@@ -31,6 +31,7 @@ export type { DemoState } from './demoStateTypes'
 
 export type DemoAction =
   | { type: 'RESET_DEMO_STATE' }
+  | { type: 'REPLACE_DEMO_STATE'; payload: { state: DemoState } }
   | { type: 'ADD_JOB'; payload: { job: import('../types/job').Job } }
   | { type: 'UPDATE_JOB'; payload: { jobId: string; changes: Partial<Pick<import('../types/job').Job, 'title' | 'department' | 'description' | 'positionsCount' | 'employmentType' | 'workArrangement' | 'location' | 'minimumExperienceYears' | 'requiredSkills' | 'applicationDeadline'>>; updatedAt: string } }
   | { type: 'CHANGE_JOB_STATUS'; payload: { jobId: string; status: import('../types/job').JobStatus; changedAt: string } }
@@ -251,6 +252,9 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
   switch (action.type) {
     case 'RESET_DEMO_STATE':
       return createInitialDemoState()
+
+    case 'REPLACE_DEMO_STATE':
+      return action.payload.state
 
     case 'ADD_JOB': {
       const job = action.payload.job

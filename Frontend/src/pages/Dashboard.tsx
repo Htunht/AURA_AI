@@ -54,7 +54,7 @@ export default function Dashboard() {
   const schedulingSummary = selectInterviewAutomationSummary(state, DASHBOARD_NOW)
   const emailSummary = selectSchedulingEmailDeliverySummary(state)
   const schedulingAttention = selectSchedulingAutomationViewModels(state).filter(
-    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED' || item.deliveryStatus === 'FAILED' || (item.invitation.status === 'PENDING' && item.deliveryStatus === 'NOT_SENT'),
+    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
   )
   const schedulingCoverage = selectSchedulingPolicyResolutionSummary(state)
   const totalApplications = funnel.applications

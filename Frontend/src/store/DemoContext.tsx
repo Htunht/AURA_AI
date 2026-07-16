@@ -3,6 +3,7 @@ import {
   createContext,
   useEffect,
   useReducer,
+  useRef,
   type Dispatch,
   type ReactNode,
 } from 'react'
@@ -15,6 +16,7 @@ import {
 import {
   clearPersistedDemoState,
   loadPersistedDemoState,
+  resolveSynchronizedDemoState,
   savePersistedDemoState,
 } from './demoPersistence'
 
@@ -43,14 +45,33 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       return hydration.state
     },
   )
+  const stateRef = useRef(state)
+  const synchronizedStateRef = useRef<DemoState | undefined>(undefined)
+  stateRef.current = state
 
   useEffect(() => {
+    if (synchronizedStateRef.current === state) {
+      synchronizedStateRef.current = undefined
+      return
+    }
     const result = savePersistedDemoState(state)
 
     if (import.meta.env.DEV && !result.success) {
       console.warn(result.error)
     }
   }, [state])
+
+  useEffect(() => {
+    function synchronizeFromStorage(event: StorageEvent) {
+      const incoming = resolveSynchronizedDemoState(stateRef.current, event.key, event.newValue)
+      if (!incoming) return
+      synchronizedStateRef.current = incoming
+      dispatch({ type: 'REPLACE_DEMO_STATE', payload: { state: incoming } })
+    }
+
+    window.addEventListener('storage', synchronizeFromStorage)
+    return () => window.removeEventListener('storage', synchronizeFromStorage)
+  }, [])
 
   const resetDemoState = useCallback(() => {
     const result = clearPersistedDemoState()

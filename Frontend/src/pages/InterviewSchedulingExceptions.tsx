@@ -17,7 +17,7 @@ export default function InterviewSchedulingExceptions() {
   const { state } = useDemoStore()
   const { retryAutomation, regenerateInvitation } = useInterviewSchedulingAutomation()
   const attention = selectSchedulingAutomationViewModels(state).filter(
-    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED' || (item.invitation.status === 'PENDING' && (item.deliveryStatus === 'FAILED' || item.deliveryStatus === 'NOT_SENT')),
+    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
   )
   const unresolvedJobs = selectJobsWithoutResolvedSchedulingPolicy(state)
 

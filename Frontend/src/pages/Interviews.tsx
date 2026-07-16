@@ -20,9 +20,9 @@ export default function Interviews() {
   const { retryAllFailed } = useSchedulingEmailAutomation()
   const items = selectInterviewListItems(state)
   const automation = selectSchedulingAutomationViewModels(state)
-  const inProgress = automation.filter((item) => item.state === 'PREPARING' || (item.invitation.status === 'PENDING' && (item.deliveryStatus === 'QUEUED' || item.deliveryStatus === 'SENDING')))
-  const awaiting = automation.filter((item) => item.invitation.status === 'PENDING' && item.deliveryStatus === 'SENT')
-  const attention = automation.filter((item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED' || (item.invitation.status === 'PENDING' && (item.deliveryStatus === 'FAILED' || item.deliveryStatus === 'NOT_SENT')))
+  const inProgress = automation.filter((item) => item.state === 'IN_PROGRESS')
+  const awaiting = automation.filter((item) => item.state === 'AWAITING_CANDIDATE')
+  const attention = automation.filter((item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED')
   const current = items.filter((item) => item.interview.status === 'SCHEDULED' || item.interview.status === 'IN_PROGRESS')
   const history = items.filter((item) => item.interview.status === 'COMPLETED' || item.interview.status === 'CANCELLED')
   const [activeTab, setActiveTab] = useState<OperationsTab>(attention.length ? 'attention' : current.length ? 'scheduled' : 'awaiting')
@@ -39,6 +39,11 @@ export default function Interviews() {
   useEffect(() => {
     if (attention.length > 0) setActiveTab('attention')
   }, [attention.length])
+
+  useEffect(() => {
+    if (activeTab === 'progress' && inProgress.length === 0 && current.length > 0) setActiveTab('scheduled')
+    if (activeTab === 'awaiting' && awaiting.length === 0 && current.length > 0) setActiveTab('scheduled')
+  }, [activeTab, awaiting.length, current.length, inProgress.length])
 
   return <PageContainer eyebrow="Interview operations" title="Interview scheduling" description="AURA applies organization and department scheduling defaults automatically. Recruiters only manage exceptions and special overrides." actions={<Link className={utilityLinkClass} to="/interviews/settings"><Settings2 size={15} />Scheduling settings</Link>}>
     {unresolvedJobs.length ? <Card className="mb-4 border-aura-warning/25 bg-aura-warning-soft/35 p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="m-0 text-base font-semibold text-depth">Scheduling defaults required</h2><p className="mb-0 mt-1 text-sm text-aura-text-secondary">{unresolvedJobs.length} job{unresolvedJobs.length === 1 ? '' : 's'} cannot prepare interview availability because no organization or department scheduling setup is available.</p></div><Link className={utilityLinkClass} to="/interviews/settings/organization">Set up organization default</Link></div></Card> : null}

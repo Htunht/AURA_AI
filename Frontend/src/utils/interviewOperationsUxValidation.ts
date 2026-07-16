@@ -113,11 +113,11 @@ export function validateInterviewOperationsUxDomain(): InterviewOperationsUxVali
   check(errors, Boolean(pending?.candidate && pending.job), 'Scheduling invitation view model did not resolve candidate and job')
   check(errors, pending?.interviewerNames.join(', ') === 'Alice Morgan, Robert Chen', 'Interviewer names did not resolve')
   check(errors, pending?.availableSlotCount === 1, 'Available slot count did not resolve')
-  check(errors, pending?.state === 'READY_TO_SHARE', 'Pending invitation did not derive READY_TO_SHARE')
+  check(errors, pending?.state === 'IN_PROGRESS', 'Queued invitation did not derive IN_PROGRESS')
   check(errors, scheduled?.state === 'SCHEDULED', 'Scheduled invitation did not derive SCHEDULED')
   check(errors, exception?.state === 'EXCEPTION', 'Exception invitation did not derive EXCEPTION')
   check(errors, expired?.state === 'EXPIRED', 'Expired invitation did not derive EXPIRED')
-  check(errors, pending?.responsibility === 'CANDIDATE' && exception?.responsibility === 'RECRUITER' && scheduled?.responsibility === 'NONE', 'Scheduling responsibility did not resolve correctly')
+  check(errors, pending?.responsibility === 'AURA' && exception?.responsibility === 'RECRUITER' && scheduled?.responsibility === 'NONE', 'Scheduling responsibility did not resolve correctly')
 
   const expectedOrder = ['policy', 'interviewers', 'slots', 'invitation', 'selection', 'confirmation']
   check(errors, pending?.progressSteps.map((step) => step.id).join(',') === expectedOrder.join(','), 'Progress steps are not ordered')

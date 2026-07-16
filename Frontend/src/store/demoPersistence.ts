@@ -37,6 +37,61 @@ export function createFreshDemoState(): DemoState {
   return createInitialDemoState()
 }
 
+export function hydratePersistedDemoStateValue(value: string | null): DemoState | undefined {
+  if (value === null) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    return undefined
+  }
+  const validation = validatePersistedDemoState(parsed)
+  if (!validation.valid) return undefined
+  return normalizePersistedDemoState(
+    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations'> & {
+      screeningQueue?: PersistedDemoState['screeningQueue']
+      interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
+      interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
+    },
+  )
+}
+
+function collectStateTimestamps(value: unknown, key: string | undefined, timestamps: number[]) {
+  if (typeof value === 'string') {
+    const timestampKey = key?.endsWith('At') && key !== 'expiresAt'
+    const timestamp = timestampKey ? Date.parse(value) : Number.NaN
+    if (Number.isFinite(timestamp)) timestamps.push(timestamp)
+    return
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectStateTimestamps(item, undefined, timestamps))
+    return
+  }
+  if (typeof value === 'object' && value !== null) {
+    Object.entries(value).forEach(([property, item]) => collectStateTimestamps(item, property, timestamps))
+  }
+}
+
+export function getDemoStateRevision(state: DemoState): number {
+  const timestamps: number[] = []
+  collectStateTimestamps(state, undefined, timestamps)
+  return Math.max(0, ...timestamps)
+}
+
+export function shouldAcceptSynchronizedDemoState(current: DemoState, incoming: DemoState): boolean {
+  return getDemoStateRevision(incoming) > getDemoStateRevision(current)
+}
+
+export function resolveSynchronizedDemoState(
+  current: DemoState,
+  storageKey: string | null,
+  value: string | null,
+): DemoState | undefined {
+  if (storageKey !== DEMO_STORAGE_KEY) return undefined
+  const incoming = hydratePersistedDemoStateValue(value)
+  return incoming && shouldAcceptSynchronizedDemoState(current, incoming) ? incoming : undefined
+}
+
 export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
   const hasInterruptedItems = state.screeningQueue.some(
     (item) => item.status === 'PROCESSING',

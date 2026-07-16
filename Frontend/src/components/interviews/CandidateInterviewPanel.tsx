@@ -62,7 +62,7 @@ export function CandidateInterviewPanel({ applicationId }: { applicationId: stri
     return <Card className="border-aura-warning/25 p-6"><Badge tone="warning">Recruiter attention</Badge><h2 className="mb-0 mt-2 text-lg font-semibold text-depth">Scheduling invitation expired</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">Prepare a fresh set of approved times and share the new invitation with the candidate.</p><Button className="mt-4" variant="secondary" onClick={() => regenerateInvitation(model.invitation.id)}>Prepare new invitation</Button></Card>
   }
 
-  if (model?.state === 'PREPARING') {
+  if (model?.state === 'IN_PROGRESS') {
     return <Card className="p-6"><div className="flex items-start gap-3"><span className="inline-grid size-10 place-items-center rounded-aura-sm bg-glacier/15 text-marine"><CalendarClock size={19} /></span><div><Badge tone="accent">AURA in progress</Badge><h2 className="mb-0 mt-2 text-lg font-semibold text-depth">Preparing interview availability</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">AURA is applying the scheduling policy, assigning the interview team, and generating candidate-ready times.</p></div></div></Card>
   }
 

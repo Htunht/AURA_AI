@@ -273,7 +273,7 @@ export function selectSchedulingExceptions(
 }
 
 export type SchedulingAutomationCardState =
-  | 'PREPARING'
+  | 'IN_PROGRESS'
   | 'READY_TO_SHARE'
   | 'AWAITING_CANDIDATE'
   | 'SCHEDULED'
@@ -320,19 +320,20 @@ export function getSchedulingExceptionLabel(
     : 'Automatic scheduling could not continue'
 }
 
-function deriveSchedulingState(
+export function deriveSchedulingAutomationCardState(
   state: DemoState,
   invitation: InterviewSchedulingInvitation,
 ): SchedulingAutomationCardState {
   const linkedInterview = invitation.scheduledInterviewId
     ? state.interviews.find((item) => item.id === invitation.scheduledInterviewId)
     : undefined
+  if (invitation.status === 'SCHEDULED' && linkedInterview) return 'SCHEDULED'
   if (invitation.status === 'CANCELLED' || linkedInterview?.status === 'CANCELLED') return 'CANCELLED'
   if (invitation.status === 'EXPIRED') return 'EXPIRED'
-  if (invitation.status === 'EXCEPTION_REQUIRED') return 'EXCEPTION'
-  if (invitation.status === 'SCHEDULED' && linkedInterview) return 'SCHEDULED'
-  if (invitation.status === 'PENDING' && invitation.availableSlots.length > 0) return invitation.delivery.status === 'SENT' ? 'AWAITING_CANDIDATE' : 'READY_TO_SHARE'
-  return 'PREPARING'
+  if (invitation.status === 'EXCEPTION_REQUIRED' || invitation.delivery.status === 'FAILED' || invitation.delivery.status === 'NOT_SENT') return 'EXCEPTION'
+  if (invitation.delivery.status === 'SENT') return 'AWAITING_CANDIDATE'
+  if (invitation.delivery.status === 'QUEUED' || invitation.delivery.status === 'SENDING') return 'IN_PROGRESS'
+  return 'READY_TO_SHARE'
 }
 
 function progressStatus(
@@ -367,7 +368,7 @@ function deriveSchedulingProgress(
       label: 'Policy applied',
       status: progressStatus(
         policyComplete,
-        cardState === 'PREPARING' && !policyComplete,
+        cardState === 'IN_PROGRESS' && !policyComplete,
         reason === 'POLICY_MISSING',
       ),
     },
@@ -376,7 +377,7 @@ function deriveSchedulingProgress(
       label: 'Interviewers assigned',
       status: progressStatus(
         interviewersComplete,
-        policyComplete && !interviewersComplete && cardState === 'PREPARING',
+        policyComplete && !interviewersComplete && cardState === 'IN_PROGRESS',
         reason === 'INTERVIEWERS_UNAVAILABLE',
       ),
     },
@@ -385,7 +386,7 @@ function deriveSchedulingProgress(
       label: 'Available times generated',
       status: progressStatus(
         slotsComplete,
-        interviewersComplete && !slotsComplete && cardState === 'PREPARING',
+        interviewersComplete && !slotsComplete && cardState === 'IN_PROGRESS',
         reason === 'NO_AVAILABLE_SLOTS',
       ),
     },
@@ -418,7 +419,7 @@ function deriveSchedulingProgress(
 function deriveSchedulingResponsibility(
   cardState: SchedulingAutomationCardState,
 ): SchedulingAutomationViewModel['responsibility'] {
-  if (cardState === 'PREPARING') return 'AURA'
+  if (cardState === 'IN_PROGRESS') return 'AURA'
   if (cardState === 'READY_TO_SHARE' || cardState === 'AWAITING_CANDIDATE') return 'CANDIDATE'
   if (cardState === 'EXCEPTION' || cardState === 'EXPIRED') return 'RECRUITER'
   return 'NONE'
@@ -435,7 +436,7 @@ export function selectSchedulingAutomationViewModels(
         : undefined
       const job = selectJobById(state, invitation.jobId)
       if (!candidate || !job) return undefined
-      const cardState = deriveSchedulingState(state, invitation)
+      const cardState = deriveSchedulingAutomationCardState(state, invitation)
       const storedPolicy = state.interviewSchedulingPolicies.find((policy) => policy.id === invitation.policyId)
       const sourceLabel = invitation.policySource === 'JOB_OVERRIDE'
         ? 'Custom policy for this job'
