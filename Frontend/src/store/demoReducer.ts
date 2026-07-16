@@ -12,6 +12,8 @@ import type { CommunicationStatus } from '../types/communication'
 import type { Decision } from '../types/decision'
 import type { Evaluation, EvaluationStatus } from '../types/evaluation'
 import type { Interview, InterviewQuestion, InterviewStatus } from '../types/interview'
+import type { InterviewQuestion as PreparedInterviewQuestion, InterviewQuestionCategory, InterviewQuestionPriority } from '../types/interviewQuestion'
+import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { EmailDeliveryErrorCode } from '../types/emailDelivery'
@@ -24,6 +26,9 @@ import { evaluateWorkflowArtifacts } from '../utils/hiringWorkflowSetup'
 import { canRecoverSchedulingEmail } from '../utils/schedulingEmailRecovery'
 import { isSameSchedulingPolicyTarget } from '../utils/interviewSchedulingPolicyResolution'
 import { createInitialDemoState } from './demoInitialState'
+import { cloneQuestion } from '../utils/interviewQuestionMigration'
+import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestionSetReadiness'
+import { deriveJobRequirements } from '../utils/jobRequirements'
 import type { DemoState } from './demoStateTypes'
 
 export { initialDemoState } from './demoInitialState'
@@ -156,6 +161,14 @@ export type DemoAction =
       type: 'ADD_INTERVIEW_QUESTIONS'
       payload: { interviewId: string; questions: InterviewQuestion[] }
     }
+  | { type: 'ADD_INTERVIEW_QUESTION_SET'; payload: { questionSet: InterviewQuestionSet } }
+  | { type: 'UPDATE_INTERVIEW_QUESTION'; payload: { questionSetId: string; questionId: string; changes: { text?: string; category?: InterviewQuestionCategory; priority?: InterviewQuestionPriority; estimatedMinutes?: number; interviewerGuidance?: string; expectedEvidence?: string }; updatedAt: string } }
+  | { type: 'ADD_INTERVIEW_QUESTION'; payload: { questionSetId: string; question: PreparedInterviewQuestion; afterQuestionId?: string; updatedAt: string } }
+  | { type: 'REMOVE_INTERVIEW_QUESTION'; payload: { questionSetId: string; questionId: string; updatedAt: string } }
+  | { type: 'MOVE_INTERVIEW_QUESTION'; payload: { questionSetId: string; questionId: string; direction?: 'UP' | 'DOWN'; overQuestionId?: string; updatedAt: string } }
+  | { type: 'APPROVE_INTERVIEW_QUESTION_SET'; payload: { questionSetId: string; approvedAt: string; approvedBy: string } }
+  | { type: 'MARK_INTERVIEW_QUESTION_GENERATION_FAILED'; payload: { questionSet: InterviewQuestionSet } }
+  | { type: 'REGENERATE_INTERVIEW_QUESTION_SET'; payload: { previousQuestionSetId: string; questionSet: InterviewQuestionSet } }
   | {
       type: 'UPDATE_INTERVIEW_STATUS'
       payload: { interviewId: string; status: InterviewStatus; updatedAt?: string }
@@ -222,6 +235,14 @@ function cloneApplicationForm(form: ApplicationForm): ApplicationForm { return {
 
 function cloneJob(job: import('../types/job').Job): import('../types/job').Job {
   return { ...job, requiredSkills: job.requiredSkills.map((skill) => ({ ...skill })) }
+}
+
+function normalizePreparedQuestions(questions: PreparedInterviewQuestion[]): PreparedInterviewQuestion[] {
+  return questions.map((question, index) => ({ ...cloneQuestion(question), order: index + 1 }))
+}
+
+function cloneQuestionSet(questionSet: InterviewQuestionSet): InterviewQuestionSet {
+  return { ...questionSet, questions: normalizePreparedQuestions(questionSet.questions) }
 }
 
 function isPublishableRubric(rubric: EvaluationRubric) {
@@ -1313,6 +1334,68 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
             : item,
         ),
       }
+    }
+
+    case 'ADD_INTERVIEW_QUESTION_SET':
+    case 'MARK_INTERVIEW_QUESTION_GENERATION_FAILED': {
+      const questionSet = action.payload.questionSet
+      const interview = state.interviews.find((item) => item.id === questionSet.interviewId)
+      const questionIds = questionSet.questions.map((question) => question.id)
+      const validQuestions = questionSet.questions.every((question) => question.interviewId === questionSet.interviewId)
+      if (!interview || !['SCHEDULED', 'IN_PROGRESS'].includes(interview.status) || state.interviewQuestionSets.some((item) => item.id === questionSet.id) || state.interviewQuestionSets.some((item) => item.interviewId === questionSet.interviewId && (item.status === 'DRAFT' || item.status === 'APPROVED')) || new Set(questionIds).size !== questionIds.length || !validQuestions) return state
+      return { ...state, interviewQuestionSets: [...state.interviewQuestionSets, cloneQuestionSet(questionSet)] }
+    }
+
+    case 'UPDATE_INTERVIEW_QUESTION': {
+      const set = state.interviewQuestionSets.find((item) => item.id === action.payload.questionSetId)
+      const question = set?.questions.find((item) => item.id === action.payload.questionId)
+      const { text, estimatedMinutes } = action.payload.changes
+      if (!set || set.status !== 'DRAFT' || !question || (text !== undefined && text.trim().length < 10) || (estimatedMinutes !== undefined && (estimatedMinutes < 1 || estimatedMinutes > 15))) return state
+      return { ...state, interviewQuestionSets: state.interviewQuestionSets.map((item) => item.id !== set.id ? item : { ...item, updatedAt: action.payload.updatedAt, questions: item.questions.map((entry) => entry.id === question.id ? { ...entry, ...action.payload.changes, text: text?.trim() ?? entry.text, updatedAt: action.payload.updatedAt } : entry) }) }
+    }
+
+    case 'ADD_INTERVIEW_QUESTION': {
+      const set = state.interviewQuestionSets.find((item) => item.id === action.payload.questionSetId)
+      const question = action.payload.question
+      if (!set || set.status !== 'DRAFT' || question.interviewId !== set.interviewId || question.text.trim().length < 10 || question.estimatedMinutes < 1 || question.estimatedMinutes > 15 || set.questions.some((item) => item.id === question.id)) return state
+      const questions = [...set.questions]
+      const afterIndex = action.payload.afterQuestionId ? questions.findIndex((item) => item.id === action.payload.afterQuestionId) : -1
+      questions.splice(afterIndex >= 0 ? afterIndex + 1 : questions.length, 0, cloneQuestion(question))
+      return { ...state, interviewQuestionSets: state.interviewQuestionSets.map((item) => item.id === set.id ? { ...item, updatedAt: action.payload.updatedAt, questions: normalizePreparedQuestions(questions) } : item) }
+    }
+
+    case 'REMOVE_INTERVIEW_QUESTION': {
+      const set = state.interviewQuestionSets.find((item) => item.id === action.payload.questionSetId)
+      if (!set || set.status !== 'DRAFT' || set.questions.length <= 1 || !set.questions.some((item) => item.id === action.payload.questionId)) return state
+      return { ...state, interviewQuestionSets: state.interviewQuestionSets.map((item) => item.id === set.id ? { ...item, updatedAt: action.payload.updatedAt, questions: normalizePreparedQuestions(item.questions.filter((question) => question.id !== action.payload.questionId)) } : item) }
+    }
+
+    case 'MOVE_INTERVIEW_QUESTION': {
+      const set = state.interviewQuestionSets.find((item) => item.id === action.payload.questionSetId)
+      if (!set || set.status !== 'DRAFT') return state
+      const from = set.questions.findIndex((item) => item.id === action.payload.questionId)
+      const to = action.payload.overQuestionId ? set.questions.findIndex((item) => item.id === action.payload.overQuestionId) : action.payload.direction === 'UP' ? from - 1 : from + 1
+      if (from < 0 || to < 0 || to >= set.questions.length || from === to) return state
+      const questions = [...set.questions]
+      const [moved] = questions.splice(from, 1)
+      questions.splice(to, 0, moved)
+      return { ...state, interviewQuestionSets: state.interviewQuestionSets.map((item) => item.id === set.id ? { ...item, updatedAt: action.payload.updatedAt, questions: normalizePreparedQuestions(questions) } : item) }
+    }
+
+    case 'APPROVE_INTERVIEW_QUESTION_SET': {
+      const set = state.interviewQuestionSets.find((item) => item.id === action.payload.questionSetId)
+      const interview = set ? state.interviews.find((item) => item.id === set.interviewId) : undefined
+      const application = interview ? state.applications.find((item) => item.id === interview.applicationId) : undefined
+      const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+      if (!set || set.status !== 'DRAFT' || !interview || !job || !action.payload.approvedBy.trim() || !evaluateInterviewQuestionSetReadiness({ questionSet: set, interview, requirements: deriveJobRequirements(job) }).ready) return state
+      return { ...state, interviewQuestionSets: state.interviewQuestionSets.map((item) => item.id === set.id ? { ...item, status: 'APPROVED', approvedAt: action.payload.approvedAt, approvedBy: action.payload.approvedBy, updatedAt: action.payload.approvedAt, questions: item.questions.map((question) => ({ ...question, status: 'APPROVED', updatedAt: action.payload.approvedAt })) } : item) }
+    }
+
+    case 'REGENERATE_INTERVIEW_QUESTION_SET': {
+      const previous = state.interviewQuestionSets.find((item) => item.id === action.payload.previousQuestionSetId)
+      const next = action.payload.questionSet
+      if (!previous || !['DRAFT', 'GENERATION_FAILED'].includes(previous.status) || next.interviewId !== previous.interviewId || next.version !== previous.version + 1 || state.interviewQuestionSets.some((item) => item.id === next.id)) return state
+      return { ...state, interviewQuestionSets: [...state.interviewQuestionSets.filter((item) => item.id !== previous.id), cloneQuestionSet(next)] }
     }
 
     case 'UPDATE_INTERVIEW_STATUS':

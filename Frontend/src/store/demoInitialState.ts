@@ -91,6 +91,7 @@ export function createInitialDemoState(): DemoState {
       })),
       questions: interview.questions.map((question) => ({ ...question })),
     })),
+    interviewQuestionSets: [],
     interviewSchedulingPolicies: interviewSchedulingPolicies.map((policy) => ({
       ...policy,
       workingDays: [...policy.workingDays],

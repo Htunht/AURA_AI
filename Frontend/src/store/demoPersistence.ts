@@ -1,6 +1,7 @@
 import { validatePersistedDemoState } from '../utils/persistedDemoStateValidation'
 import { createInitialDemoState } from './demoInitialState'
 import type { DemoState } from './demoStateTypes'
+import { migrateLegacyInterviewQuestions } from '../utils/interviewQuestionMigration'
 
 export const DEMO_STORAGE_KEY = 'aura-ai-demo-state-v1'
 
@@ -48,10 +49,11 @@ export function hydratePersistedDemoStateValue(value: string | null): DemoState 
   const validation = validatePersistedDemoState(parsed)
   if (!validation.valid) return undefined
   return normalizePersistedDemoState(
-    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations'> & {
+    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets'> & {
       screeningQueue?: PersistedDemoState['screeningQueue']
       interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
       interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
+      interviewQuestionSets?: PersistedDemoState['interviewQuestionSets']
     },
   )
 }
@@ -114,10 +116,11 @@ export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
 }
 
 export function normalizePersistedDemoState(
-  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations'> & {
+  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets'> & {
     screeningQueue?: DemoState['screeningQueue']
     interviewSchedulingPolicies?: DemoState['interviewSchedulingPolicies']
     interviewSchedulingInvitations?: DemoState['interviewSchedulingInvitations']
+    interviewQuestionSets?: DemoState['interviewQuestionSets']
   },
 ): DemoState {
   const seedPolicies = createInitialDemoState().interviewSchedulingPolicies
@@ -216,6 +219,7 @@ export function normalizePersistedDemoState(
           }
         })
       : [],
+    interviewQuestionSets: migrateLegacyInterviewQuestions(state.interviews, Array.isArray(state.interviewQuestionSets) ? state.interviewQuestionSets : []),
   })
 }
 
@@ -280,10 +284,11 @@ export function loadPersistedDemoState(): DemoStateHydrationResult {
 
   return {
     state: normalizePersistedDemoState(
-      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations'> & {
+      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets'> & {
         screeningQueue?: PersistedDemoState['screeningQueue']
         interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
         interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
+        interviewQuestionSets?: PersistedDemoState['interviewQuestionSets']
       },
     ),
     source: 'PERSISTED',

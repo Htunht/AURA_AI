@@ -22,6 +22,7 @@ import PublicJobApplication from '../pages/PublicJobApplication'
 import PublicInterviewScheduling from '../pages/PublicInterviewScheduling'
 import ScreeningRubricEditor from '../pages/ScreeningRubricEditor'
 import HiringWorkflowSetup from '../pages/HiringWorkflowSetup'
+import InterviewQuestionReview from '../pages/InterviewQuestionReview'
 
 export function AppRoutes() {
   return (
@@ -42,6 +43,7 @@ export function AppRoutes() {
         <Route path="/interviews/policies" element={<InterviewSchedulingPolicies />} />
         <Route path="/interviews/policies/:jobId" element={<InterviewSchedulingPolicyEditor />} />
         <Route path="/interviews/exceptions" element={<InterviewSchedulingExceptions />} />
+        <Route path="/interviews/:interviewId/questions" element={<InterviewQuestionReview />} />
         <Route path="/interviews/:interviewId" element={<InterviewDetail />} />
         <Route path="/jobs" element={<Jobs />} />
         <Route path="/jobs/new" element={<JobCreate />} />

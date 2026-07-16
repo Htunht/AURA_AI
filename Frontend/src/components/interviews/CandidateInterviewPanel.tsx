@@ -7,6 +7,8 @@ import {
   selectResolvedInterviewSchedulingPolicy,
   selectInterviewByApplicationId,
   selectSchedulingAutomationViewModelByApplicationId,
+  selectInterviewQuestionPreparationStatus,
+  selectLatestInterviewQuestionSet,
 } from '../../store/demoSelectors'
 import { formatInterviewDate, formatInterviewMode, formatInterviewTime } from '../../utils/helpers'
 import { Badge } from '../ui/Badge'
@@ -26,6 +28,8 @@ export function CandidateInterviewPanel({ applicationId }: { applicationId: stri
   const resolvedPolicy = application ? selectResolvedInterviewSchedulingPolicy(state, application.jobId) : undefined
   const decision = state.decisions.filter((item) => item.applicationId === applicationId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
   const positive = decision?.humanRecommendation === 'STRONG_YES' || decision?.humanRecommendation === 'YES' || decision?.humanRecommendation === 'REVIEW'
+  const preparationStatus = interview ? selectInterviewQuestionPreparationStatus(state, interview.id) : 'NOT_PREPARED'
+  const questionSet = interview ? selectLatestInterviewQuestionSet(state, interview.id) : undefined
 
   if (interview && interview.status !== 'CANCELLED') {
     return (
@@ -45,7 +49,7 @@ export function CandidateInterviewPanel({ applicationId }: { applicationId: stri
           <Detail label="Format" value={formatInterviewMode(interview.mode ?? 'VIDEO')} />
           <div className="sm:col-span-2"><Detail label="Interviewers" value={interview.interviewers.map((person) => person.name).join(', ')} /></div>
         </dl>
-        <Link className={`${linkClass} mt-5`} to={`/interviews/${interview.id}`}>View interview</Link>
+        <div className="mt-5 border-t border-harbor/10 pt-4"><p className="m-0 text-xs font-bold uppercase tracking-wide text-aura-text-muted">Interview preparation</p><p className="mb-0 mt-1 text-sm font-semibold text-depth">{preparationStatus === 'APPROVED' ? 'Question plan approved' : preparationStatus === 'DRAFT_READY' ? 'Question plan ready for recruiter review' : preparationStatus === 'FAILED' ? 'Question preparation needs attention' : 'Questions are being prepared'}</p>{questionSet ? <p className="mb-0 mt-1 text-xs text-aura-text-muted">{questionSet.questions.length} questions · Version {questionSet.version}</p> : null}</div><div className="mt-5 flex flex-wrap gap-2"><Link className={linkClass} to={`/interviews/${interview.id}`}>View interview</Link><Link className={linkClass} to={`/interviews/${interview.id}/questions`}>{preparationStatus === 'APPROVED' ? 'View plan' : 'Review questions'}</Link></div>
       </Card>
     )
   }

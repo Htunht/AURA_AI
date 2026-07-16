@@ -97,6 +97,7 @@ export function validatePersistedDemoState(
   for (const collectionName of [
     'interviewSchedulingPolicies',
     'interviewSchedulingInvitations',
+    'interviewQuestionSets',
   ] as const) {
     if (value[collectionName] !== undefined && !Array.isArray(value[collectionName])) {
       errors.push(`Persisted demo state ${collectionName} must be an array.`)
@@ -126,6 +127,7 @@ export function validatePersistedDemoState(
   const invitations = Array.isArray(value.interviewSchedulingInvitations)
     ? value.interviewSchedulingInvitations
     : []
+  const questionSets = Array.isArray(value.interviewQuestionSets) ? value.interviewQuestionSets : []
 
   validateRecords(
     jobs,
@@ -195,6 +197,7 @@ export function validatePersistedDemoState(
       Array.isArray(record.questions),
     errors,
   )
+  validateRecords(questionSets, 'interviewQuestionSets', (record) => hasStringProperties(record, ['id', 'interviewId', 'status', 'createdAt', 'updatedAt']) && Number.isInteger(record.version) && Array.isArray(record.questions), errors)
   validateRecords(
     transcripts,
     'transcripts',

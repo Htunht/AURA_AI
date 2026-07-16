@@ -7,6 +7,7 @@ import { DemoProvider } from './store'
 import { ScreeningAutomationProvider } from './providers/ScreeningAutomationProvider'
 import { InterviewSchedulingAutomationProvider } from './providers/InterviewSchedulingAutomationProvider'
 import { SchedulingEmailAutomationProvider } from './providers/SchedulingEmailAutomationProvider'
+import { InterviewQuestionAutomationProvider } from './providers/InterviewQuestionAutomationProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,9 +15,11 @@ createRoot(document.getElementById('root')!).render(
       <ScreeningAutomationProvider>
         <InterviewSchedulingAutomationProvider>
           <SchedulingEmailAutomationProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
+            <InterviewQuestionAutomationProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </InterviewQuestionAutomationProvider>
           </SchedulingEmailAutomationProvider>
         </InterviewSchedulingAutomationProvider>
       </ScreeningAutomationProvider>

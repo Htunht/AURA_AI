@@ -5,6 +5,7 @@ import type { Communication } from '../types/communication'
 import type { Decision } from '../types/decision'
 import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
+import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { SchedulingExceptionReason } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
@@ -26,8 +27,52 @@ import interviewersData from '../data/interviewers.json'
 import type { EmailDeliveryStatus } from '../types/emailDelivery'
 import type { ResolvedInterviewSchedulingPolicy } from '../types/resolvedInterviewSchedulingPolicy'
 import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyResolution'
+import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestionSetReadiness'
+import { deriveJobRequirements } from '../utils/jobRequirements'
 
 const schedulingInterviewers = interviewersData as Interviewer[]
+
+export function selectInterviewQuestionSetsByInterviewId(state: DemoState, interviewId: string): InterviewQuestionSet[] {
+  return state.interviewQuestionSets.filter((set) => set.interviewId === interviewId).sort((left, right) => right.version - left.version)
+}
+
+export function selectLatestInterviewQuestionSet(state: DemoState, interviewId: string): InterviewQuestionSet | undefined {
+  return selectInterviewQuestionSetsByInterviewId(state, interviewId)[0]
+}
+
+export function selectApprovedInterviewQuestionSet(state: DemoState, interviewId: string): InterviewQuestionSet | undefined {
+  return selectInterviewQuestionSetsByInterviewId(state, interviewId).find((set) => set.status === 'APPROVED')
+}
+
+export type InterviewQuestionPreparationStatus = 'NOT_PREPARED' | 'PREPARING' | 'DRAFT_READY' | 'APPROVED' | 'FAILED'
+
+export function selectInterviewQuestionPreparationStatus(state: DemoState, interviewId: string): InterviewQuestionPreparationStatus {
+  const set = selectLatestInterviewQuestionSet(state, interviewId)
+  if (!set) return 'NOT_PREPARED'
+  if (set.status === 'GENERATING') return 'PREPARING'
+  if (set.status === 'DRAFT') return 'DRAFT_READY'
+  if (set.status === 'APPROVED') return 'APPROVED'
+  return 'FAILED'
+}
+
+export function selectInterviewPreparationSummary(state: DemoState) {
+  const scheduled = state.interviews.filter((interview) => interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS')
+  const statuses = scheduled.map((interview) => ({ interview, status: selectInterviewQuestionPreparationStatus(state, interview.id) }))
+  return {
+    readyForReview: statuses.filter((item) => item.status === 'DRAFT_READY').length,
+    approved: statuses.filter((item) => item.status === 'APPROVED').length,
+    failed: statuses.filter((item) => item.status === 'FAILED').length,
+    needsReview: statuses.filter((item) => item.status === 'DRAFT_READY' || item.status === 'FAILED').sort((a, b) => a.interview.scheduledStart.localeCompare(b.interview.scheduledStart)),
+  }
+}
+
+export function selectInterviewQuestionSetReadiness(state: DemoState, interviewId: string) {
+  const interview = state.interviews.find((item) => item.id === interviewId)
+  const set = selectLatestInterviewQuestionSet(state, interviewId)
+  const application = interview ? state.applications.find((item) => item.id === interview.applicationId) : undefined
+  const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+  return interview && set && job ? evaluateInterviewQuestionSetReadiness({ questionSet: set, interview, requirements: deriveJobRequirements(job) }) : undefined
+}
 
 export function selectJobById(
   state: DemoState,
@@ -1342,6 +1387,8 @@ export type CandidateTimelineEvent = {
     | 'INTERVIEW_RESCHEDULED'
     | 'INTERVIEW_CANCELLED'
     | 'INTERVIEW_COMPLETED'
+    | 'INTERVIEW_QUESTIONS_PREPARED'
+    | 'INTERVIEW_PLAN_APPROVED'
     | 'FINAL_EVALUATION_COMPLETED'
     | 'DECISION_RECORDED'
     | 'COMMUNICATION_SENT'
@@ -1425,6 +1472,12 @@ export function selectCandidateTimeline(
         })
       }
     })
+
+  const applicationInterviewIds = new Set(state.interviews.filter((interview) => interview.applicationId === applicationId).map((interview) => interview.id))
+  state.interviewQuestionSets.filter((set) => applicationInterviewIds.has(set.interviewId)).forEach((set) => {
+    if (set.generatedAt || set.status !== 'GENERATION_FAILED') events.push({ id: `interview-questions-prepared-${set.id}`, type: 'INTERVIEW_QUESTIONS_PREPARED', title: 'Interview questions prepared', description: `A candidate-specific interview plan with ${set.questions.length} questions was prepared.`, occurredAt: set.generatedAt ?? set.createdAt })
+    if (set.status === 'APPROVED' && set.approvedAt) events.push({ id: `interview-plan-approved-${set.id}`, type: 'INTERVIEW_PLAN_APPROVED', title: 'Interview plan approved', description: 'The interview question plan was approved for the scheduled interview.', occurredAt: set.approvedAt })
+  })
 
   state.interviewSchedulingInvitations
     .filter((invitation) => invitation.applicationId === applicationId)

@@ -1,0 +1,21 @@
+import { ChevronDown, Copy, GripVertical, Pencil, Trash2, ArrowUp, ArrowDown } from 'lucide-react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import type { InterviewQuestion } from '../../types/interviewQuestion'
+import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
+
+const label = (value: string) => value.toLocaleLowerCase().replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
+
+export function InterviewQuestionCard({ question, editable, first, last, onEdit, onDuplicate, onDelete, onMove }: { question: InterviewQuestion; editable: boolean; first: boolean; last: boolean; onEdit: () => void; onDuplicate: () => void; onDelete: () => void; onMove: (questionId: string, direction: 'UP' | 'DOWN') => void }) {
+  const sortable = useSortable({ id: question.id, disabled: !editable })
+  return <article ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }} className="rounded-aura-md border border-harbor/15 bg-white shadow-aura-xs" role="listitem">
+    <div className="flex gap-3 p-4 md:p-5">
+      <div className="flex flex-col items-center gap-2"><span className="grid size-7 place-items-center rounded-full bg-depth text-xs font-bold text-white">{question.order}</span>{editable ? <button ref={sortable.setActivatorNodeRef} {...sortable.attributes} {...sortable.listeners} className="grid size-8 cursor-grab place-items-center rounded-aura-sm text-aura-text-muted hover:bg-glacier/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" aria-label={`Drag question ${question.order}`}><GripVertical size={16} /></button> : null}</div>
+      <div className="min-w-0 flex-1"><div className="flex flex-wrap gap-2"><Badge tone="accent">{label(question.category)}</Badge><Badge tone={question.priority === 'CORE' ? 'success' : question.priority === 'OPTIONAL' ? 'neutral' : 'warning'}>{label(question.priority)}</Badge><span className="self-center text-xs text-aura-text-muted">{question.estimatedMinutes} min · {question.source === 'SYSTEM_GENERATED' ? 'AURA prepared' : 'Interviewer added'}</span></div><h3 className="mb-0 mt-3 text-base font-semibold leading-6 text-depth">{question.text}</h3>{question.generationReason ? <p className="mb-0 mt-2 text-sm leading-6 text-aura-text-secondary"><span className="font-semibold text-harbor">Why this question:</span> {question.generationReason}</p> : null}
+        <details className="mt-3 border-t border-harbor/10 pt-3"><summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-harbor focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier">Question guidance <ChevronDown size={14} /></summary><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">{question.interviewerGuidance ? <div><dt className="text-xs font-semibold text-aura-text-muted">Listen for</dt><dd className="mb-0 mt-1 leading-6 text-depth">{question.interviewerGuidance}</dd></div> : null}{question.expectedEvidence ? <div><dt className="text-xs font-semibold text-aura-text-muted">Expected evidence</dt><dd className="mb-0 mt-1 leading-6 text-depth">{question.expectedEvidence}</dd></div> : null}{question.evidenceReferences.length ? <div className="sm:col-span-2"><dt className="text-xs font-semibold text-aura-text-muted">Used to evaluate</dt><dd className="mb-0 mt-1 text-aura-text-secondary">{question.evidenceReferences.join(' · ')}</dd></div> : null}</dl></details>
+        {editable ? <div className="mt-4 flex flex-wrap gap-2"><Button className="h-8 px-3 text-xs" variant="secondary" onClick={onEdit}><Pencil size={13} />Edit</Button><Button className="h-8 px-3 text-xs" variant="ghost" onClick={onDuplicate}><Copy size={13} />Duplicate</Button><Button className="h-8 px-3 text-xs" variant="ghost" onClick={onDelete}><Trash2 size={13} />Delete</Button><Button className="h-8 w-8 p-0" variant="ghost" disabled={first} onClick={() => onMove(question.id, 'UP')} aria-label={`Move question ${question.order} up`}><ArrowUp size={14} /></Button><Button className="h-8 w-8 p-0" variant="ghost" disabled={last} onClick={() => onMove(question.id, 'DOWN')} aria-label={`Move question ${question.order} down`}><ArrowDown size={14} /></Button></div> : null}
+      </div>
+    </div>
+  </article>
+}
