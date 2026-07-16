@@ -1,3 +1,5 @@
+import { Navigate } from 'react-router-dom'
+
 export default function InterviewSchedule() {
-  return null
+  return <Navigate to="/interviews" replace />
 }

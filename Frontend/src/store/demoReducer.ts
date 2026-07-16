@@ -11,7 +11,9 @@ import type { Candidate } from '../types/candidate'
 import type { CommunicationStatus } from '../types/communication'
 import type { Decision } from '../types/decision'
 import type { Evaluation, EvaluationStatus } from '../types/evaluation'
-import type { InterviewQuestion, InterviewStatus } from '../types/interview'
+import type { Interview, InterviewQuestion, InterviewStatus } from '../types/interview'
+import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
+import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { Transcript } from '../types/transcript'
 import type { ScreeningQueueItem } from '../types/screeningQueue'
 import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
@@ -95,13 +97,45 @@ export type DemoAction =
       payload: { queueItemId: string; queuedAt: string }
     }
   | { type: 'CLEAR_COMPLETED_SCREENING_QUEUE_ITEMS' }
+  | { type: 'ADD_INTERVIEW'; payload: { interview: Interview } }
+  | { type: 'ADD_INTERVIEW_SCHEDULING_POLICY'; payload: { policy: InterviewSchedulingPolicy } }
+  | { type: 'UPDATE_INTERVIEW_SCHEDULING_POLICY'; payload: { policyId: string; changes: Partial<Omit<InterviewSchedulingPolicy, 'id' | 'jobId' | 'version' | 'status' | 'createdAt'>> } }
+  | { type: 'ACTIVATE_INTERVIEW_SCHEDULING_POLICY'; payload: { policyId: string; updatedAt: string } }
+  | { type: 'ARCHIVE_INTERVIEW_SCHEDULING_POLICY'; payload: { policyId: string; updatedAt: string } }
+  | { type: 'ADD_SCHEDULING_INVITATION'; payload: { invitation: InterviewSchedulingInvitation } }
+  | { type: 'UPDATE_SCHEDULING_INVITATION'; payload: { invitationId: string; changes: Partial<Omit<InterviewSchedulingInvitation, 'id' | 'applicationId' | 'jobId' | 'createdAt'>> } }
+  | { type: 'MARK_SCHEDULING_EXCEPTION'; payload: { invitation: InterviewSchedulingInvitation } }
+  | { type: 'EXPIRE_SCHEDULING_INVITATION'; payload: { invitationId: string; updatedAt: string } }
+  | { type: 'CANCEL_SCHEDULING_INVITATION'; payload: { invitationId: string; updatedAt: string } }
+  | { type: 'CONFIRM_SELF_SCHEDULED_INTERVIEW'; payload: { invitationId: string; slotId: string; interview: Interview } }
+  | { type: 'RESCHEDULE_SELF_SCHEDULED_INTERVIEW'; payload: { invitationId: string; slotId: string; interview: Interview; rescheduledAt: string } }
+  | {
+      type: 'UPDATE_INTERVIEW'
+      payload: {
+        interviewId: string
+        changes: Partial<
+          Pick<
+            Interview,
+            | 'scheduledStart'
+            | 'scheduledEnd'
+            | 'timezone'
+            | 'mode'
+            | 'interviewers'
+            | 'location'
+            | 'meetingLink'
+            | 'notes'
+            | 'updatedAt'
+          >
+        >
+      }
+    }
   | {
       type: 'ADD_INTERVIEW_QUESTIONS'
       payload: { interviewId: string; questions: InterviewQuestion[] }
     }
   | {
       type: 'UPDATE_INTERVIEW_STATUS'
-      payload: { interviewId: string; status: InterviewStatus }
+      payload: { interviewId: string; status: InterviewStatus; updatedAt?: string }
     }
   | { type: 'ADD_TRANSCRIPT'; payload: Transcript }
   | {
@@ -120,6 +154,50 @@ export type DemoAction =
 function warnInvalidDecision(message: string) {
   if (import.meta.env.DEV) {
     console.warn(message)
+  }
+}
+
+function hasPositiveHumanDecision(state: DemoState, applicationId: string) {
+  const decision = state.decisions
+    .filter((item) => item.applicationId === applicationId)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
+  return decision?.humanRecommendation === 'STRONG_YES' ||
+    decision?.humanRecommendation === 'YES' ||
+    decision?.humanRecommendation === 'REVIEW'
+}
+
+function interviewHasConflict(
+  interviews: Interview[],
+  interview: Interview,
+  excludeInterviewId?: string,
+) {
+  const interviewerIds = new Set(interview.interviewers.map((person) => person.id))
+  return interviews.some((existing) =>
+    existing.id !== excludeInterviewId &&
+    (existing.status === 'SCHEDULED' || existing.status === 'IN_PROGRESS') &&
+    interview.scheduledStart < existing.scheduledEnd &&
+    interview.scheduledEnd > existing.scheduledStart &&
+    existing.interviewers.some((person) => interviewerIds.has(person.id)),
+  )
+}
+
+function clonePolicy(policy: InterviewSchedulingPolicy): InterviewSchedulingPolicy {
+  return {
+    ...policy,
+    workingDays: [...policy.workingDays],
+    requiredInterviewerRoles: [...policy.requiredInterviewerRoles],
+    fixedInterviewerIds: [...policy.fixedInterviewerIds],
+  }
+}
+
+function cloneInvitation(invitation: InterviewSchedulingInvitation): InterviewSchedulingInvitation {
+  return {
+    ...invitation,
+    interviewerIds: [...invitation.interviewerIds],
+    availableSlots: invitation.availableSlots.map((slot) => ({
+      ...slot,
+      interviewerIds: [...slot.interviewerIds],
+    })),
   }
 }
 
@@ -656,6 +734,330 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         ),
       }
 
+    case 'ADD_INTERVIEW_SCHEDULING_POLICY': {
+      const policy = action.payload.policy
+      if (
+        state.interviewSchedulingPolicies.some((item) => item.id === policy.id) ||
+        !state.jobs.some((job) => job.id === policy.jobId) ||
+        !Number.isInteger(policy.version) ||
+        policy.version < 1 ||
+        policy.status !== 'DRAFT'
+      ) return state
+      return {
+        ...state,
+        interviewSchedulingPolicies: [
+          ...state.interviewSchedulingPolicies,
+          clonePolicy(policy),
+        ],
+      }
+    }
+
+    case 'UPDATE_INTERVIEW_SCHEDULING_POLICY': {
+      const policy = state.interviewSchedulingPolicies.find(
+        (item) => item.id === action.payload.policyId,
+      )
+      if (!policy || policy.status !== 'DRAFT') return state
+      return {
+        ...state,
+        interviewSchedulingPolicies: state.interviewSchedulingPolicies.map((item) =>
+          item.id === policy.id
+            ? clonePolicy({ ...item, ...action.payload.changes })
+            : item,
+        ),
+      }
+    }
+
+    case 'ACTIVATE_INTERVIEW_SCHEDULING_POLICY': {
+      const policy = state.interviewSchedulingPolicies.find(
+        (item) => item.id === action.payload.policyId,
+      )
+      if (!policy || policy.status !== 'DRAFT') return state
+      return {
+        ...state,
+        interviewSchedulingPolicies: state.interviewSchedulingPolicies.map((item) => {
+          if (item.id === policy.id) {
+            return { ...item, status: 'ACTIVE', updatedAt: action.payload.updatedAt }
+          }
+          if (item.jobId === policy.jobId && item.status === 'ACTIVE') {
+            return { ...item, status: 'ARCHIVED', updatedAt: action.payload.updatedAt }
+          }
+          return item
+        }),
+      }
+    }
+
+    case 'ARCHIVE_INTERVIEW_SCHEDULING_POLICY': {
+      const policy = state.interviewSchedulingPolicies.find(
+        (item) => item.id === action.payload.policyId,
+      )
+      if (!policy || policy.status === 'ARCHIVED') return state
+      return {
+        ...state,
+        interviewSchedulingPolicies: state.interviewSchedulingPolicies.map((item) =>
+          item.id === policy.id
+            ? { ...item, status: 'ARCHIVED', updatedAt: action.payload.updatedAt }
+            : item,
+        ),
+      }
+    }
+
+    case 'ADD_SCHEDULING_INVITATION': {
+      const invitation = action.payload.invitation
+      const application = state.applications.find(
+        (item) => item.id === invitation.applicationId,
+      )
+      const activePolicy = state.interviewSchedulingPolicies.find(
+        (item) => item.id === invitation.policyId && item.status === 'ACTIVE',
+      )
+      const hasActiveInterview = state.interviews.some(
+        (item) => item.applicationId === invitation.applicationId &&
+          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+      )
+      const hasPendingInvitation = state.interviewSchedulingInvitations.some(
+        (item) => item.applicationId === invitation.applicationId && item.status === 'PENDING',
+      )
+      if (
+        !application || !activePolicy || application.jobId !== invitation.jobId ||
+        application.currentStage !== 'SHORTLIST_REVIEW' ||
+        !hasPositiveHumanDecision(state, application.id) || hasActiveInterview ||
+        hasPendingInvitation || invitation.status !== 'PENDING' ||
+        invitation.availableSlots.length === 0 ||
+        state.interviewSchedulingInvitations.some(
+          (item) => item.id === invitation.id || item.token === invitation.token,
+        )
+      ) return state
+      return {
+        ...state,
+        interviewSchedulingInvitations: [
+          ...state.interviewSchedulingInvitations,
+          cloneInvitation(invitation),
+        ],
+      }
+    }
+
+    case 'MARK_SCHEDULING_EXCEPTION': {
+      const invitation = action.payload.invitation
+      if (
+        invitation.status !== 'EXCEPTION_REQUIRED' ||
+        !state.applications.some((item) => item.id === invitation.applicationId)
+      ) return state
+      const existing = state.interviewSchedulingInvitations.find(
+        (item) => item.applicationId === invitation.applicationId &&
+          (item.status === 'EXCEPTION_REQUIRED' || item.status === 'PENDING'),
+      )
+      return {
+        ...state,
+        interviewSchedulingInvitations: existing
+          ? state.interviewSchedulingInvitations.map((item) =>
+              item.id === existing.id
+                ? cloneInvitation({ ...invitation, id: existing.id, token: existing.token })
+                : item,
+            )
+          : [...state.interviewSchedulingInvitations, cloneInvitation(invitation)],
+      }
+    }
+
+    case 'UPDATE_SCHEDULING_INVITATION': {
+      const invitation = state.interviewSchedulingInvitations.find(
+        (item) => item.id === action.payload.invitationId,
+      )
+      if (
+        !invitation || invitation.status === 'SCHEDULED' ||
+        (action.payload.changes.token !== undefined &&
+          state.interviewSchedulingInvitations.some(
+            (item) => item.id !== invitation.id && item.token === action.payload.changes.token,
+          ))
+      ) return state
+      return {
+        ...state,
+        interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) =>
+          item.id === invitation.id
+            ? cloneInvitation({
+                ...item,
+                ...action.payload.changes,
+                ...(action.payload.changes.status === 'PENDING'
+                  ? { lastError: undefined, exceptionReason: undefined }
+                  : {}),
+              })
+            : item,
+        ),
+      }
+    }
+
+    case 'EXPIRE_SCHEDULING_INVITATION':
+    case 'CANCEL_SCHEDULING_INVITATION': {
+      const invitation = state.interviewSchedulingInvitations.find(
+        (item) => item.id === action.payload.invitationId,
+      )
+      if (
+        !invitation ||
+        (action.type === 'EXPIRE_SCHEDULING_INVITATION'
+          ? invitation.status !== 'PENDING'
+          : invitation.status !== 'PENDING' && invitation.status !== 'SCHEDULED')
+      ) return state
+      return {
+        ...state,
+        interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) =>
+          item.id === invitation.id
+            ? {
+                ...item,
+                status: action.type === 'EXPIRE_SCHEDULING_INVITATION' ? 'EXPIRED' : 'CANCELLED',
+                updatedAt: action.payload.updatedAt,
+                ...(action.type === 'EXPIRE_SCHEDULING_INVITATION'
+                  ? { exceptionReason: 'INVITATION_EXPIRED' as const }
+                  : {}),
+              }
+            : item,
+        ),
+      }
+    }
+
+    case 'CONFIRM_SELF_SCHEDULED_INTERVIEW': {
+      const { invitationId, slotId, interview } = action.payload
+      const invitation = state.interviewSchedulingInvitations.find((item) => item.id === invitationId)
+      const slot = invitation?.availableSlots.find((item) => item.id === slotId)
+      const hasActiveInterview = state.interviews.some(
+        (item) => item.applicationId === invitation?.applicationId &&
+          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+      )
+      if (
+        !invitation || invitation.status !== 'PENDING' || !slot || hasActiveInterview ||
+        interview.status !== 'SCHEDULED' ||
+        interview.applicationId !== invitation.applicationId ||
+        interview.scheduledStart !== slot.start || interview.scheduledEnd !== slot.end ||
+        interview.interviewers.length !== slot.interviewerIds.length ||
+        interview.interviewers.some((person) => !slot.interviewerIds.includes(person.id)) ||
+        interview.scheduledEnd <= interview.scheduledStart ||
+        state.interviews.some((item) => item.id === interview.id) ||
+        interviewHasConflict(state.interviews, interview) ||
+        (interview.createdAt ? interview.createdAt >= invitation.expiresAt : true)
+      ) return state
+      return {
+        ...state,
+        interviews: [...state.interviews, {
+          ...interview,
+          interviewers: interview.interviewers.map((person) => ({ ...person })),
+          questions: interview.questions.map((question) => ({ ...question })),
+        }],
+        applications: state.applications.map((application) =>
+          application.id === invitation.applicationId
+            ? { ...application, currentStage: 'INTERVIEW' }
+            : application,
+        ),
+        interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) =>
+          item.id === invitation.id
+            ? {
+                ...item,
+                status: 'SCHEDULED',
+                selectedSlotId: slot.id,
+                scheduledInterviewId: interview.id,
+                updatedAt: interview.createdAt!,
+                exceptionReason: undefined,
+                lastError: undefined,
+              }
+            : item,
+        ),
+      }
+    }
+
+    case 'RESCHEDULE_SELF_SCHEDULED_INTERVIEW': {
+      const { invitationId, slotId, interview, rescheduledAt } = action.payload
+      const invitation = state.interviewSchedulingInvitations.find((item) => item.id === invitationId)
+      const currentInterview = invitation?.scheduledInterviewId
+        ? state.interviews.find((item) => item.id === invitation.scheduledInterviewId)
+        : undefined
+      const policy = invitation
+        ? state.interviewSchedulingPolicies.find((item) => item.id === invitation.policyId)
+        : undefined
+      const slot = invitation?.availableSlots.find((item) => item.id === slotId)
+      if (
+        !invitation || invitation.status !== 'SCHEDULED' || !currentInterview || !policy || !slot ||
+        invitation.rescheduleCount >= policy.candidateRescheduleLimit ||
+        interview.status !== 'SCHEDULED' ||
+        interview.id !== currentInterview.id || interview.applicationId !== currentInterview.applicationId ||
+        interview.scheduledStart !== slot.start || interview.scheduledEnd !== slot.end ||
+        interview.interviewers.length !== slot.interviewerIds.length ||
+        interview.interviewers.some((person) => !slot.interviewerIds.includes(person.id)) ||
+        interviewHasConflict(state.interviews, interview, currentInterview.id)
+      ) return state
+      return {
+        ...state,
+        interviews: state.interviews.map((item) =>
+          item.id === currentInterview.id
+            ? { ...item, ...interview, id: item.id, questions: item.questions, updatedAt: rescheduledAt }
+            : item,
+        ),
+        interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) =>
+          item.id === invitation.id
+            ? {
+                ...item,
+                selectedSlotId: slot.id,
+                rescheduleCount: item.rescheduleCount + 1,
+                updatedAt: rescheduledAt,
+                lastRescheduledAt: rescheduledAt,
+              }
+            : item,
+        ),
+      }
+    }
+
+    case 'ADD_INTERVIEW': {
+      const interview = action.payload.interview
+      const applicationExists = state.applications.some(
+        (application) => application.id === interview.applicationId,
+      )
+      const hasActiveInterview = state.interviews.some(
+        (item) =>
+          item.applicationId === interview.applicationId &&
+          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+      )
+      if (
+        !applicationExists ||
+        state.interviews.some((item) => item.id === interview.id) ||
+        hasActiveInterview ||
+        interview.scheduledEnd <= interview.scheduledStart
+      ) {
+        return state
+      }
+      return {
+        ...state,
+        interviews: [
+          ...state.interviews,
+          {
+            ...interview,
+            interviewers: interview.interviewers.map((person) => ({ ...person })),
+            questions: interview.questions.map((question) => ({ ...question })),
+          },
+        ],
+      }
+    }
+
+    case 'UPDATE_INTERVIEW': {
+      const interview = state.interviews.find(
+        (item) => item.id === action.payload.interviewId,
+      )
+      if (!interview) return state
+      const scheduledStart =
+        action.payload.changes.scheduledStart ?? interview.scheduledStart
+      const scheduledEnd =
+        action.payload.changes.scheduledEnd ?? interview.scheduledEnd
+      if (scheduledEnd <= scheduledStart) return state
+      return {
+        ...state,
+        interviews: state.interviews.map((item) =>
+          item.id === interview.id
+            ? {
+                ...item,
+                ...action.payload.changes,
+                interviewers: action.payload.changes.interviewers
+                  ? action.payload.changes.interviewers.map((person) => ({ ...person }))
+                  : item.interviewers,
+              }
+            : item,
+        ),
+      }
+    }
+
     case 'ADD_INTERVIEW_QUESTIONS': {
       const interview = state.interviews.find(
         (item) => item.id === action.payload.interviewId,
@@ -692,11 +1094,27 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
     }
 
     case 'UPDATE_INTERVIEW_STATUS':
+      if (
+        action.payload.status === 'CANCELLED' &&
+        !state.interviews.some(
+          (interview) =>
+            interview.id === action.payload.interviewId &&
+            interview.status === 'SCHEDULED',
+        )
+      ) {
+        return state
+      }
       return {
         ...state,
         interviews: state.interviews.map((interview) =>
           interview.id === action.payload.interviewId
-            ? { ...interview, status: action.payload.status }
+            ? {
+                ...interview,
+                status: action.payload.status,
+                ...(action.payload.updatedAt
+                  ? { updatedAt: action.payload.updatedAt }
+                  : {}),
+              }
             : interview,
         ),
       }

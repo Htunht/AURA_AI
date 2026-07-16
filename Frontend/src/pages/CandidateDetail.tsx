@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CandidateProfile } from '../components/candidates/CandidateProfile'
 import { CandidateTimeline } from '../components/candidates/CandidateTimeline'
+import { CandidateInterviewPanel } from '../components/interviews/CandidateInterviewPanel'
 import { CandidateScreeningPanel } from '../components/screening/CandidateScreeningPanel'
 import { PageContainer } from '../components/layout/PageContainer'
 import { Badge } from '../components/ui/Badge'
@@ -144,7 +145,7 @@ export default function CandidateDetail() {
 
       {activeTab === 'timeline' ? <Card className="p-5 md:p-6"><SectionHeading title="Activity timeline" description="Recorded milestones for this application, shown in chronological order." /><CandidateTimeline events={timeline} /></Card> : null}
       {activeTab === 'screening' ? <CandidateScreeningPanel applicationId={application.id} /> : null}
-      {activeTab === 'interview' ? <Placeholder title="Interview" description="Interview preparation and session records will appear here." /> : null}
+      {activeTab === 'interview' ? <CandidateInterviewPanel applicationId={application.id} /> : null}
       {activeTab === 'final' ? <Placeholder title="Final evaluation" description="Final candidate evaluation will appear after interview review." /> : null}
     </PageContainer>
   )

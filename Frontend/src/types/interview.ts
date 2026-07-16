@@ -4,6 +4,8 @@ export type InterviewStatus =
   | 'COMPLETED'
   | 'CANCELLED'
 
+export type InterviewMode = 'VIDEO' | 'PHONE' | 'ONSITE'
+
 export type InterviewQuestionType =
   | 'CORE'
   | 'TECHNICAL'
@@ -28,10 +30,17 @@ export type Interviewer = {
 export type Interview = {
   id: string
   applicationId: string
+  jobId?: string
   scheduledStart: string
   scheduledEnd: string
   timezone: string
   status: InterviewStatus
+  mode?: InterviewMode
   interviewers: Interviewer[]
+  location?: string
+  meetingLink?: string
+  notes?: string
   questions: InterviewQuestion[]
+  createdAt?: string
+  updatedAt?: string
 }

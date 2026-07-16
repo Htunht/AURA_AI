@@ -1,4 +1,4 @@
-import { createFreshDemoState } from '../store/demoPersistence'
+import { createFreshDemoState, normalizePersistedDemoState } from '../store/demoPersistence'
 import {
   demoReducer,
   initialDemoState,
@@ -30,6 +30,8 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
     'rubrics',
     'evaluations',
     'interviews',
+    'interviewSchedulingPolicies',
+    'interviewSchedulingInvitations',
     'transcripts',
     'communications',
     'decisions',
@@ -85,6 +87,17 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
     errors,
     currentValidation.valid,
     `Current demo state failed persistence validation: ${currentValidation.errors.join('; ')}`,
+  )
+
+  const legacyState = { ...createFreshDemoState() }
+  delete (legacyState as Partial<DemoState>).interviewSchedulingPolicies
+  delete (legacyState as Partial<DemoState>).interviewSchedulingInvitations
+  const hydratedLegacy = normalizePersistedDemoState(legacyState)
+  recordCheck(
+    errors,
+    hydratedLegacy.interviewSchedulingPolicies.length === initialDemoState.interviewSchedulingPolicies.length &&
+      hydratedLegacy.interviewSchedulingInvitations.length === 0,
+    'Older persisted state did not hydrate scheduling policies and invitations',
   )
 
   const missingCollection: Record<string, unknown> = {

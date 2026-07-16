@@ -59,14 +59,23 @@ export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
 }
 
 export function normalizePersistedDemoState(
-  state: Omit<DemoState, 'screeningQueue'> & {
+  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations'> & {
     screeningQueue?: DemoState['screeningQueue']
+    interviewSchedulingPolicies?: DemoState['interviewSchedulingPolicies']
+    interviewSchedulingInvitations?: DemoState['interviewSchedulingInvitations']
   },
 ): DemoState {
+  const seedPolicies = createInitialDemoState().interviewSchedulingPolicies
   return recoverInterruptedScreeningQueue({
     ...state,
     screeningQueue: Array.isArray(state.screeningQueue)
       ? state.screeningQueue
+      : [],
+    interviewSchedulingPolicies: Array.isArray(state.interviewSchedulingPolicies)
+      ? state.interviewSchedulingPolicies
+      : seedPolicies,
+    interviewSchedulingInvitations: Array.isArray(state.interviewSchedulingInvitations)
+      ? state.interviewSchedulingInvitations
       : [],
   })
 }
@@ -132,8 +141,10 @@ export function loadPersistedDemoState(): DemoStateHydrationResult {
 
   return {
     state: normalizePersistedDemoState(
-      parsedValue as Omit<PersistedDemoState, 'screeningQueue'> & {
+      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations'> & {
         screeningQueue?: PersistedDemoState['screeningQueue']
+        interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
+        interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
       },
     ),
     source: 'PERSISTED',

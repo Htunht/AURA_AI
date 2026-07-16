@@ -5,6 +5,8 @@ import type { Communication } from '../types/communication'
 import type { Decision } from '../types/decision'
 import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
+import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
+import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { Job } from '../types/job'
 import type { EvaluationRubric } from '../types/rubric'
 import type { ScreeningQueueItem } from '../types/screeningQueue'
@@ -18,6 +20,8 @@ export type DemoState = {
   rubrics: EvaluationRubric[]
   evaluations: Evaluation[]
   interviews: Interview[]
+  interviewSchedulingPolicies: InterviewSchedulingPolicy[]
+  interviewSchedulingInvitations: InterviewSchedulingInvitation[]
   transcripts: Transcript[]
   communications: Communication[]
   decisions: Decision[]

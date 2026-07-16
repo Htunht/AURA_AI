@@ -4,6 +4,7 @@ import candidatesData from '../data/candidates.json'
 import communicationsData from '../data/communications.json'
 import evaluationsData from '../data/evaluations.json'
 import interviewsData from '../data/interviews.json'
+import interviewSchedulingPoliciesData from '../data/interviewSchedulingPolicies.json'
 import jobsData from '../data/jobs.json'
 import rubricsData from '../data/rubrics.json'
 import transcriptsData from '../data/transcripts.json'
@@ -50,6 +51,8 @@ function validateInitialCounts(errors: string[]) {
     ['rubrics', rubricsData.length],
     ['evaluations', evaluationsData.length],
     ['interviews', interviewsData.length],
+    ['interviewSchedulingPolicies', interviewSchedulingPoliciesData.length],
+    ['interviewSchedulingInvitations', 0],
     ['transcripts', transcriptsData.length],
     ['communications', communicationsData.length],
     ['decisions', 0],

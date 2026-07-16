@@ -1,4 +1,4 @@
-import { CalendarCheck, CheckCircle2, FileCheck2, MailCheck, ScanSearch, UserCheck } from 'lucide-react'
+import { AlertTriangle, CalendarCheck, CalendarClock, CalendarX, CheckCircle2, FileCheck2, MailCheck, ScanSearch, UserCheck } from 'lucide-react'
 import type { CandidateTimelineEvent } from '../../store/demoSelectors'
 import { formatDateTime } from '../../utils/helpers'
 
@@ -9,7 +9,12 @@ type CandidateTimelineProps = {
 const iconByType = {
   APPLICATION_SUBMITTED: FileCheck2,
   SCREENING_COMPLETED: ScanSearch,
+  SCHEDULING_INVITATION_PREPARED: CalendarClock,
+  SCHEDULING_INVITATION_EXPIRED: CalendarX,
+  SCHEDULING_EXCEPTION: AlertTriangle,
   INTERVIEW_SCHEDULED: CalendarCheck,
+  INTERVIEW_RESCHEDULED: CalendarClock,
+  INTERVIEW_CANCELLED: CalendarX,
   INTERVIEW_COMPLETED: CheckCircle2,
   FINAL_EVALUATION_COMPLETED: CheckCircle2,
   DECISION_RECORDED: UserCheck,

@@ -4,6 +4,7 @@ import candidatesData from '../data/candidates.json'
 import communicationsData from '../data/communications.json'
 import evaluationsData from '../data/evaluations.json'
 import interviewsData from '../data/interviews.json'
+import interviewSchedulingPoliciesData from '../data/interviewSchedulingPolicies.json'
 import jobsData from '../data/jobs.json'
 import rubricsData from '../data/rubrics.json'
 import transcriptsData from '../data/transcripts.json'
@@ -13,6 +14,7 @@ import type { Candidate } from '../types/candidate'
 import type { Communication } from '../types/communication'
 import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
+import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { Job } from '../types/job'
 import type { EvaluationRubric } from '../types/rubric'
 import type { Transcript } from '../types/transcript'
@@ -26,6 +28,7 @@ const applicationForms = applicationFormsData as ApplicationForm[]
 const rubrics = rubricsData as EvaluationRubric[]
 const evaluations = evaluationsData as Evaluation[]
 const interviews = interviewsData as Interview[]
+const interviewSchedulingPolicies = interviewSchedulingPoliciesData as InterviewSchedulingPolicy[]
 const transcripts = transcriptsData as Transcript[]
 const communications = communicationsData as Communication[]
 
@@ -86,6 +89,13 @@ export function createInitialDemoState(): DemoState {
       })),
       questions: interview.questions.map((question) => ({ ...question })),
     })),
+    interviewSchedulingPolicies: interviewSchedulingPolicies.map((policy) => ({
+      ...policy,
+      workingDays: [...policy.workingDays],
+      requiredInterviewerRoles: [...policy.requiredInterviewerRoles],
+      fixedInterviewerIds: [...policy.fixedInterviewerIds],
+    })),
+    interviewSchedulingInvitations: [],
     transcripts: transcripts.map((transcript) => ({
       ...transcript,
       segments: transcript.segments.map((segment) => ({ ...segment })),

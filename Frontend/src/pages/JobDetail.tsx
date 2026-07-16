@@ -1,4 +1,4 @@
-import { ExternalLink, FilePenLine } from 'lucide-react'
+import { ExternalLink, FilePenLine, Settings2 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { PageContainer } from '../components/layout/PageContainer'
 import { Badge } from '../components/ui/Badge'
@@ -77,6 +77,10 @@ export default function JobDetail() {
           >
             <FilePenLine size={16} />
             Manage form
+          </Link>
+          <Link className={actionLinkClass} to={`/interviews/policies/${job.id}`}>
+            <Settings2 size={16} />
+            Scheduling policy
           </Link>
         </>
       }
