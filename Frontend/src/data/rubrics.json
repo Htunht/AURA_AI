@@ -3,6 +3,10 @@
     "id": "rubric-001",
     "jobId": "job-001",
     "name": "Senior React Developer Evaluation Rubric",
+    "status": "PUBLISHED",
+    "version": 1,
+    "createdAt": "2026-07-10T09:00:00Z",
+    "updatedAt": "2026-07-10T09:00:00Z",
     "criteria": [
       {
         "key": "technical_skills",

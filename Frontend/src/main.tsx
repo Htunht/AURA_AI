@@ -5,14 +5,23 @@ import './index.css'
 import App from './App.tsx'
 import { DemoProvider } from './store'
 import { ScreeningAutomationProvider } from './providers/ScreeningAutomationProvider'
+import { InterviewSchedulingAutomationProvider } from './providers/InterviewSchedulingAutomationProvider'
+import { SchedulingEmailAutomationProvider } from './providers/SchedulingEmailAutomationProvider'
+import { InterviewQuestionAutomationProvider } from './providers/InterviewQuestionAutomationProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <DemoProvider>
       <ScreeningAutomationProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <InterviewSchedulingAutomationProvider>
+          <SchedulingEmailAutomationProvider>
+            <InterviewQuestionAutomationProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </InterviewQuestionAutomationProvider>
+          </SchedulingEmailAutomationProvider>
+        </InterviewSchedulingAutomationProvider>
       </ScreeningAutomationProvider>
     </DemoProvider>
   </StrictMode>,

@@ -5,11 +5,13 @@ import type {
 } from '../../types/applicationForm'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import type { JobRequirement } from '../../types/jobRequirement'
 
 type FormFieldEditorProps = {
   initialField?: ApplicationFormField
   onSubmit: (field: ApplicationFormField) => void
   onCancel: () => void
+  requirements?: JobRequirement[]
 }
 
 const fieldTypes: ApplicationFormFieldType[] = [
@@ -34,6 +36,7 @@ export function FormFieldEditor({
   initialField,
   onSubmit,
   onCancel,
+  requirements = [],
 }: FormFieldEditorProps) {
   const [label, setLabel] = useState(initialField?.label ?? '')
   const [key, setKey] = useState(initialField?.key ?? '')
@@ -49,6 +52,9 @@ export function FormFieldEditor({
     initialField?.options?.map((option) => option.value).join('\n') ?? '',
   )
   const [error, setError] = useState('')
+  const [requirementIds, setRequirementIds] = useState(initialField?.screeningMapping?.requirementIds ?? [])
+  const [selectedCriterionKeys, setSelectedCriterionKeys] = useState(initialField?.screeningMapping?.criterionKeys ?? [])
+  const [evidenceImportance, setEvidenceImportance] = useState(initialField?.screeningMapping?.evidenceImportance ?? 'SUPPORTING')
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -69,6 +75,7 @@ export function FormFieldEditor({
       return
     }
 
+    const criterionKeys = selectedCriterionKeys.length ? selectedCriterionKeys : requirementIds.length ? Array.from(new Set(requirementIds.flatMap((id) => requirements.find((item) => item.id === id)?.importance === 'REQUIRED' ? ['required_qualifications', 'role_evidence'] : ['role_evidence']))) : []
     onSubmit({
       id: initialField?.id ?? `field-${normalizeIdentifier(normalizedKey)}`,
       key: normalizedKey,
@@ -86,6 +93,7 @@ export function FormFieldEditor({
             })),
           }
         : {}),
+      ...(requirementIds.length || criterionKeys.length ? { screeningMapping: { requirementIds, criterionKeys, evidenceImportance } } : {}),
     })
   }
 
@@ -157,6 +165,7 @@ export function FormFieldEditor({
           </small>
         </label>
       ) : null}
+      {requirements.length ? <section className="rounded-aura-sm border border-harbor/15 bg-frost/55 p-4"><h3 className="m-0 text-sm font-semibold text-depth">Screening purpose</h3><p className="mb-0 mt-1 text-xs leading-5 text-aura-text-secondary">Mapped questions provide evidence for automatic screening. Unmapped questions remain visible to recruiters but do not affect scoring.</p><p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-aura-text-muted">Related job requirements</p><div className="grid gap-2 sm:grid-cols-2">{requirements.map((requirement) => <label className="flex items-start gap-2 text-sm text-depth" key={requirement.id}><input className="mt-0.5 size-4 accent-marine" type="checkbox" checked={requirementIds.includes(requirement.id)} onChange={() => setRequirementIds((current) => current.includes(requirement.id) ? current.filter((id) => id !== requirement.id) : [...current, requirement.id])} /><span>{requirement.label}<small className="block text-xs text-aura-text-muted">{requirement.importance === 'REQUIRED' ? 'Required qualification' : requirement.importance === 'PREFERRED' ? 'Preferred qualification' : 'Supporting evidence'}</small></span></label>)}</div><p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-aura-text-muted">Evaluation categories</p><div className="flex flex-wrap gap-2">{[['required_qualifications','Required qualifications'],['relevant_experience','Relevant experience'],['role_evidence','Role-specific evidence'],['problem_solving','Problem solving'],['communication','Communication clarity']].map(([key, label]) => <label className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${selectedCriterionKeys.includes(key!) ? 'border-marine bg-glacier/15 text-harbor' : 'border-harbor/15 bg-white text-aura-text-muted'}`} key={key}><input className="sr-only" type="checkbox" checked={selectedCriterionKeys.includes(key!)} onChange={() => setSelectedCriterionKeys((current) => current.includes(key!) ? current.filter((item) => item !== key) : [...current, key!])} />{label}</label>)}</div><label className="mt-4 grid gap-1.5 text-sm font-semibold text-depth">Evidence importance<select className="h-10 rounded-aura-sm border border-harbor/20 bg-white px-3 text-sm" value={evidenceImportance} onChange={(event) => setEvidenceImportance(event.target.value as typeof evidenceImportance)}><option value="REQUIRED">Required qualification</option><option value="PREFERRED">Preferred qualification</option><option value="SUPPORTING">Supporting evidence</option></select></label></section> : null}
       <div className="flex flex-wrap justify-end gap-2 border-t border-harbor/15 pt-5">
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit">{initialField ? 'Save field' : 'Add field'}</Button>

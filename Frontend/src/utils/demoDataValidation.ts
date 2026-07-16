@@ -117,6 +117,13 @@ export function validateDemoData(): DemoDataValidationResult {
     errors.push('Application form field IDs must be globally unique.')
   }
 
+  for (const job of jobs) {
+    if (!['DRAFT', 'OPEN', 'CLOSED', 'ARCHIVED'].includes(job.status)) errors.push(`Job ${job.id} has an invalid status.`)
+    if (!job.updatedAt) errors.push(`Job ${job.id} is missing updatedAt.`)
+    if (!['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY'].includes(job.employmentType)) errors.push(`Job ${job.id} has an invalid employment type.`)
+    if (!['ONSITE', 'HYBRID', 'REMOTE'].includes(job.workArrangement)) errors.push(`Job ${job.id} has an invalid work arrangement.`)
+  }
+
   for (const form of applicationForms) {
     if (!jobIds.has(form.jobId)) {
       errors.push(`Application form ${form.id} references unknown job ${form.jobId}`)
@@ -250,6 +257,22 @@ export function validateDemoData(): DemoDataValidationResult {
       errors.push(
         `Rubric ${rubric.id} weights must total 100; received ${totalWeight}`,
       )
+    }
+
+    if (!['DRAFT', 'PUBLISHED', 'ARCHIVED'].includes(rubric.status)) {
+      errors.push(`Rubric ${rubric.id} has an invalid status.`)
+    }
+    if (!Number.isInteger(rubric.version) || rubric.version <= 0) {
+      errors.push(`Rubric ${rubric.id} must have a positive integer version.`)
+    }
+    if (!rubric.createdAt || !rubric.updatedAt) {
+      errors.push(`Rubric ${rubric.id} must include persistence timestamps.`)
+    }
+  }
+
+  for (const job of jobs) {
+    if (rubrics.filter((rubric) => rubric.jobId === job.id && rubric.status === 'PUBLISHED').length > 1) {
+      errors.push(`Job ${job.id} has more than one published screening rubric.`)
     }
   }
 

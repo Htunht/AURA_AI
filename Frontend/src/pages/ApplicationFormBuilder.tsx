@@ -122,7 +122,7 @@ export default function ApplicationFormBuilder() {
     setSuggestionsError(undefined)
     setSuggestionProgressIndex(0)
 
-    const rubric = state.rubrics.find((item) => item.jobId === job.id)
+    const rubric = state.rubrics.find((item) => item.jobId === job.id && item.status === 'PUBLISHED')
 
     if (!rubric) {
       setSuggestionsError(
@@ -209,6 +209,7 @@ export default function ApplicationFormBuilder() {
         fields: publishedForm.fields.map((field) => ({
           ...field,
           options: field.options?.map((option) => ({ ...option })),
+          screeningMapping: field.screeningMapping ? { ...field.screeningMapping, requirementIds: [...field.screeningMapping.requirementIds], criterionKeys: [...field.screeningMapping.criterionKeys] } : undefined,
         })),
         createdAt: DEMO_TIMESTAMP,
         updatedAt: DEMO_TIMESTAMP,

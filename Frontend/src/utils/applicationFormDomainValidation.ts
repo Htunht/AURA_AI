@@ -196,6 +196,60 @@ export function validateApplicationFormDomain(): ApplicationFormDomainValidation
     'Submission preparation did not create CV document metadata',
   )
 
+  const guidedExperienceField = form.fields.find(
+    (field) => field.key === 'years_experience',
+  )
+  if (guidedExperienceField) {
+    const guidedForm: ApplicationForm = {
+      ...form,
+      fields: form.fields.map((field) =>
+        field.id === guidedExperienceField.id
+          ? { ...field, key: 'years_of_experience' }
+          : field,
+      ),
+    }
+    const guidedSubmission: CandidateSubmission = {
+      ...validSubmission,
+      answers: validSubmission.answers.map((answer) =>
+        answer.fieldId === guidedExperienceField.id
+          ? { ...answer, fieldKey: 'years_of_experience' }
+          : answer,
+      ),
+    }
+    const guidedPrepared = prepareApplicationSubmission({
+      form: guidedForm,
+      submission: guidedSubmission,
+      existingCandidates: [],
+      candidateId: 'candidate-validation-guided',
+      applicationId: 'application-validation-guided',
+      documentId: 'document-validation-guided-cv',
+      submittedAt: '2026-07-18T09:15:00Z',
+    })
+    recordCheck(
+      errors,
+      guidedPrepared.candidate.yearsExperience === 5,
+      'Guided experience field was not copied to the candidate profile',
+    )
+
+    const existingGuidedPrepared = prepareApplicationSubmission({
+      form: guidedForm,
+      submission: guidedSubmission,
+      existingCandidates: [
+        { ...guidedPrepared.candidate, yearsExperience: 0 },
+      ],
+      candidateId: 'candidate-validation-guided-unused',
+      applicationId: 'application-validation-guided-existing',
+      documentId: 'document-validation-guided-existing-cv',
+      submittedAt: '2026-07-18T09:20:00Z',
+    })
+    recordCheck(
+      errors,
+      existingGuidedPrepared.candidate.id === guidedPrepared.candidate.id &&
+        existingGuidedPrepared.candidate.yearsExperience === 5,
+      'A repeat applicant did not refresh the stored experience value',
+    )
+  }
+
   const john = initialDemoState.candidates.find(
     (candidate) => candidate.id === 'candidate-001',
   )

@@ -1,4 +1,13 @@
-export type JobStatus = 'DRAFT' | 'OPEN' | 'CLOSED'
+export type JobStatus = 'DRAFT' | 'OPEN' | 'CLOSED' | 'ARCHIVED'
+
+export type EmploymentType =
+  | 'FULL_TIME'
+  | 'PART_TIME'
+  | 'CONTRACT'
+  | 'INTERNSHIP'
+  | 'TEMPORARY'
+
+export type WorkArrangement = 'ONSITE' | 'HYBRID' | 'REMOTE'
 
 export type SkillRequirement = {
   name: string
@@ -13,7 +22,15 @@ export type Job = {
   description: string
   status: JobStatus
   positionsCount: number
-  applicationDeadline: string
+  employmentType: EmploymentType
+  workArrangement: WorkArrangement
+  location?: string
+  minimumExperienceYears: number
+  applicationDeadline?: string
   requiredSkills: SkillRequirement[]
   createdAt: string
+  updatedAt: string
+  openedAt?: string
+  closedAt?: string
+  archivedAt?: string
 }

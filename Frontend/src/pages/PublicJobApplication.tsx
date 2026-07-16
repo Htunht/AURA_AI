@@ -10,6 +10,7 @@ import { prepareApplicationSubmission, type PreparedApplicationSubmission } from
 import { selectJobById, selectPublishedApplicationFormByJobId } from '../store/demoSelectors'
 import type { ApplicationSubmissionValue, CandidateSubmission } from '../types/application'
 import { validateApplicationSubmission } from '../utils/applicationSubmissionValidation'
+import { canAcceptPublicApplications } from '../utils/jobValidation'
 
 const DEMO_TIMESTAMP = '2026-07-16T10:30:00Z'
 
@@ -26,7 +27,16 @@ export default function PublicJobApplication() {
     return <PublicUnavailable title="Job not found" message="This job opening does not exist." />
   }
 
-  if (job.status !== 'OPEN' || !form) {
+  if (!canAcceptPublicApplications(job, Boolean(form)) && job.status !== 'OPEN') {
+    const message = job.status === 'DRAFT'
+      ? 'This role is not open for applications.'
+      : job.status === 'CLOSED'
+        ? 'Applications for this role are now closed.'
+        : 'This role is no longer available.'
+    return <PublicUnavailable title={job.title} message={message} />
+  }
+
+  if (!form) {
     return <PublicUnavailable title={job.title} message="Applications are not currently available." />
   }
 
@@ -117,7 +127,10 @@ export default function PublicJobApplication() {
         submittedAt: DEMO_TIMESTAMP,
       })
 
-      dispatch({ type: 'ADD_CANDIDATE', payload: prepared.candidate })
+      dispatch({
+        type: existingCandidate ? 'UPDATE_CANDIDATE' : 'ADD_CANDIDATE',
+        payload: prepared.candidate,
+      })
       dispatch({ type: 'ADD_APPLICATION', payload: prepared.application })
       dispatch({
         type: 'QUEUE_SCREENING_APPLICATION',
@@ -161,7 +174,7 @@ export default function PublicJobApplication() {
         <header className="border-b border-harbor/15 pb-5">
           <h2 className="m-0 text-xl font-semibold text-depth">{form.name}</h2>
           <p className="mt-2 mb-0 text-sm leading-6 text-aura-text-secondary">
-            Complete the fields below. Required fields are marked clearly.
+            {form.description ?? 'Complete the fields below. Required fields are marked clearly.'}
           </p>
         </header>
         {errors.length > 0 ? (

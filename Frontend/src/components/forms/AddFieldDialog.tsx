@@ -1,12 +1,14 @@
 import type { ApplicationFormField } from '../../types/applicationForm'
 import { Dialog } from '../ui/Dialog'
 import { FormFieldEditor } from './FormFieldEditor'
+import type { JobRequirement } from '../../types/jobRequirement'
 
 type AddFieldDialogProps = {
   open: boolean
   field?: ApplicationFormField
   onClose: () => void
   onSubmit: (field: ApplicationFormField) => void
+  requirements?: JobRequirement[]
 }
 
 export function AddFieldDialog({
@@ -14,6 +16,7 @@ export function AddFieldDialog({
   field,
   onClose,
   onSubmit,
+  requirements,
 }: AddFieldDialogProps) {
   return (
     <Dialog
@@ -26,6 +29,7 @@ export function AddFieldDialog({
         initialField={field}
         onCancel={onClose}
         onSubmit={onSubmit}
+        requirements={requirements}
       />
     </Dialog>
   )

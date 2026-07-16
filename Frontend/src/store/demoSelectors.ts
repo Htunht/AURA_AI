@@ -5,6 +5,12 @@ import type { Communication } from '../types/communication'
 import type { Decision } from '../types/decision'
 import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
+import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
+import type { InterviewSession } from '../types/interviewSession'
+import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
+import type { SchedulingExceptionReason } from '../types/interviewSchedulingInvitation'
+import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
+import type { Interviewer } from '../types/interviewer'
 import type { Job } from '../types/job'
 import type { EvaluationRubric } from '../types/rubric'
 import type {
@@ -14,7 +20,88 @@ import type {
 import type { ScreeningQueueItem } from '../types/screeningQueue'
 import type { Transcript } from '../types/transcript'
 import { getScreeningRecommendationLabel } from '../utils/recommendation'
+import { evaluateJobReadiness, selectJobRelatedRecordCounts as deriveJobRelatedRecordCounts, type JobReadinessResult, type JobRelatedRecordCounts } from '../utils/jobValidation'
+import { evaluateHiringWorkflowReadiness, selectHiringWorkflowSetupProgress as deriveHiringWorkflowSetupProgress } from '../utils/hiringWorkflowSetup'
+import type { HiringWorkflowReadiness, HiringWorkflowSetupProgress } from '../types/hiringWorkflowSetup'
 import type { DemoState } from './demoReducer'
+import interviewersData from '../data/interviewers.json'
+import type { EmailDeliveryStatus } from '../types/emailDelivery'
+import type { ResolvedInterviewSchedulingPolicy } from '../types/resolvedInterviewSchedulingPolicy'
+import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyResolution'
+import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestionSetReadiness'
+import { deriveJobRequirements } from '../utils/jobRequirements'
+
+const schedulingInterviewers = interviewersData as Interviewer[]
+
+export function selectInterviewQuestionSetsByInterviewId(state: DemoState, interviewId: string): InterviewQuestionSet[] {
+  return state.interviewQuestionSets.filter((set) => set.interviewId === interviewId).sort((left, right) => right.version - left.version)
+}
+
+export function selectInterviewSessionByInterviewId(state: DemoState, interviewId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.interviewId === interviewId) }
+export function selectInterviewSessionById(state: DemoState, sessionId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.id === sessionId) }
+export type InterviewSessionViewModel = { session: InterviewSession; interview: Interview; questionSet: InterviewQuestionSet; candidate: Candidate; application: Application; job: Job }
+export function selectInterviewSessionViewModel(state: DemoState, interviewId: string): InterviewSessionViewModel | undefined {
+  const session = selectInterviewSessionByInterviewId(state, interviewId); const interview = state.interviews.find((item) => item.id === interviewId); const questionSet = session ? state.interviewQuestionSets.find((item) => item.id === session.questionSetId) : undefined; const application = interview ? state.applications.find((item) => item.id === interview.applicationId) : undefined; const candidate = application ? state.candidates.find((item) => item.id === application.candidateId) : undefined; const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+  return session && interview && questionSet && application && candidate && job ? { session, interview, questionSet, application, candidate, job } : undefined
+}
+export type InterviewSessionProgressSummary = { total: number; asked: number; skipped: number; notAsked: number; current: number; notReached: number; completionPercent: number }
+export function selectInterviewSessionProgressSummary(session: InterviewSession): InterviewSessionProgressSummary {
+  const count = (status: string) => session.questionProgress.filter((item) => item.status === status).length
+  const total = session.questionProgress.length; const asked = count('ASKED'); const skipped = count('SKIPPED'); const notAsked = count('NOT_ASKED'); const current = count('CURRENT'); const notReached = count('NOT_REACHED')
+  return { total, asked, skipped, notAsked, current, notReached, completionPercent: total ? Math.round(((asked + skipped) / total) * 100) : 0 }
+}
+export type InterviewSessionOperationalStatus = 'PLAN_REQUIRED' | 'READY' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'UNAVAILABLE'
+export function selectInterviewSessionOperationalStatus(state: DemoState, interviewId: string): InterviewSessionOperationalStatus {
+  const interview = state.interviews.find((item) => item.id === interviewId); const session = selectInterviewSessionByInterviewId(state, interviewId)
+  if (!interview || interview.status === 'CANCELLED') return 'UNAVAILABLE'
+  if (session?.status === 'COMPLETED' || interview.status === 'COMPLETED') return 'COMPLETED'
+  if (session?.status === 'IN_PROGRESS') return 'IN_PROGRESS'
+  if (session?.status === 'PAUSED') return 'PAUSED'
+  return selectApprovedInterviewQuestionSet(state, interviewId) ? 'READY' : 'PLAN_REQUIRED'
+}
+export function selectInterviewSessionOperationsSummary(state: DemoState, now: Date) {
+  const statuses = state.interviews.map((interview) => ({ interview, status: selectInterviewSessionOperationalStatus(state, interview.id) }))
+  const day = now.toISOString().slice(0, 10)
+  return { ready: statuses.filter((item) => item.status === 'READY').length, inProgress: statuses.filter((item) => item.status === 'IN_PROGRESS').length, paused: statuses.filter((item) => item.status === 'PAUSED').length, completedToday: state.interviewSessions.filter((session) => session.status === 'COMPLETED' && session.completedAt?.slice(0, 10) === day).length, attention: statuses.filter((item) => item.status === 'PAUSED' || (item.status === 'PLAN_REQUIRED' && item.interview.scheduledStart <= new Date(now.getTime() + 60 * 60_000).toISOString())) }
+}
+
+export function selectLatestInterviewQuestionSet(state: DemoState, interviewId: string): InterviewQuestionSet | undefined {
+  return selectInterviewQuestionSetsByInterviewId(state, interviewId)[0]
+}
+
+export function selectApprovedInterviewQuestionSet(state: DemoState, interviewId: string): InterviewQuestionSet | undefined {
+  return selectInterviewQuestionSetsByInterviewId(state, interviewId).find((set) => set.status === 'APPROVED')
+}
+
+export type InterviewQuestionPreparationStatus = 'NOT_PREPARED' | 'PREPARING' | 'DRAFT_READY' | 'APPROVED' | 'FAILED'
+
+export function selectInterviewQuestionPreparationStatus(state: DemoState, interviewId: string): InterviewQuestionPreparationStatus {
+  const set = selectLatestInterviewQuestionSet(state, interviewId)
+  if (!set) return 'NOT_PREPARED'
+  if (set.status === 'GENERATING') return 'PREPARING'
+  if (set.status === 'DRAFT') return 'DRAFT_READY'
+  if (set.status === 'APPROVED') return 'APPROVED'
+  return 'FAILED'
+}
+
+export function selectInterviewPreparationSummary(state: DemoState) {
+  const scheduled = state.interviews.filter((interview) => interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS')
+  const statuses = scheduled.map((interview) => ({ interview, status: selectInterviewQuestionPreparationStatus(state, interview.id) }))
+  return {
+    readyForReview: statuses.filter((item) => item.status === 'DRAFT_READY').length,
+    approved: statuses.filter((item) => item.status === 'APPROVED').length,
+    failed: statuses.filter((item) => item.status === 'FAILED').length,
+    needsReview: statuses.filter((item) => item.status === 'DRAFT_READY' || item.status === 'FAILED').sort((a, b) => a.interview.scheduledStart.localeCompare(b.interview.scheduledStart)),
+  }
+}
+
+export function selectInterviewQuestionSetReadiness(state: DemoState, interviewId: string) {
+  const interview = state.interviews.find((item) => item.id === interviewId)
+  const set = selectLatestInterviewQuestionSet(state, interviewId)
+  const application = interview ? state.applications.find((item) => item.id === interview.applicationId) : undefined
+  const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+  return interview && set && job ? evaluateInterviewQuestionSetReadiness({ questionSet: set, interview, requirements: deriveJobRequirements(job) }) : undefined
+}
 
 export function selectJobById(
   state: DemoState,
@@ -22,6 +109,21 @@ export function selectJobById(
 ): Job | undefined {
   return state.jobs.find((job) => job.id === jobId)
 }
+
+export function selectJobsByStatus(state: DemoState, status: Job['status']): Job[] {
+  return state.jobs.filter((job) => job.status === status)
+}
+
+export function selectJobReadiness(state: DemoState, jobId: string): JobReadinessResult {
+  return evaluateJobReadiness(state, jobId)
+}
+
+export function selectJobRelatedRecordCounts(state: DemoState, jobId: string): JobRelatedRecordCounts {
+  return deriveJobRelatedRecordCounts(state, jobId)
+}
+
+export function selectHiringWorkflowSetupProgress(state: DemoState, jobId: string): HiringWorkflowSetupProgress { return deriveHiringWorkflowSetupProgress(state, jobId) }
+export function selectHiringWorkflowReadiness(state: DemoState, jobId: string): HiringWorkflowReadiness { return evaluateHiringWorkflowReadiness(state, jobId) }
 
 export function selectCandidateById(
   state: DemoState,
@@ -80,6 +182,29 @@ export function selectDraftApplicationFormByJobId(
   )
 }
 
+export function selectRubricsByJobId(
+  state: DemoState,
+  jobId: string,
+): EvaluationRubric[] {
+  return state.rubrics
+    .filter((rubric) => rubric.jobId === jobId)
+    .sort((left, right) => right.version - left.version)
+}
+
+export function selectPublishedRubricByJobId(
+  state: DemoState,
+  jobId: string,
+): EvaluationRubric | undefined {
+  return selectRubricsByJobId(state, jobId).find((rubric) => rubric.status === 'PUBLISHED')
+}
+
+export function selectDraftRubricByJobId(
+  state: DemoState,
+  jobId: string,
+): EvaluationRubric | undefined {
+  return selectRubricsByJobId(state, jobId).find((rubric) => rubric.status === 'DRAFT')
+}
+
 export function selectCandidateForApplication(
   state: DemoState,
   applicationId: string,
@@ -136,9 +261,475 @@ export function selectInterviewByApplicationId(
   state: DemoState,
   applicationId: string,
 ): Interview | undefined {
-  return state.interviews.find(
-    (interview) => interview.applicationId === applicationId,
+  return state.interviews
+    .filter((interview) => interview.applicationId === applicationId)
+    .sort((left, right) => {
+      const leftActive = left.status === 'SCHEDULED' || left.status === 'IN_PROGRESS'
+      const rightActive = right.status === 'SCHEDULED' || right.status === 'IN_PROGRESS'
+      if (leftActive !== rightActive) return leftActive ? -1 : 1
+      return right.scheduledStart.localeCompare(left.scheduledStart)
+    })[0]
+}
+
+export function selectInterviewById(
+  state: DemoState,
+  interviewId: string,
+): Interview | undefined {
+  return state.interviews.find((interview) => interview.id === interviewId)
+}
+
+export function selectActiveInterviewSchedulingPolicy(
+  state: DemoState,
+  jobId: string,
+): InterviewSchedulingPolicy | undefined {
+  return selectResolvedInterviewSchedulingPolicy(state, jobId)?.policy
+}
+
+export function selectResolvedInterviewSchedulingPolicy(
+  state: DemoState,
+  jobId: string,
+): ResolvedInterviewSchedulingPolicy | undefined {
+  const job = selectJobById(state, jobId)
+  return job ? resolveInterviewSchedulingPolicy({ policies: state.interviewSchedulingPolicies, job }) : undefined
+}
+
+export function selectJobsWithoutResolvedSchedulingPolicy(state: DemoState): Job[] {
+  return state.jobs.filter((job) => !selectResolvedInterviewSchedulingPolicy(state, job.id))
+}
+
+export type SchedulingPolicyResolutionSummary = {
+  jobOverrides: number
+  departmentTemplates: number
+  organizationDefaults: number
+  unresolvedJobs: number
+}
+
+export function selectSchedulingPolicyResolutionSummary(state: DemoState): SchedulingPolicyResolutionSummary {
+  const resolved = state.jobs.map((job) => selectResolvedInterviewSchedulingPolicy(state, job.id))
+  return {
+    jobOverrides: resolved.filter((item) => item?.source === 'JOB_OVERRIDE').length,
+    departmentTemplates: resolved.filter((item) => item?.source === 'DEPARTMENT_TEMPLATE').length,
+    organizationDefaults: resolved.filter((item) => item?.source === 'ORGANIZATION_DEFAULT').length,
+    unresolvedJobs: resolved.filter((item) => !item).length,
+  }
+}
+
+export function selectSchedulingInvitationByToken(
+  state: DemoState,
+  token: string,
+): InterviewSchedulingInvitation | undefined {
+  return state.interviewSchedulingInvitations.find((item) => item.token === token)
+}
+
+export function selectSchedulingInvitationByApplicationId(
+  state: DemoState,
+  applicationId: string,
+): InterviewSchedulingInvitation | undefined {
+  return state.interviewSchedulingInvitations
+    .filter((item) => item.applicationId === applicationId)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+}
+
+export function selectPendingSchedulingInvitations(
+  state: DemoState,
+): InterviewSchedulingInvitation[] {
+  return state.interviewSchedulingInvitations
+    .filter((item) => item.status === 'PENDING')
+    .sort((left, right) => left.expiresAt.localeCompare(right.expiresAt))
+}
+
+export function selectSchedulingExceptions(
+  state: DemoState,
+): InterviewSchedulingInvitation[] {
+  return state.interviewSchedulingInvitations
+    .filter((item) => item.status === 'EXCEPTION_REQUIRED')
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+}
+
+export type SchedulingAutomationCardState =
+  | 'IN_PROGRESS'
+  | 'READY_TO_SHARE'
+  | 'AWAITING_CANDIDATE'
+  | 'SCHEDULED'
+  | 'EXCEPTION'
+  | 'EXPIRED'
+  | 'CANCELLED'
+
+export type SchedulingProgressStep = {
+  id: string
+  label: string
+  status: 'COMPLETE' | 'CURRENT' | 'PENDING' | 'FAILED'
+}
+
+export type SchedulingAutomationViewModel = {
+  invitation: InterviewSchedulingInvitation
+  candidate: Candidate
+  job: Job
+  interviewerNames: string[]
+  availableSlotCount: number
+  state: SchedulingAutomationCardState
+  responsibility: 'AURA' | 'CANDIDATE' | 'RECRUITER' | 'NONE'
+  progressSteps: SchedulingProgressStep[]
+  deliveryStatus: EmailDeliveryStatus
+  deliveryAttemptCount: number
+  deliveryError?: string
+  sentAt?: string
+  policySourceLabel?: string
+}
+
+const exceptionLabels: Record<SchedulingExceptionReason, string> = {
+  POLICY_MISSING: 'Scheduling defaults required',
+  INTERVIEWERS_UNAVAILABLE: 'No eligible interviewers are available',
+  NO_AVAILABLE_SLOTS: 'No suitable time slots were found',
+  INVITATION_EXPIRED: 'Candidate invitation expired',
+  SLOT_CONFLICT: 'Selected time is no longer available',
+  RESCHEDULE_LIMIT_REACHED: 'Candidate reached the reschedule limit',
+}
+
+export function getSchedulingExceptionLabel(
+  reason?: SchedulingExceptionReason,
+): string {
+  return reason
+    ? exceptionLabels[reason]
+    : 'Automatic scheduling could not continue'
+}
+
+export function deriveSchedulingAutomationCardState(
+  state: DemoState,
+  invitation: InterviewSchedulingInvitation,
+): SchedulingAutomationCardState {
+  const linkedInterview = invitation.scheduledInterviewId
+    ? state.interviews.find((item) => item.id === invitation.scheduledInterviewId)
+    : undefined
+  if (invitation.status === 'SCHEDULED' && linkedInterview) return 'SCHEDULED'
+  if (invitation.status === 'CANCELLED' || linkedInterview?.status === 'CANCELLED') return 'CANCELLED'
+  if (invitation.status === 'EXPIRED') return 'EXPIRED'
+  if (invitation.status === 'EXCEPTION_REQUIRED' || invitation.delivery.status === 'FAILED' || invitation.delivery.status === 'NOT_SENT') return 'EXCEPTION'
+  if (invitation.delivery.status === 'SENT') return 'AWAITING_CANDIDATE'
+  if (invitation.delivery.status === 'QUEUED' || invitation.delivery.status === 'SENDING') return 'IN_PROGRESS'
+  return 'READY_TO_SHARE'
+}
+
+function progressStatus(
+  complete: boolean,
+  current: boolean,
+  failed: boolean,
+): SchedulingProgressStep['status'] {
+  if (failed) return 'FAILED'
+  if (complete) return 'COMPLETE'
+  return current ? 'CURRENT' : 'PENDING'
+}
+
+function deriveSchedulingProgress(
+  state: DemoState,
+  invitation: InterviewSchedulingInvitation,
+  cardState: SchedulingAutomationCardState,
+): SchedulingProgressStep[] {
+  const policyComplete = Boolean(
+    state.interviewSchedulingPolicies.find(
+      (policy) => policy.id === invitation.policyId,
+    ),
   )
+  const interviewersComplete = invitation.interviewerIds.length > 0
+  const slotsComplete = invitation.availableSlots.length > 0
+  const candidateSelected = Boolean(invitation.selectedSlotId)
+  const interviewConfirmed = cardState === 'SCHEDULED'
+  const reason = invitation.exceptionReason
+
+  return [
+    {
+      id: 'policy',
+      label: 'Policy applied',
+      status: progressStatus(
+        policyComplete,
+        cardState === 'IN_PROGRESS' && !policyComplete,
+        reason === 'POLICY_MISSING',
+      ),
+    },
+    {
+      id: 'interviewers',
+      label: 'Interviewers assigned',
+      status: progressStatus(
+        interviewersComplete,
+        policyComplete && !interviewersComplete && cardState === 'IN_PROGRESS',
+        reason === 'INTERVIEWERS_UNAVAILABLE',
+      ),
+    },
+    {
+      id: 'slots',
+      label: 'Available times generated',
+      status: progressStatus(
+        slotsComplete,
+        interviewersComplete && !slotsComplete && cardState === 'IN_PROGRESS',
+        reason === 'NO_AVAILABLE_SLOTS',
+      ),
+    },
+    {
+      id: 'invitation',
+      label: cardState === 'EXPIRED' ? 'Scheduling link expired' : 'Scheduling link prepared',
+      status: progressStatus(
+        slotsComplete && cardState !== 'EXPIRED' && cardState !== 'READY_TO_SHARE',
+        slotsComplete && cardState === 'READY_TO_SHARE',
+        cardState === 'EXPIRED' || reason === 'INVITATION_EXPIRED',
+      ),
+    },
+    {
+      id: 'selection',
+      label: 'Candidate selected time',
+      status: progressStatus(
+        candidateSelected,
+        cardState === 'AWAITING_CANDIDATE',
+        reason === 'SLOT_CONFLICT' || reason === 'RESCHEDULE_LIMIT_REACHED',
+      ),
+    },
+    {
+      id: 'confirmation',
+      label: 'Interview confirmed',
+      status: progressStatus(interviewConfirmed, false, false),
+    },
+  ]
+}
+
+function deriveSchedulingResponsibility(
+  cardState: SchedulingAutomationCardState,
+): SchedulingAutomationViewModel['responsibility'] {
+  if (cardState === 'IN_PROGRESS') return 'AURA'
+  if (cardState === 'READY_TO_SHARE' || cardState === 'AWAITING_CANDIDATE') return 'CANDIDATE'
+  if (cardState === 'EXCEPTION' || cardState === 'EXPIRED') return 'RECRUITER'
+  return 'NONE'
+}
+
+export function selectSchedulingAutomationViewModels(
+  state: DemoState,
+): SchedulingAutomationViewModel[] {
+  return state.interviewSchedulingInvitations
+    .map((invitation): SchedulingAutomationViewModel | undefined => {
+      const application = selectApplicationById(state, invitation.applicationId)
+      const candidate = application
+        ? selectCandidateById(state, application.candidateId)
+        : undefined
+      const job = selectJobById(state, invitation.jobId)
+      if (!candidate || !job) return undefined
+      const cardState = deriveSchedulingAutomationCardState(state, invitation)
+      const storedPolicy = state.interviewSchedulingPolicies.find((policy) => policy.id === invitation.policyId)
+      const sourceLabel = invitation.policySource === 'JOB_OVERRIDE'
+        ? 'Custom policy for this job'
+        : invitation.policySource === 'DEPARTMENT_TEMPLATE'
+          ? `${storedPolicy?.department ?? job.department} default`
+          : invitation.policySource === 'ORGANIZATION_DEFAULT'
+            ? 'Organization default'
+            : storedPolicy?.displayName
+      return {
+        invitation,
+        candidate,
+        job,
+        interviewerNames: invitation.interviewerIds.map(
+          (id) => schedulingInterviewers.find((person) => person.id === id)?.fullName ?? 'Assigned interviewer',
+        ),
+        availableSlotCount: invitation.availableSlots.length,
+        state: cardState,
+        responsibility: deriveSchedulingResponsibility(cardState),
+        progressSteps: deriveSchedulingProgress(state, invitation, cardState),
+        deliveryStatus: invitation.delivery.status,
+        deliveryAttemptCount: invitation.delivery.attemptCount,
+        deliveryError: invitation.delivery.lastErrorMessage,
+        sentAt: invitation.delivery.sentAt,
+        policySourceLabel: sourceLabel,
+      }
+    })
+    .filter((item): item is SchedulingAutomationViewModel => Boolean(item))
+    .sort((left, right) => right.invitation.updatedAt.localeCompare(left.invitation.updatedAt))
+}
+
+export function selectInvitationsPendingEmailDelivery(state: DemoState): InterviewSchedulingInvitation[] {
+  return state.interviewSchedulingInvitations.filter((item) => item.delivery.status === 'QUEUED' || item.delivery.status === 'SENDING')
+}
+
+export function selectFailedEmailInvitations(state: DemoState): InterviewSchedulingInvitation[] {
+  return state.interviewSchedulingInvitations.filter((item) => item.delivery.status === 'FAILED')
+}
+
+export type SchedulingEmailDeliverySummary = { queued: number; sending: number; sent: number; failed: number; notSent: number }
+export function selectSchedulingEmailDeliverySummary(state: DemoState): SchedulingEmailDeliverySummary {
+  const statuses = state.interviewSchedulingInvitations.map((item) => item.delivery.status)
+  return { queued: statuses.filter((item) => item === 'QUEUED').length, sending: statuses.filter((item) => item === 'SENDING').length, sent: statuses.filter((item) => item === 'SENT').length, failed: statuses.filter((item) => item === 'FAILED').length, notSent: statuses.filter((item) => item === 'NOT_SENT').length }
+}
+
+export function selectSchedulingAutomationViewModelByApplicationId(
+  state: DemoState,
+  applicationId: string,
+): SchedulingAutomationViewModel | undefined {
+  return selectSchedulingAutomationViewModels(state).find(
+    (item) => item.invitation.applicationId === applicationId,
+  )
+}
+
+export function selectInvitationsExpiringSoon(
+  state: DemoState,
+  now: Date,
+  hours: number,
+): InterviewSchedulingInvitation[] {
+  const start = now.getTime()
+  const end = start + Math.max(0, hours) * 3_600_000
+  return selectPendingSchedulingInvitations(state).filter((item) => {
+    const expiry = new Date(item.expiresAt).getTime()
+    return expiry >= start && expiry <= end
+  })
+}
+
+export type SelfSchedulingCandidate = {
+  application: Application
+  candidate: Candidate
+  job: Job
+  decision: Decision
+  policy?: InterviewSchedulingPolicy
+  invitation?: InterviewSchedulingInvitation
+  interview?: Interview
+}
+
+export function selectSelfSchedulingCandidates(state: DemoState): SelfSchedulingCandidate[] {
+  return state.applications
+    .map((application): SelfSchedulingCandidate | undefined => {
+      const candidate = selectCandidateById(state, application.candidateId)
+      const job = selectJobById(state, application.jobId)
+      const decision = selectLatestDecisionByApplicationId(state, application.id)
+      const policy = selectResolvedInterviewSchedulingPolicy(state, application.jobId)?.policy
+      const invitation = selectSchedulingInvitationByApplicationId(state, application.id)
+      const interview = selectInterviewByApplicationId(state, application.id)
+      const positive = decision?.humanRecommendation === 'STRONG_YES' ||
+        decision?.humanRecommendation === 'YES' ||
+        decision?.humanRecommendation === 'REVIEW'
+      const activeInterview = state.interviews.some((item) =>
+        item.applicationId === application.id &&
+        (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+      )
+      return candidate && job && decision && positive && policy &&
+        application.currentStage === 'SHORTLIST_REVIEW' && !activeInterview &&
+        invitation?.status !== 'PENDING' && invitation?.status !== 'SCHEDULED'
+        ? { application, candidate, job, decision, policy, invitation, interview }
+        : undefined
+    })
+    .filter((item): item is SelfSchedulingCandidate => Boolean(item))
+    .sort((left, right) => right.decision.createdAt.localeCompare(left.decision.createdAt))
+}
+
+export type InterviewAutomationSummary = {
+  invitationsReadyToShare: number
+  awaitingCandidateScheduling: number
+  scheduledInterviews: number
+  schedulingExceptions: number
+  interviewsToday: number
+}
+
+export function selectInterviewAutomationSummary(
+  state: DemoState,
+  now: Date,
+): InterviewAutomationSummary {
+  const today = now.toISOString().slice(0, 10)
+  return {
+    invitationsReadyToShare: selectSchedulingAutomationViewModels(state).filter(
+      (item) => item.state === 'READY_TO_SHARE',
+    ).length,
+    awaitingCandidateScheduling: selectSchedulingAutomationViewModels(state).filter(
+      (item) => item.state === 'READY_TO_SHARE' || item.state === 'AWAITING_CANDIDATE',
+    ).length,
+    scheduledInterviews: state.interviews.filter(
+      (item) => item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS',
+    ).length,
+    schedulingExceptions: selectSchedulingAutomationViewModels(state).filter(
+      (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
+    ).length,
+    interviewsToday: state.interviews.filter(
+      (item) => item.status !== 'CANCELLED' && item.scheduledStart.slice(0, 10) === today,
+    ).length,
+  }
+}
+
+export type InterviewSchedulingCandidate = {
+  application: Application
+  candidate: Candidate
+  job: Job
+  decision: Decision
+  existingInterview?: Interview
+}
+
+export function selectInterviewSchedulingCandidates(
+  state: DemoState,
+): InterviewSchedulingCandidate[] {
+  return state.applications
+    .map((application): InterviewSchedulingCandidate | undefined => {
+      const candidate = selectCandidateById(state, application.candidateId)
+      const job = selectJobById(state, application.jobId)
+      const decision = selectLatestDecisionByApplicationId(state, application.id)
+      const positiveDecision =
+        decision?.humanRecommendation === 'STRONG_YES' ||
+        decision?.humanRecommendation === 'YES' ||
+        decision?.humanRecommendation === 'REVIEW'
+      const existingInterview = selectInterviewByApplicationId(
+        state,
+        application.id,
+      )
+      const hasActiveInterview = state.interviews.some(
+        (interview) =>
+          interview.applicationId === application.id &&
+          (interview.status === 'SCHEDULED' ||
+            interview.status === 'IN_PROGRESS'),
+      )
+
+      return candidate &&
+        job &&
+        decision &&
+        positiveDecision &&
+        application.currentStage === 'SHORTLIST_REVIEW' &&
+        !hasActiveInterview
+        ? { application, candidate, job, decision, existingInterview }
+        : undefined
+    })
+    .filter((item): item is InterviewSchedulingCandidate => item !== undefined)
+    .sort((left, right) =>
+      right.decision.createdAt.localeCompare(left.decision.createdAt),
+    )
+}
+
+export type InterviewListItem = {
+  interview: Interview
+  application: Application
+  candidate: Candidate
+  job: Job
+}
+
+export function selectInterviewListItems(state: DemoState): InterviewListItem[] {
+  const statusPriority: Record<Interview['status'], number> = {
+    SCHEDULED: 0,
+    IN_PROGRESS: 1,
+    COMPLETED: 2,
+    CANCELLED: 3,
+  }
+  return state.interviews
+    .map((interview): InterviewListItem | undefined => {
+      const application = selectApplicationById(state, interview.applicationId)
+      const candidate = application
+        ? selectCandidateById(state, application.candidateId)
+        : undefined
+      const job = application ? selectJobById(state, application.jobId) : undefined
+      return application && candidate && job
+        ? { interview, application, candidate, job }
+        : undefined
+    })
+    .filter((item): item is InterviewListItem => item !== undefined)
+    .sort((left, right) => {
+      const priorityDifference =
+        statusPriority[left.interview.status] - statusPriority[right.interview.status]
+      if (priorityDifference !== 0) return priorityDifference
+      return left.interview.status === 'SCHEDULED' ||
+        left.interview.status === 'IN_PROGRESS'
+        ? left.interview.scheduledStart.localeCompare(
+            right.interview.scheduledStart,
+          )
+        : right.interview.scheduledStart.localeCompare(
+            left.interview.scheduledStart,
+          )
+    })
 }
 
 export function selectTranscriptByInterviewId(
@@ -205,7 +796,7 @@ export function selectCandidateScreeningViewModel(
     candidate,
     application,
     job,
-    rubric: state.rubrics.find((rubric) => rubric.jobId === job.id),
+    rubric: selectPublishedRubricByJobId(state, job.id),
     screeningEvaluation,
     decision: screeningEvaluation
       ? state.decisions
@@ -307,6 +898,12 @@ export function selectActiveJobs(state: DemoState): Job[] {
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
 }
 
+export function selectArchivedJobs(state: DemoState): Job[] {
+  return state.jobs
+    .filter((job) => job.status === 'ARCHIVED')
+    .sort((left, right) => (right.archivedAt ?? right.updatedAt).localeCompare(left.archivedAt ?? left.updatedAt))
+}
+
 export type RecentApplicationItem = {
   application: Application
   candidate: Candidate
@@ -392,6 +989,14 @@ export function selectUpcomingInterviews(
     .slice(0, Math.max(0, limit))
 }
 
+export function selectUpcomingInterviewItems(
+  state: DemoState,
+  now: Date,
+  limit = 5,
+): UpcomingInterviewItem[] {
+  return selectUpcomingInterviews(state, now, limit)
+}
+
 export function selectApplicationCountByJobId(
   state: DemoState,
   jobId: string,
@@ -453,6 +1058,7 @@ export type CandidateListItem = {
 
 export type CandidateScreeningDisplayStatus =
   | 'NOT_SCREENED'
+  | 'SETUP_REQUIRED'
   | 'QUEUED'
   | 'PROCESSING'
   | 'COMPLETED'
@@ -567,7 +1173,8 @@ export function findApplicationsRequiringAutomaticScreening(
             item.status === 'FAILED'),
       )
 
-      return !hasCompletedEvaluation && !hasBlockingQueueItem
+      const hasPublishedRubric = Boolean(selectPublishedRubricByJobId(state, application.jobId))
+      return hasPublishedRubric && !hasCompletedEvaluation && !hasBlockingQueueItem
     })
     .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt))
     .map((application) => application.id)
@@ -576,8 +1183,10 @@ export function findApplicationsRequiringAutomaticScreening(
 function deriveCandidateScreeningStatus(
   evaluation: Evaluation | undefined,
   queueItem: ScreeningQueueItem | undefined,
+  hasPublishedRubric: boolean,
 ): CandidateScreeningDisplayStatus {
   if (evaluation?.status === 'COMPLETED') return 'COMPLETED'
+  if (!hasPublishedRubric) return 'SETUP_REQUIRED'
   if (queueItem?.status === 'PROCESSING') return 'PROCESSING'
   if (queueItem?.status === 'QUEUED') return 'QUEUED'
   if (queueItem?.status === 'FAILED') return 'FAILED'
@@ -601,6 +1210,7 @@ export function selectCandidateListItems(
         state,
         application.id,
       )
+      const publishedRubric = selectPublishedRubricByJobId(state, application.jobId)
 
       return candidate && job
         ? {
@@ -614,6 +1224,7 @@ export function selectCandidateListItems(
             screeningStatus: deriveCandidateScreeningStatus(
               screeningEvaluation,
               screeningQueueItem,
+              Boolean(publishedRubric),
             ),
           }
         : undefined
@@ -798,8 +1409,17 @@ export type CandidateTimelineEvent = {
   type:
     | 'APPLICATION_SUBMITTED'
     | 'SCREENING_COMPLETED'
+    | 'SCHEDULING_INVITATION_PREPARED'
+    | 'SCHEDULING_INVITATION_EXPIRED'
+    | 'SCHEDULING_EXCEPTION'
     | 'INTERVIEW_SCHEDULED'
+    | 'INTERVIEW_RESCHEDULED'
+    | 'INTERVIEW_CANCELLED'
     | 'INTERVIEW_COMPLETED'
+    | 'INTERVIEW_QUESTIONS_PREPARED'
+    | 'INTERVIEW_PLAN_APPROVED'
+    | 'INTERVIEW_STARTED'
+    | 'INTERVIEW_PAUSED'
     | 'FINAL_EVALUATION_COMPLETED'
     | 'DECISION_RECORDED'
     | 'COMMUNICATION_SENT'
@@ -848,21 +1468,90 @@ export function selectCandidateTimeline(
   state.interviews
     .filter((interview) => interview.applicationId === applicationId)
     .forEach((interview) => {
+      const modeLabel =
+        interview.mode === 'PHONE'
+          ? 'phone'
+          : interview.mode === 'ONSITE'
+            ? 'on-site'
+            : 'video'
       events.push({
         id: `interview-scheduled-${interview.id}`,
         type: 'INTERVIEW_SCHEDULED',
         title: 'Interview scheduled',
-        description: `Interview arranged with ${interview.interviewers.length} interviewer${interview.interviewers.length === 1 ? '' : 's'}.`,
-        occurredAt: interview.scheduledStart,
+        description: `The candidate selected a ${modeLabel} interview time.`,
+        occurredAt: interview.createdAt ?? interview.scheduledStart,
       })
 
-      if (interview.status === 'COMPLETED') {
+      if (interview.status === 'CANCELLED') {
+        events.push({
+          id: `interview-cancelled-${interview.id}`,
+          type: 'INTERVIEW_CANCELLED',
+          title: 'Interview cancelled',
+          description:
+            'The scheduled interview was cancelled and the application returned to shortlist review.',
+          occurredAt: interview.updatedAt ?? interview.scheduledStart,
+        })
+      }
+
+      if (interview.status === 'COMPLETED' && !state.interviewSessions.some((session) => session.interviewId === interview.id && session.status === 'COMPLETED')) {
         events.push({
           id: `interview-completed-${interview.id}`,
           type: 'INTERVIEW_COMPLETED',
           title: 'Interview completed',
           description: 'The scheduled interview session was completed.',
           occurredAt: interview.scheduledEnd,
+        })
+      }
+    })
+
+  const applicationInterviewIds = new Set(state.interviews.filter((interview) => interview.applicationId === applicationId).map((interview) => interview.id))
+  state.interviewQuestionSets.filter((set) => applicationInterviewIds.has(set.interviewId)).forEach((set) => {
+    if (set.generatedAt || set.status !== 'GENERATION_FAILED') events.push({ id: `interview-questions-prepared-${set.id}`, type: 'INTERVIEW_QUESTIONS_PREPARED', title: 'Interview questions prepared', description: `A candidate-specific interview plan with ${set.questions.length} questions was prepared.`, occurredAt: set.generatedAt ?? set.createdAt })
+    if (set.status === 'APPROVED' && set.approvedAt) events.push({ id: `interview-plan-approved-${set.id}`, type: 'INTERVIEW_PLAN_APPROVED', title: 'Interview plan approved', description: 'The interview question plan was approved for the scheduled interview.', occurredAt: set.approvedAt })
+  })
+  state.interviewSessions.filter((session) => applicationInterviewIds.has(session.interviewId)).forEach((session) => {
+    const summary = selectInterviewSessionProgressSummary(session)
+    if (session.startedAt) events.push({ id: `interview-started-${session.id}`, type: 'INTERVIEW_STARTED', title: 'Interview started', occurredAt: session.startedAt })
+    if (session.status === 'PAUSED' && session.pausedAt) events.push({ id: `interview-paused-${session.id}`, type: 'INTERVIEW_PAUSED', title: 'Interview paused', occurredAt: session.pausedAt })
+    if (session.status === 'COMPLETED' && session.completedAt) events.push({ id: `interview-session-completed-${session.id}`, type: 'INTERVIEW_COMPLETED', title: 'Interview completed', description: `The interview ended after ${Math.round(session.accumulatedActiveSeconds / 60)} minutes. ${summary.asked} questions were asked.`, occurredAt: session.completedAt })
+  })
+
+  state.interviewSchedulingInvitations
+    .filter((invitation) => invitation.applicationId === applicationId)
+    .forEach((invitation) => {
+      if (invitation.status !== 'EXCEPTION_REQUIRED') {
+        events.push({
+          id: `scheduling-invitation-prepared-${invitation.id}`,
+          type: 'SCHEDULING_INVITATION_PREPARED',
+          title: 'Interview scheduling invitation prepared',
+          description: 'Candidate-selectable interview availability was prepared automatically.',
+          occurredAt: invitation.createdAt,
+        })
+      }
+      if (invitation.status === 'EXPIRED') {
+        events.push({
+          id: `scheduling-invitation-expired-${invitation.id}`,
+          type: 'SCHEDULING_INVITATION_EXPIRED',
+          title: 'Scheduling invitation expired',
+          occurredAt: invitation.expiresAt,
+        })
+      }
+      if (invitation.status === 'EXCEPTION_REQUIRED') {
+        events.push({
+          id: `scheduling-exception-${invitation.id}`,
+          type: 'SCHEDULING_EXCEPTION',
+          title: 'Interview scheduling requires attention',
+          description: invitation.lastError,
+          occurredAt: invitation.updatedAt,
+        })
+      }
+      if (invitation.lastRescheduledAt) {
+        events.push({
+          id: `interview-rescheduled-${invitation.id}-${invitation.rescheduleCount}`,
+          type: 'INTERVIEW_RESCHEDULED',
+          title: 'Interview rescheduled',
+          description: 'The candidate selected a new interview time.',
+          occurredAt: invitation.lastRescheduledAt,
         })
       }
     })

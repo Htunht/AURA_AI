@@ -2,7 +2,7 @@ import { AlertCircle, CheckCircle2, LoaderCircle, RotateCcw } from 'lucide-react
 import { Link } from 'react-router-dom'
 import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import { useDemoStore } from '../../hooks/useDemoStore'
-import { selectScreeningQueueSummary } from '../../store/demoSelectors'
+import { selectHiringWorkflowSetupProgress, selectScreeningQueueSummary } from '../../store/demoSelectors'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
@@ -15,6 +15,17 @@ export function ScreeningAutomationStatus({
   const { retryFailed } = useScreeningAutomation()
   const summary = selectScreeningQueueSummary(state)
   const isProcessing = summary.queued > 0 || summary.processing > 0
+  const failedItems = state.screeningQueue.filter((item) => item.status === 'FAILED')
+  const setupRequiredJobIds = Array.from(new Set(state.applications.flatMap((application) => {
+    const hasCompletedEvaluation = state.evaluations.some((evaluation) => evaluation.applicationId === application.id && evaluation.evaluationType === 'SCREENING' && evaluation.status === 'COMPLETED')
+    const workflowPublished = selectHiringWorkflowSetupProgress(state, application.jobId).status === 'PUBLISHED'
+    return !hasCompletedEvaluation && !workflowPublished ? [application.jobId] : []
+  })))
+  const hasSetupRequired = setupRequiredJobIds.length > 0
+  const retryableApplicationIds = failedItems.filter((item) => {
+    const application = state.applications.find((entry) => entry.id === item.applicationId)
+    return application && selectHiringWorkflowSetupProgress(state, application.jobId).status === 'PUBLISHED'
+  }).map((item) => item.applicationId)
 
   return (
     <Card className="mb-4 p-4 md:px-5">
@@ -27,7 +38,7 @@ export function ScreeningAutomationStatus({
                 className="animate-spin text-marine motion-reduce:animate-none"
                 aria-hidden="true"
               />
-            ) : summary.failed > 0 ? (
+            ) : summary.failed > 0 || hasSetupRequired ? (
               <AlertCircle size={17} className="text-aura-danger" aria-hidden="true" />
             ) : (
               <CheckCircle2 size={17} className="text-aura-success" aria-hidden="true" />
@@ -39,8 +50,10 @@ export function ScreeningAutomationStatus({
           <p className="mb-0 mt-1.5 text-xs leading-5 text-aura-text-secondary" aria-live="polite">
             {isProcessing
               ? 'AURA is screening new applications automatically.'
-              : summary.failed > 0
-                ? 'Some applications require a screening retry.'
+              : hasSetupRequired
+                ? 'Some roles have an incomplete application workflow. Finish required evidence questions and screening rules to start automatic screening.'
+                : summary.failed > 0
+                  ? 'Some applications require a screening retry.'
                 : 'All submitted applications have been screened.'}
           </p>
         </div>
@@ -64,11 +77,16 @@ export function ScreeningAutomationStatus({
               </div>
             ))}
           </dl>
-          {summary.failed > 0 ? (
-            <Button variant="secondary" onClick={() => retryFailed()}>
+          {retryableApplicationIds.length > 0 ? (
+            <Button variant="secondary" onClick={() => retryFailed(retryableApplicationIds)}>
               <RotateCcw size={15} aria-hidden="true" />
               Retry all failed
             </Button>
+          ) : null}
+          {setupRequiredJobIds.length === 1 ? (
+            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/jobs/${setupRequiredJobIds[0]}/setup`}>Continue setup</Link>
+          ) : setupRequiredJobIds.length > 1 ? (
+            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to="/jobs">Review workflows</Link>
           ) : null}
           {pendingRecruiterReviews !== undefined ? (
             <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-[#72a3bf] bg-transparent px-3 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf]" to="/reviews">Open review queue</Link>

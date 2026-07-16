@@ -94,6 +94,16 @@ export function validatePersistedDemoState(
   ) {
     errors.push('Persisted demo state screeningQueue must be an array.')
   }
+  for (const collectionName of [
+    'interviewSchedulingPolicies',
+    'interviewSchedulingInvitations',
+    'interviewQuestionSets',
+    'interviewSessions',
+  ] as const) {
+    if (value[collectionName] !== undefined && !Array.isArray(value[collectionName])) {
+      errors.push(`Persisted demo state ${collectionName} must be an array.`)
+    }
+  }
 
   if (errors.length > 0) {
     return { valid: false, errors }
@@ -112,11 +122,24 @@ export function validatePersistedDemoState(
   const screeningQueue = Array.isArray(value.screeningQueue)
     ? value.screeningQueue
     : []
+  const policies = Array.isArray(value.interviewSchedulingPolicies)
+    ? value.interviewSchedulingPolicies
+    : []
+  const invitations = Array.isArray(value.interviewSchedulingInvitations)
+    ? value.interviewSchedulingInvitations
+    : []
+  const questionSets = Array.isArray(value.interviewQuestionSets) ? value.interviewQuestionSets : []
+  const sessions = Array.isArray(value.interviewSessions) ? value.interviewSessions : []
 
   validateRecords(
     jobs,
     'jobs',
-    (record) => hasStringProperties(record, ['id', 'title', 'status']),
+    (record) =>
+      hasStringProperties(record, ['id', 'title', 'status']) &&
+      (record.employmentType === undefined || typeof record.employmentType === 'string') &&
+      (record.workArrangement === undefined || typeof record.workArrangement === 'string') &&
+      (record.minimumExperienceYears === undefined || typeof record.minimumExperienceYears === 'number') &&
+      (record.updatedAt === undefined || typeof record.updatedAt === 'string'),
     errors,
   )
   validateRecords(
@@ -176,6 +199,8 @@ export function validatePersistedDemoState(
       Array.isArray(record.questions),
     errors,
   )
+  validateRecords(questionSets, 'interviewQuestionSets', (record) => hasStringProperties(record, ['id', 'interviewId', 'status', 'createdAt', 'updatedAt']) && Number.isInteger(record.version) && Array.isArray(record.questions), errors)
+  validateRecords(sessions, 'interviewSessions', (record) => hasStringProperties(record, ['id', 'interviewId', 'questionSetId', 'status', 'createdAt', 'updatedAt']) && Array.isArray(record.questionProgress) && typeof record.accumulatedActiveSeconds === 'number' && typeof record.generalNotes === 'string', errors)
   validateRecords(
     transcripts,
     'transcripts',
@@ -221,11 +246,48 @@ export function validatePersistedDemoState(
       (record.error === undefined || typeof record.error === 'string'),
     errors,
   )
+  validateRecords(
+    policies,
+    'interviewSchedulingPolicies',
+    (record) =>
+      hasStringProperties(record, ['id', 'status', 'interviewMode']) &&
+      (
+        (record.scope === undefined && typeof record.jobId === 'string') ||
+        (
+          ['ORGANIZATION', 'DEPARTMENT', 'JOB'].includes(record.scope as string) &&
+          typeof record.displayName === 'string'
+        )
+      ) &&
+      Number.isInteger(record.version) &&
+      Array.isArray(record.workingDays) &&
+      Array.isArray(record.requiredInterviewerRoles) &&
+      Array.isArray(record.fixedInterviewerIds),
+    errors,
+  )
+  validateRecords(
+    invitations,
+    'interviewSchedulingInvitations',
+    (record) =>
+      hasStringProperties(record, [
+        'id', 'token', 'applicationId', 'jobId', 'policyId', 'status',
+        'createdAt', 'updatedAt', 'expiresAt',
+      ]) &&
+      Array.isArray(record.interviewerIds) &&
+      Array.isArray(record.availableSlots) &&
+      Number.isInteger(record.rescheduleCount) &&
+      (record.delivery === undefined ||
+        (isRecord(record.delivery) &&
+          typeof record.delivery.provider === 'string' &&
+          typeof record.delivery.status === 'string' &&
+          Number.isInteger(record.delivery.attemptCount))),
+    errors,
+  )
 
   const jobIds = stringIds(jobs)
   const candidateIds = stringIds(candidates)
   const applicationIds = stringIds(applications)
   const interviewIds = stringIds(interviews)
+  const policyIds = stringIds(policies)
 
   validateReference(applications, 'applications', 'jobId', jobIds, errors)
   validateReference(
@@ -279,6 +341,19 @@ export function validatePersistedDemoState(
     applicationIds,
     errors,
   )
+  validateReference(policies, 'interviewSchedulingPolicies', 'jobId', jobIds, errors)
+  validateReference(invitations, 'interviewSchedulingInvitations', 'applicationId', applicationIds, errors)
+  validateReference(invitations, 'interviewSchedulingInvitations', 'jobId', jobIds, errors)
+  invitations.forEach((value, index) => {
+    if (
+      isRecord(value) &&
+      typeof value.policyId === 'string' &&
+      value.policyId.length > 0 &&
+      !policyIds.has(value.policyId)
+    ) {
+      errors.push(`interviewSchedulingInvitations[${index}].policyId references a missing record.`)
+    }
+  })
   validateReference(
     screeningQueue,
     'screeningQueue',

@@ -21,11 +21,15 @@ import type {
 } from '../types/evaluation'
 import type { Interview, InterviewQuestion } from '../types/interview'
 import type { Job } from '../types/job'
+import type { Candidate } from '../types/candidate'
+import type { ApplicationForm } from '../types/applicationForm'
 import type { EvaluationRubric } from '../types/rubric'
 import type { Transcript, TranscriptSegment } from '../types/transcript'
 import { calculateWeightedScore } from '../utils/score'
 import { demoDelay } from './demoDelay'
 import { DemoServiceError } from './DemoServiceError'
+import { deriveJobRequirements } from '../utils/jobRequirements'
+import { collectRequirementEvidence } from './screeningEvidence'
 
 export type CandidateScreeningResult = {
   evaluation: Evaluation
@@ -509,6 +513,31 @@ function createScreeningEvaluation(input: {
   }
 }
 
+export function createFormAwareScreeningEvaluation(input: { application: Application; rubric: EvaluationRubric; form: ApplicationForm; job: Job; candidate: Candidate; createdAt: string }): Evaluation {
+  const requirements = deriveJobRequirements(input.job)
+  const evidence = collectRequirementEvidence({ requirements, form: input.form, application: input.application, candidateSkills: input.candidate.skills })
+  const scoreFor = (status: typeof evidence[number]['evidenceStatus']) => status === 'STRONG' ? 95 : status === 'MODERATE' ? 75 : status === 'WEAK' ? 45 : 20
+  const answersForCriterion = (criterionKey: string) => input.application.answers.filter((answer) => input.form.fields.find((field) => field.key === answer.fieldKey)?.screeningMapping?.criterionKeys.includes(criterionKey))
+  const requiredEvidence = evidence.filter((item) => requirements.find((requirement) => requirement.id === item.requirementId)?.importance === 'REQUIRED')
+  const preferredEvidence = evidence.filter((item) => requirements.find((requirement) => requirement.id === item.requirementId)?.importance === 'PREFERRED')
+  const criterionScores: CriterionScore[] = input.rubric.criteria.map((criterion) => {
+    const relevant = criterion.key === 'required_qualifications' ? requiredEvidence : criterion.key === 'relevant_experience' ? evidence.filter((item) => requirements.find((requirement) => requirement.id === item.requirementId)?.type === 'MINIMUM_EXPERIENCE') : criterion.key === 'role_evidence' ? [...requiredEvidence, ...preferredEvidence] : []
+    const mappedAnswers = answersForCriterion(criterion.key)
+    const answerScore = mappedAnswers.length ? Math.min(95, 50 + Math.round(mappedAnswers.map((answer) => formatApplicationEvidenceValue(answer.value).length).reduce((sum, length) => sum + Math.min(120, length), 0) / Math.max(1, mappedAnswers.length) / 3)) : 55
+    const score = relevant.length ? Math.round(relevant.reduce((sum, item) => sum + scoreFor(item.evidenceStatus), 0) / relevant.length) : answerScore
+    const answer = relevant.flatMap((item) => item.answers)[0] ?? mappedAnswers[0]
+    return { criterionKey: criterion.key, name: criterion.name, weight: criterion.weight, score, rationale: `${criterion.name} uses mapped application evidence and deterministic qualification checks.`, evidence: answer ? [{ sourceType: 'APPLICATION_ANSWER', sourceId: answer.id, excerpt: formatApplicationEvidenceValue(answer.value) }] : [] }
+  })
+  const overallScore = calculateWeightedScore(criterionScores)
+  const missingRequired = requiredEvidence.filter((item) => item.evidenceStatus === 'MISSING')
+  let recommendation = overallScore >= 90 ? 'STRONG_YES' as const : overallScore >= 75 ? 'YES' as const : overallScore >= 60 ? 'REVIEW' as const : overallScore >= 40 ? 'NO' as const : 'STRONG_NO' as const
+  const confidence = Math.round(55 + evidence.filter((item) => item.evidenceStatus !== 'MISSING').length / Math.max(1, evidence.length) * 40)
+  if ((missingRequired.length > 0 && overallScore >= 60) || confidence < 65) recommendation = 'REVIEW'
+  const strongest = [...criterionScores].sort((a, b) => b.score - a.score)[0]
+  const weakest = [...criterionScores].sort((a, b) => a.score - b.score)[0]
+  return { id: `evaluation-screening-${input.application.id}`, applicationId: input.application.id, evaluationType: 'SCREENING', status: 'COMPLETED', overallScore, recommendation, confidence, summary: 'This deterministic screening result compares mapped application answers with the published job requirements. Recruiter review remains required.', strengths: strongest ? [{ id: `insight-${input.application.id}-strength`, title: strongest.name, description: strongest.rationale, evidence: strongest.evidence }] : [], concerns: weakest && (weakest.score < 70 || missingRequired.length) ? [{ id: `insight-${input.application.id}-concern`, title: missingRequired.length ? 'Missing required qualification evidence' : `Limited evidence for ${weakest.name.toLocaleLowerCase()}`, description: missingRequired.length ? 'One or more required qualifications did not have submitted evidence and require recruiter review.' : weakest.rationale, evidence: weakest.evidence }] : [], criterionScores, createdAt: input.createdAt }
+}
+
 export async function runCandidateScreening(input: {
   applicationId: string
   applications: Application[]
@@ -516,6 +545,9 @@ export async function runCandidateScreening(input: {
   rubric?: EvaluationRubric
   generatedAt?: string
   delayMs?: number
+  job?: Job
+  form?: ApplicationForm
+  candidate?: Candidate
 }): Promise<CandidateScreeningResult> {
   const application = input.applications.find(
     (item) => item.id === input.applicationId,
@@ -556,7 +588,9 @@ export async function runCandidateScreening(input: {
   return {
     evaluation: evaluation
       ? copyEvaluation(evaluation)
-      : createScreeningEvaluation({
+      : input.job && input.form && input.candidate
+        ? createFormAwareScreeningEvaluation({ application, rubric: input.rubric!, form: input.form, job: input.job, candidate: input.candidate, createdAt: input.generatedAt ?? new Date().toISOString() })
+        : createScreeningEvaluation({
           application,
           rubric: input.rubric!,
           createdAt: input.generatedAt ?? new Date().toISOString(),

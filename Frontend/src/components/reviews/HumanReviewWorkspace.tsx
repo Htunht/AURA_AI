@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import { useDemoStore } from '../../hooks/useDemoStore'
+import { selectResolvedInterviewSchedulingPolicy, selectSchedulingInvitationByApplicationId } from '../../store/demoSelectors'
 import type { Decision } from '../../types/decision'
 import type { Recommendation } from '../../types/evaluation'
 import type { HumanReviewQueueItem } from '../../types/reviewQueue'
@@ -30,7 +31,9 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [overrideOpen, setOverrideOpen] = useState(false)
   const evaluation = item.evaluation
-  const rubric = state.rubrics.find((entry) => entry.jobId === item.job.id)
+  const rubric = state.rubrics.find((entry) => entry.jobId === item.job.id && entry.status === 'PUBLISHED')
+  const schedulingInvitation = selectSchedulingInvitationByApplicationId(state, item.application.id)
+  const schedulingPolicy = selectResolvedInterviewSchedulingPolicy(state, item.job.id)
 
   function recordDecision(
     reviewAction: Decision['reviewAction'],
@@ -105,9 +108,9 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
 
       {item.category === 'FAILED' ? (
         <Card className="border-aura-danger/20 p-5">
-          <h3 className="m-0 text-base font-semibold text-depth">Screening must be retried before a hiring recommendation can be reviewed.</h3>
-          <p className="mb-0 mt-2 text-sm text-aura-text-secondary">No recruiter decision controls are available until screening completes successfully.</p>
-          <Button className="mt-4" variant="secondary" onClick={() => retryFailed([item.application.id])}><RotateCcw size={16} aria-hidden="true" />Retry screening</Button>
+          <h3 className="m-0 text-base font-semibold text-depth">{rubric ? 'Screening must be retried before a hiring recommendation can be reviewed.' : 'Screening setup is required for this role.'}</h3>
+          <p className="mb-0 mt-2 text-sm text-aura-text-secondary">{rubric ? 'No recruiter decision controls are available until screening completes successfully.' : 'Publish an evidence rubric to let AURA screen this application. Hiring decisions remain with the recruiter.'}</p>
+          {rubric ? <Button className="mt-4" variant="secondary" onClick={() => retryFailed([item.application.id])}><RotateCcw size={16} aria-hidden="true" />Retry screening</Button> : <Link className="mt-4 inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15" to={`/jobs/${item.job.id}/setup`}>Continue hiring workflow setup</Link>}
         </Card>
       ) : item.decision ? (
         <Card className="border-marine/25 p-5 md:p-6">
@@ -120,6 +123,7 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
           </dl>
           {item.decision.overrideReason ? <div className="mt-4 border-l-2 border-glacier pl-4"><p className="m-0 text-xs font-bold uppercase tracking-wide text-aura-text-muted">Override reason</p><p className="mb-0 mt-1.5 text-sm leading-6 text-aura-text-secondary">{item.decision.overrideReason}</p></div> : null}
           <p className="mb-0 mt-5 flex items-center gap-2 text-xs font-medium text-harbor"><CheckCircle2 size={15} aria-hidden="true" />This audit record is append-only and cannot be edited.</p>
+          {schedulingInvitation?.status === 'PENDING' ? schedulingInvitation.delivery.status === 'SENT' ? <p className="mb-0 mt-4 text-sm font-semibold text-aura-success">Scheduling invitation sent</p> : schedulingInvitation.delivery.status === 'FAILED' || schedulingInvitation.delivery.status === 'NOT_SENT' ? <Link className="mt-4 inline-flex font-semibold text-aura-warning" to="/interviews">Resolve delivery issue</Link> : <p className="mb-0 mt-4 text-sm font-semibold text-harbor">Scheduling prepared using {schedulingPolicy?.sourceLabel.toLocaleLowerCase() ?? 'inherited defaults'}</p> : schedulingInvitation?.status === 'EXCEPTION_REQUIRED' ? <Link className="mt-4 inline-flex font-semibold text-harbor" to="/interviews/exceptions">Scheduling exception · Resolve scheduling</Link> : !schedulingPolicy ? <Link className="mt-4 inline-flex font-semibold text-harbor" to="/interviews/settings">Scheduling defaults required</Link> : <p className="mb-0 mt-4 text-sm text-aura-text-secondary">Preparing interview availability using {schedulingPolicy.sourceLabel.toLocaleLowerCase()}.</p>}
         </Card>
       ) : evaluation ? (
         <Card className="border-marine/25 p-5 md:p-6">

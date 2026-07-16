@@ -5,12 +5,14 @@ import {
   ArrowUp,
   GripVertical,
   Pencil,
+  Copy,
   Trash2,
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import type { ApplicationFormField } from '../../types/applicationForm'
 import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
+import type { JobRequirement } from '../../types/jobRequirement'
 
 type SortableFormFieldRowProps = {
   field: ApplicationFormField
@@ -23,6 +25,9 @@ type SortableFormFieldRowProps = {
   onRemove: (fieldId: string) => void
   onMoveUp: (fieldId: string) => void
   onMoveDown: (fieldId: string) => void
+  onDuplicate?: (field: ApplicationFormField) => void
+  requirements?: JobRequirement[]
+  showFieldKey?: boolean
 }
 
 export function SortableFormFieldRow({
@@ -36,6 +41,9 @@ export function SortableFormFieldRow({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onDuplicate,
+  requirements = [],
+  showFieldKey = true,
 }: SortableFormFieldRowProps) {
   const {
     attributes,
@@ -78,14 +86,16 @@ export function SortableFormFieldRow({
             {aiSuggested ? <Badge tone="accent">Suggested by AURA</Badge> : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2.5 text-xs font-medium text-aura-text-muted">
-            <code className="rounded-aura-xs bg-frost px-1.5 py-1 font-utility text-[11px] text-harbor">
+            {showFieldKey ? <code className="rounded-aura-xs bg-frost px-1.5 py-1 font-utility text-[11px] text-harbor">
               {field.key}
-            </code>
+            </code> : null}
             <span>{field.type.replace('_', ' ')}</span>
             {field.type === 'MULTI_SELECT' ? (
               <span>{field.options?.length ?? 0} options</span>
             ) : null}
           </div>
+          {field.helpText ? <p className="mb-0 mt-2 text-xs text-aura-text-secondary">{field.helpText}</p> : null}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs"><span className="font-semibold text-aura-text-muted">Used to evaluate:</span>{field.screeningMapping?.requirementIds.length ? field.screeningMapping.requirementIds.map((id) => <span className="rounded-full bg-glacier/15 px-2 py-0.5 font-semibold text-harbor" key={id}>{requirements.find((item) => item.id === id)?.label ?? 'Role requirement'}</span>) : <><span className="text-aura-text-muted">Not used in automatic screening</span>{editable ? <button type="button" className="font-semibold text-harbor underline-offset-2 hover:underline" onClick={() => onEdit(field)}>Set screening purpose</button> : null}</>}</div>
         </div>
         {editable ? (
           <div className="col-span-2 flex flex-wrap justify-end gap-1 px-3 pb-3 md:col-span-1 md:items-center md:px-4 md:py-0">
@@ -128,6 +138,7 @@ export function SortableFormFieldRow({
             >
               <Pencil size={17} aria-hidden="true" />
             </button>
+            {onDuplicate ? <button type="button" className="inline-grid size-9 place-items-center rounded-aura-sm border border-harbor/15 bg-white text-harbor hover:bg-glacier/15" onClick={() => onDuplicate(field)} aria-label={`Duplicate ${field.label}`} title="Duplicate question"><Copy size={16} /></button> : null}
             <button
               type="button"
               className="inline-grid size-9 place-items-center rounded-aura-sm border border-aura-danger/30 bg-white text-aura-danger transition-colors duration-150 hover:bg-aura-danger-soft disabled:cursor-not-allowed disabled:opacity-40"

@@ -1,0 +1,17 @@
+import { createInitialDemoState } from '../store/demoInitialState'
+import { selectCandidateTimeline, selectInterviewSessionOperationsSummary, selectInterviewSessionProgressSummary, selectInterviewSessionViewModel } from '../store/demoSelectors'
+import { createInterviewSession } from '../services/interviewSessionInitialization'
+import { generateInterviewQuestions } from '../services/interviewQuestionGeneration'
+import { deriveJobRequirements } from './jobRequirements'
+
+export type InterviewSessionUiValidationResult = { valid: boolean; errors: string[] }
+export function validateInterviewSessionUiDomain(): InterviewSessionUiValidationResult {
+  const errors: string[] = []; const state = createInitialDemoState(); const interview = state.interviews.find((item) => item.status === 'SCHEDULED'); const application = state.applications.find((item) => item.id === interview?.applicationId); const candidate = state.candidates.find((item) => item.id === application?.candidateId); const job = state.jobs.find((item) => item.id === application?.jobId)
+  if (!interview || !application || !candidate || !job) return { valid: false, errors: ['UI validation fixtures could not be resolved.'] }
+  const stamp = '2026-07-16T12:00:00.000Z'; const questions = generateInterviewQuestions({ interview, application, candidate, job, requirements: deriveJobRequirements(job), durationMinutes: 45 }).questions.map((question) => ({ ...question, status: 'APPROVED' as const })); const set = { id: `question-set-${interview.id}-v088`, interviewId: interview.id, version: 88, status: 'APPROVED' as const, questions, approvedAt: stamp, approvedBy: 'Recruitment Team', createdAt: stamp, updatedAt: stamp }; const session = { ...createInterviewSession({ interview, questionSet: set, createdAt: stamp }), status: 'COMPLETED' as const, startedAt: stamp, completedAt: stamp, accumulatedActiveSeconds: 600, completionSummary: '1 question asked, 0 skipped, and remaining questions not reached.', questionProgress: questions.map((question, index) => ({ questionId: question.id, status: index === 0 ? 'ASKED' as const : 'NOT_REACHED' as const, interviewerNotes: index === 0 ? 'Evidence note' : '', followUpNotes: [] })) }; const prepared = { ...state, interviewQuestionSets: [set], interviewSessions: [session], interviews: state.interviews.map((item) => item.id === interview.id ? { ...item, status: 'COMPLETED' as const } : item) }
+  const model = selectInterviewSessionViewModel(prepared, interview.id); if (!model || model.candidate.id !== candidate.id || model.questionSet.id !== set.id) errors.push('Session view model did not resolve all references.')
+  const progress = selectInterviewSessionProgressSummary(session); if (progress.asked !== 1 || progress.notReached !== questions.length - 1 || progress.completionPercent !== Math.round(100 / questions.length)) errors.push('Session progress summary is incorrect.')
+  const operations = selectInterviewSessionOperationsSummary(prepared, new Date('2026-07-16T20:00:00.000Z')); if (operations.completedToday !== 1) errors.push('Dashboard completed-today count is incorrect.')
+  const timeline = selectCandidateTimeline(prepared, application.id); if (!timeline.some((event) => event.type === 'INTERVIEW_STARTED') || !timeline.some((event) => event.type === 'INTERVIEW_COMPLETED')) errors.push('Session timeline events are missing.')
+  return { valid: errors.length === 0, errors }
+}

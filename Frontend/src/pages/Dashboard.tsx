@@ -1,5 +1,6 @@
 import {
   BriefcaseBusiness,
+  AlertTriangle,
   CalendarClock,
   ChevronRight,
   ScanSearch,
@@ -19,8 +20,14 @@ import {
   selectPublishedApplicationFormByJobId,
   selectRecentApplications,
   selectUpcomingInterviews,
+  selectInterviewAutomationSummary,
+  selectSchedulingAutomationViewModels,
+  selectSchedulingEmailDeliverySummary,
+  selectSchedulingPolicyResolutionSummary,
+  selectInterviewPreparationSummary,
+  selectInterviewSessionOperationsSummary,
 } from '../store/demoSelectors'
-import { formatApplicationStage, formatDate, formatTime } from '../utils/helpers'
+import { formatApplicationStage, formatDate, formatInterviewTime } from '../utils/helpers'
 import { getScreeningRecommendationLabel } from '../utils/recommendation'
 
 const DASHBOARD_NOW = new Date('2026-07-16T10:30:00Z')
@@ -29,6 +36,8 @@ const primaryLinkClass =
   'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-4 text-sm font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] hover:bg-[#5b8da8] hover:border-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf] focus-visible:ring-offset-2'
 const buttonLinkClass =
   'inline-flex h-9 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-3 text-xs font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] hover:bg-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf] focus-visible:ring-offset-2'
+const textLinkClass =
+  'inline-flex items-center gap-1 text-xs font-semibold text-[#72a3bf] hover:text-[#5b8da8] no-underline transition-colors'
 
 function recommendationTone(recommendation?: string) {
   if (recommendation === 'STRONG_YES' || recommendation === 'YES') return 'success'
@@ -43,6 +52,16 @@ export default function Dashboard() {
   const activeJobs = selectActiveJobs(state).slice(0, 3)
   const recentApplications = selectRecentApplications(state)
   const upcomingInterviews = selectUpcomingInterviews(state, DASHBOARD_NOW)
+
+  const schedulingSummary = selectInterviewAutomationSummary(state, DASHBOARD_NOW)
+  const emailSummary = selectSchedulingEmailDeliverySummary(state)
+  const schedulingAttention = selectSchedulingAutomationViewModels(state).filter(
+    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
+  )
+  const schedulingCoverage = selectSchedulingPolicyResolutionSummary(state)
+  const preparationSummary = selectInterviewPreparationSummary(state)
+  const sessionSummary = selectInterviewSessionOperationsSummary(state, DASHBOARD_NOW)
+
   const metricCards = [
     { label: 'Active job openings', value: metrics.activeJobs, description: 'Roles currently accepting applications', icon: BriefcaseBusiness },
     { label: 'Total candidates', value: metrics.totalCandidates, description: 'Candidate profiles in the workspace', icon: Users },
@@ -74,8 +93,116 @@ export default function Dashboard() {
         <ScreeningAutomationStatus pendingRecruiterReviews={metrics.pendingRecruiterReviews} />
       </div>
 
+      {/* Live interview operations */}
       <div className="mt-4 overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm">
-        {/* Card dark header */}
+        <div className="bg-depth px-5 py-4 md:px-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-glacier">Live interview operations</p>
+            <h2 className="mb-0 mt-2 text-lg font-semibold text-white">Session readiness</h2>
+          </div>
+          <Link className={textLinkClass} to="/interviews">Open interviews</Link>
+        </div>
+        <div className="bg-white p-5 md:p-6">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-aura-sm bg-harbor/10 sm:grid-cols-4">
+            {[
+              ['Ready', sessionSummary.ready],
+              ['In progress', sessionSummary.inProgress],
+              ['Paused', sessionSummary.paused],
+              ['Completed today', sessionSummary.completedToday]
+            ].map(([label, value]) => (
+              <div className="bg-frost p-3" key={label}>
+                <p className="m-0 text-xl font-bold text-depth">{value}</p>
+                <p className="mb-0 mt-1 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p>
+              </div>
+            ))}
+          </div>
+          {sessionSummary.attention.length ? (
+            <div className="mt-3 flex flex-wrap gap-3">
+              {sessionSummary.attention.slice(0, 3).map(({ interview, status }) => (
+                <Link
+                  className="text-xs font-semibold text-aura-warning"
+                  key={interview.id}
+                  to={status === 'PAUSED' ? `/interviews/${interview.id}/session` : `/interviews/${interview.id}/questions`}
+                >
+                  {status === 'PAUSED' ? 'Paused interview' : 'Plan approval needed'} · {formatInterviewTime(interview.scheduledStart)}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Scheduling automation */}
+      <div className="mt-4 overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm">
+        <div className="bg-depth px-5 py-4 md:px-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-glacier">Scheduling automation</p>
+            <h2 className="mb-0 mt-2 text-lg font-semibold text-white">Interview operations</h2>
+          </div>
+          <Link className={textLinkClass} to="/interviews">Open interviews</Link>
+        </div>
+        <div className="grid bg-white lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="p-5 md:p-6">
+            <p className="mb-4 text-xs text-aura-text-muted">AURA prepares interview teams, approved times, and scheduling invitation emails.</p>
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-aura-sm bg-harbor/10 xl:grid-cols-4">
+              {[
+                ['Invitation emails sending', emailSummary.queued + emailSummary.sending],
+                ['Awaiting response', emailSummary.sent],
+                ['Delivery failures', emailSummary.failed],
+                ['Confirmed interviews', schedulingSummary.scheduledInterviews]
+              ].map(([label, value]) => (
+                <div className="bg-frost p-3" key={label}>
+                  <p className="m-0 text-2xl font-bold text-depth">{value}</p>
+                  <p className="mb-0 mt-1 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="border-t border-harbor/10 bg-frost/50 p-5 lg:border-l lg:border-t-0">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} className={schedulingAttention.length ? 'text-aura-warning' : 'text-aura-success'} />
+              <h3 className="m-0 text-sm font-semibold text-depth">Recruiter attention</h3>
+            </div>
+            <div className="mt-3 grid gap-2">
+              {schedulingAttention.slice(0, 3).map((item) => (
+                <Link className="text-xs font-semibold text-aura-warning" to="/interviews" key={item.invitation.id}>
+                  {item.candidate.fullName} · scheduling requires attention
+                </Link>
+              ))}
+            </div>
+            {schedulingAttention.length === 0 ? (
+              <p className="mb-0 mt-4 text-xs font-semibold text-aura-success">No scheduling exceptions require recruiter attention.</p>
+            ) : (
+              <div className="mt-4">
+                <Link className={textLinkClass} to="/interviews">Review exceptions</Link>
+              </div>
+            )}
+            <div className="mt-4 border-t border-harbor/10 pt-4">
+              <p className="m-0 text-xs font-semibold text-depth">Interview preparation</p>
+              <p className="mb-0 mt-2 text-xs text-aura-text-secondary">{preparationSummary.readyForReview} ready for review · {preparationSummary.approved} approved · {preparationSummary.failed} requires attention</p>
+              <div className="mt-2 grid gap-1">
+                {preparationSummary.needsReview.slice(0, 2).map(({ interview }) => {
+                  const application = state.applications.find((item) => item.id === interview.applicationId)
+                  const candidate = application ? state.candidates.find((item) => item.id === application.candidateId) : undefined
+                  return (
+                    <Link className={textLinkClass} key={interview.id} to={`/interviews/${interview.id}/questions`}>
+                      {candidate?.fullName ?? 'Candidate'} · review questions
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="mt-4 border-t border-harbor/10 pt-4">
+              <p className="m-0 text-xs font-semibold text-depth">Scheduling coverage</p>
+              <p className={`mb-0 mt-1 text-xs ${schedulingCoverage.unresolvedJobs ? 'text-aura-warning' : 'text-aura-success'}`}>{schedulingCoverage.unresolvedJobs ? `${schedulingCoverage.unresolvedJobs} active jobs need scheduling defaults.` : 'All active jobs have automatic scheduling coverage.'}</p>
+              <Link className={`${textLinkClass} mt-2`} to="/interviews/settings">Review scheduling settings</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Active job openings */}
+      <div className="mt-4 overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm">
         <div className="bg-depth px-5 py-4 md:px-6">
           <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-glacier">Open requisitions</p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -83,16 +210,11 @@ export default function Dashboard() {
             {(() => {
               const totalPositions = activeJobs.reduce((sum, job) => sum + job.positionsCount, 0)
               return (
-                // <span className="inline-flex items-center rounded-full bg-aura-success-soft px-2.5 py-0.5 text-[11px] font-bold text-aura-success">
-                //   {totalPositions} position{totalPositions === 1 ? '' : 's'} open
-                // </span>
-
-                <Badge tone="success"> {totalPositions} position{totalPositions === 1 ? '' : 's'} open</Badge>
+                <Badge tone="success">{totalPositions} position{totalPositions === 1 ? '' : 's'} open</Badge>
               )
             })()}
           </div>
         </div>
-        {/* Job list rows */}
         <div className="divide-y divide-harbor/10 bg-white px-5 md:px-6">
           {activeJobs.map((job) => {
             const publishedForm = selectPublishedApplicationFormByJobId(state, job.id)
@@ -124,7 +246,6 @@ export default function Dashboard() {
             <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-glacier">Submissions</p>
             <h2 className="mb-0 mt-2 text-lg font-semibold text-white">Recent applications</h2>
           </div>
-          {/* Column headers */}
           <div className="hidden border-b border-harbor/10 bg-frost/60 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-aura-text-muted md:grid md:grid-cols-3 md:px-6">
             <span>Candidate</span>
             <span className="text-center">Applied role</span>
@@ -137,17 +258,14 @@ export default function Dashboard() {
               const subtitle = decision ? `Recruiter ${decision.reviewAction === 'CONFIRM' ? 'confirmed' : 'overrode'}` : formatApplicationStage(application.currentStage)
               return (
                 <article className="grid items-center gap-2 px-5 py-4 md:grid-cols-3 md:px-6" key={application.id}>
-                  {/* Col 1 — Candidate */}
                   <div className="min-w-0">
                     <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
                     <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{candidate.currentPosition}</p>
                   </div>
-                  {/* Col 2 — Role & date */}
                   <div className="min-w-0 md:text-center">
                     <Link className="text-sm font-medium text-harbor no-underline hover:text-depth" to={`/jobs/${job.id}`}>{job.title}</Link>
                     <p className="mb-0 mt-0.5 text-xs text-aura-text-muted">{formatDate(application.submittedAt)} · {subtitle}</p>
                   </div>
-                  {/* Col 3 — Review status (focus) */}
                   <div className="md:text-right">
                     <Badge tone={recommendationTone(recommendation)}>{label}</Badge>
                   </div>
@@ -170,7 +288,6 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                {/* Column headers */}
                 <div className="hidden border-b border-harbor/10 bg-frost/60 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-aura-text-muted md:grid md:grid-cols-3 md:px-6">
                   <span>Candidate</span>
                   <span className="text-center">Date &amp; time</span>
@@ -179,17 +296,14 @@ export default function Dashboard() {
                 <div className="divide-y divide-harbor/10">
                   {upcomingInterviews.map(({ interview, candidate, job }) => (
                     <article className="grid items-center gap-2 px-5 py-4 md:grid-cols-3 md:px-6" key={interview.id}>
-                      {/* Col 1 — Candidate */}
                       <div className="min-w-0">
                         <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
                         <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{job.title}</p>
                       </div>
-                      {/* Col 2 — Schedule */}
                       <div className="min-w-0 md:text-center">
                         <p className="m-0 text-sm font-semibold text-harbor">{formatDate(interview.scheduledStart)} · {formatTime(interview.scheduledStart)}</p>
                         <p className="mb-0 mt-0.5 text-xs text-aura-text-muted">With {interview.interviewers.map((person) => person.name).join(', ')}</p>
                       </div>
-                      {/* Col 3 — Status */}
                       <div className="md:text-right">
                         <Badge tone="accent">{interview.status}</Badge>
                       </div>

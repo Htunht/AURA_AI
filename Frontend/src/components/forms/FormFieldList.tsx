@@ -15,6 +15,7 @@ import {
 import type { ApplicationFormField } from '../../types/applicationForm'
 import { Card } from '../ui/Card'
 import { SortableFormFieldRow } from './SortableFormFieldRow'
+import type { JobRequirement } from '../../types/jobRequirement'
 
 type FormFieldListProps = {
   fields: ApplicationFormField[]
@@ -25,6 +26,9 @@ type FormFieldListProps = {
   onMoveUp: (fieldId: string) => void
   onMoveDown: (fieldId: string) => void
   onReorder: (activeFieldId: string, overFieldId: string) => void
+  onDuplicate?: (field: ApplicationFormField) => void
+  requirements?: JobRequirement[]
+  showFieldKey?: boolean
 }
 
 export function FormFieldList({
@@ -36,6 +40,9 @@ export function FormFieldList({
   onMoveUp,
   onMoveDown,
   onReorder,
+  onDuplicate,
+  requirements = [],
+  showFieldKey = true,
 }: FormFieldListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -87,6 +94,9 @@ export function FormFieldList({
               onRemove={onRemove}
               onMoveUp={onMoveUp}
               onMoveDown={onMoveDown}
+              onDuplicate={onDuplicate}
+              requirements={requirements}
+              showFieldKey={showFieldKey}
             />
           ))}
         </div>
