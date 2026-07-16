@@ -89,6 +89,7 @@ export default function Candidates() {
             <span className="sr-only">Screening status</span>
             <select className={selectClass} value={screeningStatus} onChange={(event) => setScreeningStatus(event.target.value as ScreeningStatusFilter)}>
               <option value="ALL">All screening statuses</option>
+              <option value="SETUP_REQUIRED">Setup required</option>
               <option value="NOT_SCREENED">Not screened</option>
               <option value="QUEUED">Queued</option>
               <option value="PROCESSING">Processing</option>

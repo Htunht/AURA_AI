@@ -15,6 +15,17 @@ export function ScreeningAutomationStatus({
   const { retryFailed } = useScreeningAutomation()
   const summary = selectScreeningQueueSummary(state)
   const isProcessing = summary.queued > 0 || summary.processing > 0
+  const failedItems = state.screeningQueue.filter((item) => item.status === 'FAILED')
+  const setupRequiredJobIds = Array.from(new Set(state.applications.flatMap((application) => {
+    const hasCompletedEvaluation = state.evaluations.some((evaluation) => evaluation.applicationId === application.id && evaluation.evaluationType === 'SCREENING' && evaluation.status === 'COMPLETED')
+    const hasRubric = state.rubrics.some((rubric) => rubric.jobId === application.jobId && rubric.status === 'PUBLISHED')
+    return !hasCompletedEvaluation && !hasRubric ? [application.jobId] : []
+  })))
+  const hasSetupRequired = setupRequiredJobIds.length > 0
+  const retryableApplicationIds = failedItems.filter((item) => {
+    const application = state.applications.find((entry) => entry.id === item.applicationId)
+    return application && state.rubrics.some((rubric) => rubric.jobId === application.jobId && rubric.status === 'PUBLISHED')
+  }).map((item) => item.applicationId)
 
   return (
     <Card className="mb-4 p-4 md:px-5">
@@ -27,7 +38,7 @@ export function ScreeningAutomationStatus({
                 className="animate-spin text-marine motion-reduce:animate-none"
                 aria-hidden="true"
               />
-            ) : summary.failed > 0 ? (
+            ) : summary.failed > 0 || hasSetupRequired ? (
               <AlertCircle size={17} className="text-aura-danger" aria-hidden="true" />
             ) : (
               <CheckCircle2 size={17} className="text-aura-success" aria-hidden="true" />
@@ -39,8 +50,10 @@ export function ScreeningAutomationStatus({
           <p className="mb-0 mt-1.5 text-xs leading-5 text-aura-text-secondary" aria-live="polite">
             {isProcessing
               ? 'AURA is screening new applications automatically.'
-              : summary.failed > 0
-                ? 'Some applications require a screening retry.'
+              : hasSetupRequired
+                ? 'Some roles need a published rubric before AURA can screen their applications.'
+                : summary.failed > 0
+                  ? 'Some applications require a screening retry.'
                 : 'All submitted applications have been screened.'}
           </p>
         </div>
@@ -64,11 +77,16 @@ export function ScreeningAutomationStatus({
               </div>
             ))}
           </dl>
-          {summary.failed > 0 ? (
-            <Button variant="secondary" onClick={() => retryFailed()}>
+          {retryableApplicationIds.length > 0 ? (
+            <Button variant="secondary" onClick={() => retryFailed(retryableApplicationIds)}>
               <RotateCcw size={15} aria-hidden="true" />
               Retry all failed
             </Button>
+          ) : null}
+          {setupRequiredJobIds.length === 1 ? (
+            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/jobs/${setupRequiredJobIds[0]}/screening-rubric`}>Configure rubric</Link>
+          ) : setupRequiredJobIds.length > 1 ? (
+            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to="/jobs">Configure rubrics</Link>
           ) : null}
           {pendingRecruiterReviews !== undefined ? (
             <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to="/reviews">Open review queue</Link>

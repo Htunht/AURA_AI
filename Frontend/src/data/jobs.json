@@ -6,6 +6,10 @@
     "description": "We are looking for a senior frontend developer to build and maintain scalable React applications.",
     "status": "OPEN",
     "positionsCount": 2,
+    "employmentType": "FULL_TIME",
+    "workArrangement": "HYBRID",
+    "location": "Yangon",
+    "minimumExperienceYears": 3,
     "applicationDeadline": "2026-08-10",
     "requiredSkills": [
       { "name": "React", "priority": "REQUIRED", "minimumYears": 3 },
@@ -14,7 +18,9 @@
       { "name": "Automated Testing", "priority": "PREFERRED" },
       { "name": "Next.js", "priority": "PREFERRED" }
     ],
-    "createdAt": "2026-07-10T09:00:00Z"
+    "createdAt": "2026-07-10T09:00:00Z",
+    "updatedAt": "2026-07-10T09:00:00Z",
+    "openedAt": "2026-07-10T09:00:00Z"
   },
   {
     "id": "job-002",
@@ -23,13 +29,19 @@
     "description": "Design accessible product experiences and turn research insights into clear interaction patterns.",
     "status": "OPEN",
     "positionsCount": 1,
+    "employmentType": "FULL_TIME",
+    "workArrangement": "HYBRID",
+    "location": "Yangon",
+    "minimumExperienceYears": 2,
     "applicationDeadline": "2026-08-18",
     "requiredSkills": [
       { "name": "Figma", "priority": "REQUIRED", "minimumYears": 2 },
       { "name": "User Research", "priority": "REQUIRED" },
       { "name": "Design Systems", "priority": "PREFERRED" }
     ],
-    "createdAt": "2026-07-11T09:30:00Z"
+    "createdAt": "2026-07-11T09:30:00Z",
+    "updatedAt": "2026-07-11T09:30:00Z",
+    "openedAt": "2026-07-11T09:30:00Z"
   },
   {
     "id": "job-003",
@@ -38,6 +50,10 @@
     "description": "Build reliable APIs and services that support AURA AI recruitment workflows.",
     "status": "DRAFT",
     "positionsCount": 2,
+    "employmentType": "FULL_TIME",
+    "workArrangement": "HYBRID",
+    "location": "Yangon",
+    "minimumExperienceYears": 2,
     "applicationDeadline": "2026-08-25",
     "requiredSkills": [
       { "name": "Node.js", "priority": "REQUIRED", "minimumYears": 2 },
@@ -45,6 +61,7 @@
       { "name": "REST API Design", "priority": "REQUIRED" },
       { "name": "Docker", "priority": "PREFERRED" }
     ],
-    "createdAt": "2026-07-12T08:45:00Z"
+    "createdAt": "2026-07-12T08:45:00Z",
+    "updatedAt": "2026-07-12T08:45:00Z"
   }
 ]

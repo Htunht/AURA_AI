@@ -68,6 +68,25 @@ export function normalizePersistedDemoState(
   const seedPolicies = createInitialDemoState().interviewSchedulingPolicies
   return recoverInterruptedScreeningQueue({
     ...state,
+    jobs: state.jobs.map((job) => ({
+      ...job,
+      employmentType: job.employmentType ?? 'FULL_TIME',
+      workArrangement: job.workArrangement ?? 'REMOTE',
+      minimumExperienceYears: Number.isFinite(job.minimumExperienceYears)
+        ? job.minimumExperienceYears
+        : Math.max(0, ...job.requiredSkills.map((skill) => skill.minimumYears ?? 0)),
+      updatedAt: job.updatedAt ?? job.createdAt,
+      openedAt: job.openedAt ?? (job.status === 'OPEN' ? job.createdAt : undefined),
+      requiredSkills: job.requiredSkills.map((skill) => ({ ...skill })),
+    })),
+    rubrics: state.rubrics.map((rubric) => ({
+      ...rubric,
+      status: rubric.status ?? 'PUBLISHED',
+      version: Number.isInteger(rubric.version) && rubric.version > 0 ? rubric.version : 1,
+      createdAt: rubric.createdAt ?? state.jobs.find((job) => job.id === rubric.jobId)?.createdAt ?? '2026-07-01T00:00:00.000Z',
+      updatedAt: rubric.updatedAt ?? rubric.createdAt ?? state.jobs.find((job) => job.id === rubric.jobId)?.createdAt ?? '2026-07-01T00:00:00.000Z',
+      criteria: rubric.criteria.map((criterion) => ({ ...criterion })),
+    })),
     screeningQueue: Array.isArray(state.screeningQueue)
       ? state.screeningQueue
       : [],

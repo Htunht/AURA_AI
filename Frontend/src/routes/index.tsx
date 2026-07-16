@@ -5,6 +5,8 @@ import CandidateDetail from '../pages/CandidateDetail'
 import Candidates from '../pages/Candidates'
 import Dashboard from '../pages/Dashboard'
 import JobDetail from '../pages/JobDetail'
+import JobCreate from '../pages/JobCreate'
+import JobEdit from '../pages/JobEdit'
 import Jobs from '../pages/Jobs'
 import HumanReviewQueue from '../pages/HumanReviewQueue'
 import InterviewDetail from '../pages/InterviewDetail'
@@ -16,6 +18,7 @@ import Interviews from '../pages/Interviews'
 import Login from '../pages/Login'
 import PublicJobApplication from '../pages/PublicJobApplication'
 import PublicInterviewScheduling from '../pages/PublicInterviewScheduling'
+import ScreeningRubricEditor from '../pages/ScreeningRubricEditor'
 
 export function AppRoutes() {
   return (
@@ -34,12 +37,15 @@ export function AppRoutes() {
         <Route path="/interviews/exceptions" element={<InterviewSchedulingExceptions />} />
         <Route path="/interviews/:interviewId" element={<InterviewDetail />} />
         <Route path="/jobs" element={<Jobs />} />
+        <Route path="/jobs/new" element={<JobCreate />} />
         <Route path="/jobs/:jobId" element={<JobDetail />} />
+        <Route path="/jobs/:jobId/edit" element={<JobEdit />} />
         <Route path="/jobs/:jobId/candidates" element={<Candidates />} />
         <Route
           path="/jobs/:jobId/application-form"
           element={<ApplicationFormBuilder />}
         />
+        <Route path="/jobs/:jobId/screening-rubric" element={<ScreeningRubricEditor />} />
         <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
       </Route>
 

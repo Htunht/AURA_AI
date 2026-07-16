@@ -122,7 +122,7 @@ export default function ApplicationFormBuilder() {
     setSuggestionsError(undefined)
     setSuggestionProgressIndex(0)
 
-    const rubric = state.rubrics.find((item) => item.jobId === job.id)
+    const rubric = state.rubrics.find((item) => item.jobId === job.id && item.status === 'PUBLISHED')
 
     if (!rubric) {
       setSuggestionsError(

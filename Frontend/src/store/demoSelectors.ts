@@ -16,6 +16,7 @@ import type {
 import type { ScreeningQueueItem } from '../types/screeningQueue'
 import type { Transcript } from '../types/transcript'
 import { getScreeningRecommendationLabel } from '../utils/recommendation'
+import { evaluateJobReadiness, selectJobRelatedRecordCounts as deriveJobRelatedRecordCounts, type JobReadinessResult, type JobRelatedRecordCounts } from '../utils/jobValidation'
 import type { DemoState } from './demoReducer'
 
 export function selectJobById(
@@ -23,6 +24,18 @@ export function selectJobById(
   jobId: string,
 ): Job | undefined {
   return state.jobs.find((job) => job.id === jobId)
+}
+
+export function selectJobsByStatus(state: DemoState, status: Job['status']): Job[] {
+  return state.jobs.filter((job) => job.status === status)
+}
+
+export function selectJobReadiness(state: DemoState, jobId: string): JobReadinessResult {
+  return evaluateJobReadiness(state, jobId)
+}
+
+export function selectJobRelatedRecordCounts(state: DemoState, jobId: string): JobRelatedRecordCounts {
+  return deriveJobRelatedRecordCounts(state, jobId)
 }
 
 export function selectCandidateById(
@@ -80,6 +93,29 @@ export function selectDraftApplicationFormByJobId(
   return selectApplicationFormsByJobId(state, jobId).find(
     (form) => form.status === 'DRAFT',
   )
+}
+
+export function selectRubricsByJobId(
+  state: DemoState,
+  jobId: string,
+): EvaluationRubric[] {
+  return state.rubrics
+    .filter((rubric) => rubric.jobId === jobId)
+    .sort((left, right) => right.version - left.version)
+}
+
+export function selectPublishedRubricByJobId(
+  state: DemoState,
+  jobId: string,
+): EvaluationRubric | undefined {
+  return selectRubricsByJobId(state, jobId).find((rubric) => rubric.status === 'PUBLISHED')
+}
+
+export function selectDraftRubricByJobId(
+  state: DemoState,
+  jobId: string,
+): EvaluationRubric | undefined {
+  return selectRubricsByJobId(state, jobId).find((rubric) => rubric.status === 'DRAFT')
 }
 
 export function selectCandidateForApplication(
@@ -418,7 +454,7 @@ export function selectCandidateScreeningViewModel(
     candidate,
     application,
     job,
-    rubric: state.rubrics.find((rubric) => rubric.jobId === job.id),
+    rubric: selectPublishedRubricByJobId(state, job.id),
     screeningEvaluation,
     decision: screeningEvaluation
       ? state.decisions
@@ -518,6 +554,12 @@ export function selectActiveJobs(state: DemoState): Job[] {
   return state.jobs
     .filter((job) => job.status === 'OPEN')
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+}
+
+export function selectArchivedJobs(state: DemoState): Job[] {
+  return state.jobs
+    .filter((job) => job.status === 'ARCHIVED')
+    .sort((left, right) => (right.archivedAt ?? right.updatedAt).localeCompare(left.archivedAt ?? left.updatedAt))
 }
 
 export type RecentApplicationItem = {
@@ -674,6 +716,7 @@ export type CandidateListItem = {
 
 export type CandidateScreeningDisplayStatus =
   | 'NOT_SCREENED'
+  | 'SETUP_REQUIRED'
   | 'QUEUED'
   | 'PROCESSING'
   | 'COMPLETED'
@@ -788,7 +831,8 @@ export function findApplicationsRequiringAutomaticScreening(
             item.status === 'FAILED'),
       )
 
-      return !hasCompletedEvaluation && !hasBlockingQueueItem
+      const hasPublishedRubric = Boolean(selectPublishedRubricByJobId(state, application.jobId))
+      return hasPublishedRubric && !hasCompletedEvaluation && !hasBlockingQueueItem
     })
     .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt))
     .map((application) => application.id)
@@ -797,8 +841,10 @@ export function findApplicationsRequiringAutomaticScreening(
 function deriveCandidateScreeningStatus(
   evaluation: Evaluation | undefined,
   queueItem: ScreeningQueueItem | undefined,
+  hasPublishedRubric: boolean,
 ): CandidateScreeningDisplayStatus {
   if (evaluation?.status === 'COMPLETED') return 'COMPLETED'
+  if (!hasPublishedRubric) return 'SETUP_REQUIRED'
   if (queueItem?.status === 'PROCESSING') return 'PROCESSING'
   if (queueItem?.status === 'QUEUED') return 'QUEUED'
   if (queueItem?.status === 'FAILED') return 'FAILED'
@@ -822,6 +868,7 @@ export function selectCandidateListItems(
         state,
         application.id,
       )
+      const publishedRubric = selectPublishedRubricByJobId(state, application.jobId)
 
       return candidate && job
         ? {
@@ -835,6 +882,7 @@ export function selectCandidateListItems(
             screeningStatus: deriveCandidateScreeningStatus(
               screeningEvaluation,
               screeningQueueItem,
+              Boolean(publishedRubric),
             ),
           }
         : undefined

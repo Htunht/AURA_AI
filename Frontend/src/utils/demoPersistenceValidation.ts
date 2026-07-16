@@ -8,6 +8,7 @@ import { validateApplicationFormDomain } from './applicationFormDomainValidation
 import { validateDemoData } from './demoDataValidation'
 import { validateDemoStore } from './demoStoreValidation'
 import { validatePersistedDemoState } from './persistedDemoStateValidation'
+import { validateRubricBuilderDomain } from './rubricBuilderValidation'
 
 export type DemoPersistenceValidationResult = {
   valid: boolean
@@ -100,6 +101,39 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
     'Older persisted state did not hydrate scheduling policies and invitations',
   )
 
+  const legacyRubricState = createFreshDemoState()
+  const legacyRubrics = legacyRubricState.rubrics.map((rubric) => {
+    const legacyRubric: Partial<typeof rubric> = { ...rubric }
+    delete legacyRubric.status
+    delete legacyRubric.version
+    delete legacyRubric.createdAt
+    delete legacyRubric.updatedAt
+    return legacyRubric
+  })
+  const hydratedLegacyRubrics = normalizePersistedDemoState({
+    ...legacyRubricState,
+    rubrics: legacyRubrics as DemoState['rubrics'],
+  })
+  recordCheck(
+    errors,
+    hydratedLegacyRubrics.rubrics.every((rubric) => rubric.status === 'PUBLISHED' && rubric.version === 1 && Boolean(rubric.createdAt) && Boolean(rubric.updatedAt)),
+    'Older persisted rubrics did not hydrate with a published version and timestamps',
+  )
+
+  const legacyJobState = createFreshDemoState()
+  const legacyJobs = legacyJobState.jobs.map((job) => {
+    const legacyJob: Partial<typeof job> = { ...job }
+    delete legacyJob.employmentType
+    delete legacyJob.workArrangement
+    delete legacyJob.location
+    delete legacyJob.minimumExperienceYears
+    delete legacyJob.updatedAt
+    delete legacyJob.openedAt
+    return legacyJob
+  })
+  const hydratedLegacyJobs = normalizePersistedDemoState({ ...legacyJobState, jobs: legacyJobs as DemoState['jobs'] })
+  recordCheck(errors, hydratedLegacyJobs.jobs.every((job) => job.employmentType === 'FULL_TIME' && job.workArrangement === 'REMOTE' && Number.isFinite(job.minimumExperienceYears) && Boolean(job.updatedAt) && (job.status !== 'OPEN' || Boolean(job.openedAt))), 'Older persisted jobs did not hydrate with safe CRUD defaults')
+
   const missingCollection: Record<string, unknown> = {
     ...createFreshDemoState(),
   }
@@ -179,6 +213,7 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
   const demoDataValidation = validateDemoData()
   const demoStoreValidation = validateDemoStore()
   const applicationFormValidation = validateApplicationFormDomain()
+  const rubricBuilderValidation = validateRubricBuilderDomain()
 
   recordCheck(
     errors,
@@ -194,6 +229,11 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
     errors,
     applicationFormValidation.valid,
     `Existing application form validation failed: ${applicationFormValidation.errors.join('; ')}`,
+  )
+  recordCheck(
+    errors,
+    rubricBuilderValidation.valid,
+    `Rubric builder validation failed: ${rubricBuilderValidation.errors.join('; ')}`,
   )
 
   return { valid: errors.length === 0, errors }

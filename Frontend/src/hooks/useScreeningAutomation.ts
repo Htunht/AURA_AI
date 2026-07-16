@@ -34,7 +34,7 @@ function queueItemId(applicationId: string) {
 function readableScreeningError(error: unknown) {
   if (error instanceof DemoServiceError) {
     if (error.code === 'RUBRIC_NOT_FOUND') {
-      return 'An evaluation rubric is not available for this role.'
+      return 'An evaluation rubric is not published for this role.'
     }
     if (error.code === 'INVALID_SERVICE_INPUT') {
       return 'The application does not contain enough evidence for screening.'
@@ -52,7 +52,6 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
   const stateRef = useRef(state)
   stateRef.current = state
   const mountedRef = useRef(false)
-  const bootstrappedRef = useRef(false)
   const activeIdsRef = useRef(new Set<string>())
   const [activeApplicationIds, setActiveApplicationIds] = useState<string[]>([])
 
@@ -70,13 +69,10 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
   }, [])
 
   useEffect(() => {
-    if (bootstrappedRef.current) return
-    bootstrappedRef.current = true
-
     for (const applicationId of findApplicationsRequiringAutomaticScreening(
-      stateRef.current,
+      state,
     )) {
-      const application = stateRef.current.applications.find(
+      const application = state.applications.find(
         (item) => item.id === applicationId,
       )
       if (!application) continue
@@ -85,7 +81,7 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
         payload: { applicationId, queuedAt: application.submittedAt },
       })
     }
-  }, [dispatch])
+  }, [dispatch, state])
 
   const processQueueItem = useCallback(
     async (applicationId: string, actionDispatch: Dispatch<DemoAction>) => {
@@ -132,7 +128,9 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
           ? currentState.jobs.find((item) => item.id === application.jobId)
           : undefined
         const rubric = job
-          ? currentState.rubrics.find((item) => item.jobId === job.id)
+          ? currentState.rubrics.find(
+              (item) => item.jobId === job.id && item.status === 'PUBLISHED',
+            )
           : undefined
 
         if (!application || !candidate || !job || !rubric) {
@@ -141,8 +139,9 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
             payload: {
               queueItemId: id,
               completedAt: startedAt,
-              error:
-                'Candidate application, role, or evaluation rubric could not be resolved.',
+              error: !rubric && application && candidate && job
+                ? 'An evaluation rubric is not published for this role.'
+                : 'Candidate application or role could not be resolved.',
             },
           })
           return

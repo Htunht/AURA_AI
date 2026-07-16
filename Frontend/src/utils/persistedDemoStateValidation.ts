@@ -130,7 +130,12 @@ export function validatePersistedDemoState(
   validateRecords(
     jobs,
     'jobs',
-    (record) => hasStringProperties(record, ['id', 'title', 'status']),
+    (record) =>
+      hasStringProperties(record, ['id', 'title', 'status']) &&
+      (record.employmentType === undefined || typeof record.employmentType === 'string') &&
+      (record.workArrangement === undefined || typeof record.workArrangement === 'string') &&
+      (record.minimumExperienceYears === undefined || typeof record.minimumExperienceYears === 'number') &&
+      (record.updatedAt === undefined || typeof record.updatedAt === 'string'),
     errors,
   )
   validateRecords(

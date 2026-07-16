@@ -9,6 +9,7 @@ import { prepareApplicationSubmission, type PreparedApplicationSubmission } from
 import { selectJobById, selectPublishedApplicationFormByJobId } from '../store/demoSelectors'
 import type { ApplicationSubmissionValue, CandidateSubmission } from '../types/application'
 import { validateApplicationSubmission } from '../utils/applicationSubmissionValidation'
+import { canAcceptPublicApplications } from '../utils/jobValidation'
 
 const DEMO_TIMESTAMP = '2026-07-16T10:30:00Z'
 
@@ -25,7 +26,16 @@ export default function PublicJobApplication() {
     return <PublicUnavailable title="Job not found" message="This job opening does not exist." />
   }
 
-  if (job.status !== 'OPEN' || !form) {
+  if (!canAcceptPublicApplications(job, Boolean(form)) && job.status !== 'OPEN') {
+    const message = job.status === 'DRAFT'
+      ? 'This role is not open for applications.'
+      : job.status === 'CLOSED'
+        ? 'Applications for this role are now closed.'
+        : 'This role is no longer available.'
+    return <PublicUnavailable title={job.title} message={message} />
+  }
+
+  if (!form) {
     return <PublicUnavailable title={job.title} message="Applications are not currently available." />
   }
 

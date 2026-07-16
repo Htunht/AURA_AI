@@ -31,7 +31,7 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [overrideOpen, setOverrideOpen] = useState(false)
   const evaluation = item.evaluation
-  const rubric = state.rubrics.find((entry) => entry.jobId === item.job.id)
+  const rubric = state.rubrics.find((entry) => entry.jobId === item.job.id && entry.status === 'PUBLISHED')
   const schedulingInvitation = selectSchedulingInvitationByApplicationId(state, item.application.id)
   const schedulingPolicy = selectActiveInterviewSchedulingPolicy(state, item.job.id)
 
@@ -108,9 +108,9 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
 
       {item.category === 'FAILED' ? (
         <Card className="border-aura-danger/20 p-5">
-          <h3 className="m-0 text-base font-semibold text-depth">Screening must be retried before a hiring recommendation can be reviewed.</h3>
-          <p className="mb-0 mt-2 text-sm text-aura-text-secondary">No recruiter decision controls are available until screening completes successfully.</p>
-          <Button className="mt-4" variant="secondary" onClick={() => retryFailed([item.application.id])}><RotateCcw size={16} aria-hidden="true" />Retry screening</Button>
+          <h3 className="m-0 text-base font-semibold text-depth">{rubric ? 'Screening must be retried before a hiring recommendation can be reviewed.' : 'Screening setup is required for this role.'}</h3>
+          <p className="mb-0 mt-2 text-sm text-aura-text-secondary">{rubric ? 'No recruiter decision controls are available until screening completes successfully.' : 'Publish an evidence rubric to let AURA screen this application. Hiring decisions remain with the recruiter.'}</p>
+          {rubric ? <Button className="mt-4" variant="secondary" onClick={() => retryFailed([item.application.id])}><RotateCcw size={16} aria-hidden="true" />Retry screening</Button> : <Link className="mt-4 inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15" to={`/jobs/${item.job.id}/screening-rubric`}>Configure screening rubric</Link>}
         </Card>
       ) : item.decision ? (
         <Card className="border-marine/25 p-5 md:p-6">

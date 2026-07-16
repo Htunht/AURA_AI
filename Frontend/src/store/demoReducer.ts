@@ -16,7 +16,9 @@ import type { InterviewSchedulingInvitation } from '../types/interviewScheduling
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { Transcript } from '../types/transcript'
 import type { ScreeningQueueItem } from '../types/screeningQueue'
+import type { EvaluationRubric } from '../types/rubric'
 import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
+import { canDeleteJob, canOpenJob, isValidJobTransition, validateJob } from '../utils/jobValidation'
 import { createInitialDemoState } from './demoInitialState'
 import type { DemoState } from './demoStateTypes'
 
@@ -25,6 +27,10 @@ export type { DemoState } from './demoStateTypes'
 
 export type DemoAction =
   | { type: 'RESET_DEMO_STATE' }
+  | { type: 'ADD_JOB'; payload: { job: import('../types/job').Job } }
+  | { type: 'UPDATE_JOB'; payload: { jobId: string; changes: Partial<Pick<import('../types/job').Job, 'title' | 'department' | 'description' | 'positionsCount' | 'employmentType' | 'workArrangement' | 'location' | 'minimumExperienceYears' | 'requiredSkills' | 'applicationDeadline'>>; updatedAt: string } }
+  | { type: 'CHANGE_JOB_STATUS'; payload: { jobId: string; status: import('../types/job').JobStatus; changedAt: string } }
+  | { type: 'DELETE_JOB'; payload: { jobId: string } }
   | {
       type: 'UPDATE_APPLICATION_STATUS'
       payload: { applicationId: string; status: ApplicationStatus }
@@ -63,6 +69,9 @@ export type DemoAction =
       type: 'PUBLISH_APPLICATION_FORM'
       payload: { formId: string; updatedAt: string }
     }
+  | { type: 'ADD_RUBRIC'; payload: { rubric: EvaluationRubric } }
+  | { type: 'UPDATE_RUBRIC'; payload: { rubric: EvaluationRubric } }
+  | { type: 'PUBLISH_RUBRIC'; payload: { rubricId: string; updatedAt: string } }
   | { type: 'ADD_CANDIDATE'; payload: Candidate }
   | { type: 'ADD_APPLICATION'; payload: Application }
   | { type: 'ADD_EVALUATION'; payload: Evaluation }
@@ -190,6 +199,26 @@ function clonePolicy(policy: InterviewSchedulingPolicy): InterviewSchedulingPoli
   }
 }
 
+function cloneRubric(rubric: EvaluationRubric): EvaluationRubric {
+  return { ...rubric, criteria: rubric.criteria.map((criterion) => ({ ...criterion })) }
+}
+
+function cloneJob(job: import('../types/job').Job): import('../types/job').Job {
+  return { ...job, requiredSkills: job.requiredSkills.map((skill) => ({ ...skill })) }
+}
+
+function isPublishableRubric(rubric: EvaluationRubric) {
+  return rubric.name.trim().length > 0 &&
+    rubric.criteria.length > 0 &&
+    new Set(rubric.criteria.map((criterion) => criterion.key)).size === rubric.criteria.length &&
+    rubric.criteria.every((criterion) =>
+      criterion.key.trim().length > 0 && criterion.name.trim().length > 0 &&
+      criterion.description.trim().length > 0 && criterion.evaluationGuidance.trim().length > 0 &&
+      Number.isFinite(criterion.weight) && criterion.weight > 0,
+    ) &&
+    rubric.criteria.reduce((total, criterion) => total + criterion.weight, 0) === 100
+}
+
 function cloneInvitation(invitation: InterviewSchedulingInvitation): InterviewSchedulingInvitation {
   return {
     ...invitation,
@@ -205,6 +234,41 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
   switch (action.type) {
     case 'RESET_DEMO_STATE':
       return createInitialDemoState()
+
+    case 'ADD_JOB': {
+      const job = action.payload.job
+      if (job.status !== 'DRAFT' || state.jobs.some((item) => item.id === job.id) || !validateJob(job).valid) return state
+      return { ...state, jobs: [...state.jobs, cloneJob(job)] }
+    }
+
+    case 'UPDATE_JOB': {
+      const existing = state.jobs.find((job) => job.id === action.payload.jobId)
+      if (!existing) return state
+      const updated = cloneJob({ ...existing, ...action.payload.changes, id: existing.id, status: existing.status, createdAt: existing.createdAt, updatedAt: action.payload.updatedAt, openedAt: existing.openedAt, closedAt: existing.closedAt, archivedAt: existing.archivedAt })
+      if (!validateJob(updated).valid) return state
+      return { ...state, jobs: state.jobs.map((job) => job.id === existing.id ? updated : job) }
+    }
+
+    case 'CHANGE_JOB_STATUS': {
+      const job = state.jobs.find((item) => item.id === action.payload.jobId)
+      if (!job || !isValidJobTransition(job.status, action.payload.status)) return state
+      if (action.payload.status === 'OPEN' && !canOpenJob(state, job.id, action.payload.changedAt).ready) return state
+      const next = cloneJob({
+        ...job,
+        status: action.payload.status,
+        updatedAt: action.payload.changedAt,
+        ...(action.payload.status === 'OPEN' ? { openedAt: action.payload.changedAt, closedAt: undefined } : {}),
+        ...(action.payload.status === 'CLOSED' ? { closedAt: action.payload.changedAt } : {}),
+        ...(action.payload.status === 'ARCHIVED' ? { archivedAt: action.payload.changedAt } : {}),
+        ...(job.status === 'ARCHIVED' && action.payload.status === 'DRAFT' ? { archivedAt: undefined } : {}),
+      })
+      return { ...state, jobs: state.jobs.map((item) => item.id === job.id ? next : item) }
+    }
+
+    case 'DELETE_JOB':
+      return canDeleteJob(state, action.payload.jobId).allowed
+        ? { ...state, jobs: state.jobs.filter((job) => job.id !== action.payload.jobId) }
+        : state
 
     case 'UPDATE_APPLICATION_STATUS':
       return {
@@ -452,6 +516,45 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       }
     }
 
+    case 'ADD_RUBRIC': {
+      const rubric = action.payload.rubric
+      if (
+        rubric.status !== 'DRAFT' || !Number.isInteger(rubric.version) || rubric.version < 1 ||
+        !state.jobs.some((job) => job.id === rubric.jobId) ||
+        state.rubrics.some((item) => item.id === rubric.id ||
+          (item.jobId === rubric.jobId && (item.version === rubric.version || item.status === 'DRAFT')))
+      ) return state
+      return { ...state, rubrics: [...state.rubrics, cloneRubric(rubric)] }
+    }
+
+    case 'UPDATE_RUBRIC': {
+      const rubric = state.rubrics.find((item) => item.id === action.payload.rubric.id)
+      if (
+        !rubric || rubric.status !== 'DRAFT' || action.payload.rubric.status !== 'DRAFT' ||
+        rubric.jobId !== action.payload.rubric.jobId || rubric.version !== action.payload.rubric.version
+      ) return state
+      return {
+        ...state,
+        rubrics: state.rubrics.map((item) =>
+          item.id === rubric.id ? cloneRubric(action.payload.rubric) : item,
+        ),
+      }
+    }
+
+    case 'PUBLISH_RUBRIC': {
+      const rubric = state.rubrics.find((item) => item.id === action.payload.rubricId)
+      if (!rubric || rubric.status !== 'DRAFT' || !isPublishableRubric(rubric)) return state
+      return {
+        ...state,
+        rubrics: state.rubrics.map((item) => {
+          if (item.id === rubric.id) return { ...item, status: 'PUBLISHED', updatedAt: action.payload.updatedAt }
+          return item.jobId === rubric.jobId && item.status === 'PUBLISHED'
+            ? { ...item, status: 'ARCHIVED', updatedAt: action.payload.updatedAt }
+            : item
+        }),
+      }
+    }
+
     case 'ADD_CANDIDATE':
       if (
         state.candidates.some(
@@ -597,8 +700,13 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         const hasQueueRecord = state.screeningQueue.some(
           (item) => item.applicationId === applicationId,
         )
+        const hasPublishedRubric = application
+          ? state.rubrics.some(
+              (rubric) => rubric.jobId === application.jobId && rubric.status === 'PUBLISHED',
+            )
+          : false
 
-        if (!application || hasCompletedEvaluation || hasQueueRecord) continue
+        if (!application || !hasPublishedRubric || hasCompletedEvaluation || hasQueueRecord) continue
 
         queueItems.push({
           id: `screening-queue-${application.id}`,
