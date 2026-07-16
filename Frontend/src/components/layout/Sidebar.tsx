@@ -1,4 +1,4 @@
-import { BriefcaseBusiness } from 'lucide-react'
+import { BriefcaseBusiness, LayoutDashboard, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const navLinkClass =
@@ -23,16 +23,44 @@ export function Sidebar() {
           </span>
         </span>
       </div>
-      <nav className="block lg:grid lg:gap-1" aria-label="Admin navigation">
-        <NavLink
-          to="/jobs"
-          className={({ isActive }) =>
-            `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
-          }
-        >
-          <BriefcaseBusiness size={18} aria-hidden="true" />
-          Job Openings
-        </NavLink>
+      <nav className="flex items-center gap-1 lg:grid lg:gap-5" aria-label="Admin navigation">
+        <div className="lg:grid lg:gap-1">
+          <p className="mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-frost/40 lg:block">
+            Overview
+          </p>
+          <NavLink
+            to="/dashboard"
+            className={({ isActive }) =>
+              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+            }
+          >
+            <LayoutDashboard size={18} aria-hidden="true" />
+            Dashboard
+          </NavLink>
+        </div>
+        <div className="flex items-center gap-1 lg:grid lg:gap-1">
+          <p className="mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-frost/40 lg:block">
+            Recruitment
+          </p>
+          <NavLink
+            to="/jobs"
+            className={({ isActive }) =>
+              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+            }
+          >
+            <BriefcaseBusiness size={18} aria-hidden="true" />
+            Job Openings
+          </NavLink>
+          <NavLink
+            to="/candidates"
+            className={({ isActive }) =>
+              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+            }
+          >
+            <Users size={18} aria-hidden="true" />
+            Candidates
+          </NavLink>
+        </div>
       </nav>
     </aside>
   )
