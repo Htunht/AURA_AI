@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Dialog } from '../components/ui/Dialog'
 import { useDemoStore } from '../hooks/useDemoStore'
-import { selectInterviewById, selectInterviewQuestionPreparationStatus, selectLatestInterviewQuestionSet } from '../store/demoSelectors'
+import { selectInterviewById, selectInterviewQuestionPreparationStatus, selectLatestInterviewQuestionSet, selectInterviewSessionOperationalStatus } from '../store/demoSelectors'
 import { formatDuration, formatInterviewDate, formatInterviewMode, formatInterviewStatus, formatInterviewTime } from '../utils/helpers'
 
 const linkClass = 'inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier'
@@ -34,6 +34,7 @@ export default function InterviewDetail() {
         : historicalPolicy?.displayName
   const questionSet = interview ? selectLatestInterviewQuestionSet(state, interview.id) : undefined
   const preparationStatus = interview ? selectInterviewQuestionPreparationStatus(state, interview.id) : 'NOT_PREPARED'
+  const sessionStatus = interview ? selectInterviewSessionOperationalStatus(state, interview.id) : 'UNAVAILABLE'
 
   if (!interview || !application || !candidate || !job) return <PageContainer eyebrow="Interview operations" title="Interview not found"><Card className="p-8 text-center text-sm text-aura-text-secondary">The requested interview record could not be resolved.</Card></PageContainer>
 
@@ -47,7 +48,7 @@ export default function InterviewDetail() {
     setCancelOpen(false)
   }
 
-  return <PageContainer eyebrow="Interview operations" title={`${candidate.fullName} interview`} description={`${job.title} · ${formatInterviewStatus(interview.status)}`} actions={<Link className={linkClass} to="/interviews">Back to interviews</Link>}>
+  return <PageContainer eyebrow="Interview operations" title={`${candidate.fullName} interview`} description={`${job.title} · ${formatInterviewStatus(interview.status)}`} actions={<div className="flex flex-wrap gap-2"><Link className={linkClass} to="/interviews">Back to interviews</Link>{preparationStatus === 'APPROVED' && interview.status !== 'CANCELLED' ? <Link className={linkClass} to={`/interviews/${interview.id}/session`}>{sessionStatus === 'READY' ? 'Open session workspace' : sessionStatus === 'IN_PROGRESS' ? 'Return to session' : sessionStatus === 'PAUSED' ? 'Resume session' : 'View session summary'}</Link> : null}</div>}>
     {searchParams.get('rescheduled') === '1' ? <Card className="mb-4 border-aura-success/25 bg-aura-success-soft p-4 text-sm font-semibold text-aura-success">Interview rescheduled.</Card> : null}
     <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
       <div className="grid gap-4">

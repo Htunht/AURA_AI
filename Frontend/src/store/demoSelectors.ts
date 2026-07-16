@@ -6,6 +6,7 @@ import type { Decision } from '../types/decision'
 import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
 import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
+import type { InterviewSession } from '../types/interviewSession'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { SchedulingExceptionReason } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
@@ -34,6 +35,34 @@ const schedulingInterviewers = interviewersData as Interviewer[]
 
 export function selectInterviewQuestionSetsByInterviewId(state: DemoState, interviewId: string): InterviewQuestionSet[] {
   return state.interviewQuestionSets.filter((set) => set.interviewId === interviewId).sort((left, right) => right.version - left.version)
+}
+
+export function selectInterviewSessionByInterviewId(state: DemoState, interviewId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.interviewId === interviewId) }
+export function selectInterviewSessionById(state: DemoState, sessionId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.id === sessionId) }
+export type InterviewSessionViewModel = { session: InterviewSession; interview: Interview; questionSet: InterviewQuestionSet; candidate: Candidate; application: Application; job: Job }
+export function selectInterviewSessionViewModel(state: DemoState, interviewId: string): InterviewSessionViewModel | undefined {
+  const session = selectInterviewSessionByInterviewId(state, interviewId); const interview = state.interviews.find((item) => item.id === interviewId); const questionSet = session ? state.interviewQuestionSets.find((item) => item.id === session.questionSetId) : undefined; const application = interview ? state.applications.find((item) => item.id === interview.applicationId) : undefined; const candidate = application ? state.candidates.find((item) => item.id === application.candidateId) : undefined; const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+  return session && interview && questionSet && application && candidate && job ? { session, interview, questionSet, application, candidate, job } : undefined
+}
+export type InterviewSessionProgressSummary = { total: number; asked: number; skipped: number; notAsked: number; current: number; notReached: number; completionPercent: number }
+export function selectInterviewSessionProgressSummary(session: InterviewSession): InterviewSessionProgressSummary {
+  const count = (status: string) => session.questionProgress.filter((item) => item.status === status).length
+  const total = session.questionProgress.length; const asked = count('ASKED'); const skipped = count('SKIPPED'); const notAsked = count('NOT_ASKED'); const current = count('CURRENT'); const notReached = count('NOT_REACHED')
+  return { total, asked, skipped, notAsked, current, notReached, completionPercent: total ? Math.round(((asked + skipped) / total) * 100) : 0 }
+}
+export type InterviewSessionOperationalStatus = 'PLAN_REQUIRED' | 'READY' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'UNAVAILABLE'
+export function selectInterviewSessionOperationalStatus(state: DemoState, interviewId: string): InterviewSessionOperationalStatus {
+  const interview = state.interviews.find((item) => item.id === interviewId); const session = selectInterviewSessionByInterviewId(state, interviewId)
+  if (!interview || interview.status === 'CANCELLED') return 'UNAVAILABLE'
+  if (session?.status === 'COMPLETED' || interview.status === 'COMPLETED') return 'COMPLETED'
+  if (session?.status === 'IN_PROGRESS') return 'IN_PROGRESS'
+  if (session?.status === 'PAUSED') return 'PAUSED'
+  return selectApprovedInterviewQuestionSet(state, interviewId) ? 'READY' : 'PLAN_REQUIRED'
+}
+export function selectInterviewSessionOperationsSummary(state: DemoState, now: Date) {
+  const statuses = state.interviews.map((interview) => ({ interview, status: selectInterviewSessionOperationalStatus(state, interview.id) }))
+  const day = now.toISOString().slice(0, 10)
+  return { ready: statuses.filter((item) => item.status === 'READY').length, inProgress: statuses.filter((item) => item.status === 'IN_PROGRESS').length, paused: statuses.filter((item) => item.status === 'PAUSED').length, completedToday: state.interviewSessions.filter((session) => session.status === 'COMPLETED' && session.completedAt?.slice(0, 10) === day).length, attention: statuses.filter((item) => item.status === 'PAUSED' || (item.status === 'PLAN_REQUIRED' && item.interview.scheduledStart <= new Date(now.getTime() + 60 * 60_000).toISOString())) }
 }
 
 export function selectLatestInterviewQuestionSet(state: DemoState, interviewId: string): InterviewQuestionSet | undefined {
@@ -1389,6 +1418,8 @@ export type CandidateTimelineEvent = {
     | 'INTERVIEW_COMPLETED'
     | 'INTERVIEW_QUESTIONS_PREPARED'
     | 'INTERVIEW_PLAN_APPROVED'
+    | 'INTERVIEW_STARTED'
+    | 'INTERVIEW_PAUSED'
     | 'FINAL_EVALUATION_COMPLETED'
     | 'DECISION_RECORDED'
     | 'COMMUNICATION_SENT'
@@ -1462,7 +1493,7 @@ export function selectCandidateTimeline(
         })
       }
 
-      if (interview.status === 'COMPLETED') {
+      if (interview.status === 'COMPLETED' && !state.interviewSessions.some((session) => session.interviewId === interview.id && session.status === 'COMPLETED')) {
         events.push({
           id: `interview-completed-${interview.id}`,
           type: 'INTERVIEW_COMPLETED',
@@ -1477,6 +1508,12 @@ export function selectCandidateTimeline(
   state.interviewQuestionSets.filter((set) => applicationInterviewIds.has(set.interviewId)).forEach((set) => {
     if (set.generatedAt || set.status !== 'GENERATION_FAILED') events.push({ id: `interview-questions-prepared-${set.id}`, type: 'INTERVIEW_QUESTIONS_PREPARED', title: 'Interview questions prepared', description: `A candidate-specific interview plan with ${set.questions.length} questions was prepared.`, occurredAt: set.generatedAt ?? set.createdAt })
     if (set.status === 'APPROVED' && set.approvedAt) events.push({ id: `interview-plan-approved-${set.id}`, type: 'INTERVIEW_PLAN_APPROVED', title: 'Interview plan approved', description: 'The interview question plan was approved for the scheduled interview.', occurredAt: set.approvedAt })
+  })
+  state.interviewSessions.filter((session) => applicationInterviewIds.has(session.interviewId)).forEach((session) => {
+    const summary = selectInterviewSessionProgressSummary(session)
+    if (session.startedAt) events.push({ id: `interview-started-${session.id}`, type: 'INTERVIEW_STARTED', title: 'Interview started', occurredAt: session.startedAt })
+    if (session.status === 'PAUSED' && session.pausedAt) events.push({ id: `interview-paused-${session.id}`, type: 'INTERVIEW_PAUSED', title: 'Interview paused', occurredAt: session.pausedAt })
+    if (session.status === 'COMPLETED' && session.completedAt) events.push({ id: `interview-session-completed-${session.id}`, type: 'INTERVIEW_COMPLETED', title: 'Interview completed', description: `The interview ended after ${Math.round(session.accumulatedActiveSeconds / 60)} minutes. ${summary.asked} questions were asked.`, occurredAt: session.completedAt })
   })
 
   state.interviewSchedulingInvitations

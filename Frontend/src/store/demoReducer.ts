@@ -14,6 +14,7 @@ import type { Evaluation, EvaluationStatus } from '../types/evaluation'
 import type { Interview, InterviewQuestion, InterviewStatus } from '../types/interview'
 import type { InterviewQuestion as PreparedInterviewQuestion, InterviewQuestionCategory, InterviewQuestionPriority } from '../types/interviewQuestion'
 import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
+import type { InterviewSession } from '../types/interviewSession'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { EmailDeliveryErrorCode } from '../types/emailDelivery'
@@ -169,6 +170,18 @@ export type DemoAction =
   | { type: 'APPROVE_INTERVIEW_QUESTION_SET'; payload: { questionSetId: string; approvedAt: string; approvedBy: string } }
   | { type: 'MARK_INTERVIEW_QUESTION_GENERATION_FAILED'; payload: { questionSet: InterviewQuestionSet } }
   | { type: 'REGENERATE_INTERVIEW_QUESTION_SET'; payload: { previousQuestionSetId: string; questionSet: InterviewQuestionSet } }
+  | { type: 'ADD_INTERVIEW_SESSION'; payload: { session: InterviewSession } }
+  | { type: 'START_INTERVIEW_SESSION'; payload: { sessionId: string; startedAt: string } }
+  | { type: 'PAUSE_INTERVIEW_SESSION'; payload: { sessionId: string; pausedAt: string; activeSecondsSinceResume: number } }
+  | { type: 'RESUME_INTERVIEW_SESSION'; payload: { sessionId: string; resumedAt: string } }
+  | { type: 'UPDATE_SESSION_QUESTION_NOTES'; payload: { sessionId: string; questionId: string; notes: string; updatedAt: string } }
+  | { type: 'ADD_SESSION_FOLLOW_UP'; payload: { sessionId: string; questionId: string; followUp: string; updatedAt: string } }
+  | { type: 'REMOVE_SESSION_FOLLOW_UP'; payload: { sessionId: string; questionId: string; followUpIndex: number; updatedAt: string } }
+  | { type: 'MARK_SESSION_QUESTION_ASKED'; payload: { sessionId: string; questionId: string; completedAt: string } }
+  | { type: 'MARK_SESSION_QUESTION_SKIPPED'; payload: { sessionId: string; questionId: string; skippedAt: string } }
+  | { type: 'SET_CURRENT_SESSION_QUESTION'; payload: { sessionId: string; questionId: string; changedAt: string } }
+  | { type: 'UPDATE_INTERVIEW_SESSION_GENERAL_NOTES'; payload: { sessionId: string; notes: string; updatedAt: string } }
+  | { type: 'COMPLETE_INTERVIEW_SESSION'; payload: { sessionId: string; completedAt: string; activeSecondsSinceResume: number } }
   | {
       type: 'UPDATE_INTERVIEW_STATUS'
       payload: { interviewId: string; status: InterviewStatus; updatedAt?: string }
@@ -1396,6 +1409,91 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       const next = action.payload.questionSet
       if (!previous || !['DRAFT', 'GENERATION_FAILED'].includes(previous.status) || next.interviewId !== previous.interviewId || next.version !== previous.version + 1 || state.interviewQuestionSets.some((item) => item.id === next.id)) return state
       return { ...state, interviewQuestionSets: [...state.interviewQuestionSets.filter((item) => item.id !== previous.id), cloneQuestionSet(next)] }
+    }
+
+    case 'ADD_INTERVIEW_SESSION': {
+      const session = action.payload.session
+      const interview = state.interviews.find((item) => item.id === session.interviewId)
+      const set = state.interviewQuestionSets.find((item) => item.id === session.questionSetId)
+      const validIds = new Set(set?.questions.map((question) => question.id) ?? [])
+      const progressIds = session.questionProgress.map((item) => item.questionId)
+      if (!interview || !set || set.status !== 'APPROVED' || set.interviewId !== interview.id || state.interviewSessions.some((item) => item.id === session.id || item.interviewId === session.interviewId) || progressIds.length !== validIds.size || new Set(progressIds).size !== progressIds.length || progressIds.some((id) => !validIds.has(id))) return state
+      return { ...state, interviewSessions: [...state.interviewSessions, { ...session, questionProgress: session.questionProgress.map((item) => ({ ...item, followUpNotes: [...item.followUpNotes] })) }] }
+    }
+
+    case 'START_INTERVIEW_SESSION': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      const interview = session ? state.interviews.find((item) => item.id === session.interviewId) : undefined
+      const set = session ? state.interviewQuestionSets.find((item) => item.id === session.questionSetId) : undefined
+      const first = session?.questionProgress[0]
+      if (!session || !interview || !set || !first || session.status !== 'NOT_STARTED' || interview.status !== 'SCHEDULED' || set.status !== 'APPROVED') return state
+      return { ...state, interviews: state.interviews.map((item) => item.id === interview.id ? { ...item, status: 'IN_PROGRESS', updatedAt: action.payload.startedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, status: 'IN_PROGRESS', startedAt: action.payload.startedAt, updatedAt: action.payload.startedAt, currentQuestionId: first.questionId, questionProgress: item.questionProgress.map((progress, index) => index === 0 ? { ...progress, status: 'CURRENT', startedAt: action.payload.startedAt } : progress) } : item) }
+    }
+
+    case 'PAUSE_INTERVIEW_SESSION': {
+      const { sessionId, pausedAt, activeSecondsSinceResume } = action.payload
+      if (!Number.isFinite(activeSecondsSinceResume) || activeSecondsSinceResume < 0) return state
+      return { ...state, interviewSessions: state.interviewSessions.map((session) => session.id === sessionId && session.status === 'IN_PROGRESS' ? { ...session, status: 'PAUSED', pausedAt, updatedAt: pausedAt, accumulatedActiveSeconds: session.accumulatedActiveSeconds + Math.floor(activeSecondsSinceResume) } : session) }
+    }
+
+    case 'RESUME_INTERVIEW_SESSION':
+      return { ...state, interviewSessions: state.interviewSessions.map((session) => session.id === action.payload.sessionId && session.status === 'PAUSED' ? { ...session, status: 'IN_PROGRESS', resumedAt: action.payload.resumedAt, updatedAt: action.payload.resumedAt } : session) }
+
+    case 'UPDATE_SESSION_QUESTION_NOTES': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      if (!session || !['IN_PROGRESS', 'PAUSED'].includes(session.status) || action.payload.notes.length > 5000 || !session.questionProgress.some((item) => item.questionId === action.payload.questionId)) return state
+      return { ...state, interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, updatedAt: action.payload.updatedAt, questionProgress: item.questionProgress.map((progress) => progress.questionId === action.payload.questionId ? { ...progress, interviewerNotes: action.payload.notes } : progress) } : item) }
+    }
+
+    case 'ADD_SESSION_FOLLOW_UP': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      const progress = session?.questionProgress.find((item) => item.questionId === action.payload.questionId)
+      const followUp = action.payload.followUp.trim()
+      const normalized = followUp.toLocaleLowerCase().replace(/\s+/g, ' ')
+      if (!session || !progress || !['IN_PROGRESS', 'PAUSED'].includes(session.status) || followUp.length < 3 || followUp.length > 300 || progress.followUpNotes.length >= 10 || progress.followUpNotes.some((item) => item.trim().toLocaleLowerCase().replace(/\s+/g, ' ') === normalized)) return state
+      return { ...state, interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, updatedAt: action.payload.updatedAt, questionProgress: item.questionProgress.map((entry) => entry.questionId === progress.questionId ? { ...entry, followUpNotes: [...entry.followUpNotes, followUp] } : entry) } : item) }
+    }
+
+    case 'REMOVE_SESSION_FOLLOW_UP': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      const progress = session?.questionProgress.find((item) => item.questionId === action.payload.questionId)
+      if (!session || !progress || !['IN_PROGRESS', 'PAUSED'].includes(session.status) || action.payload.followUpIndex < 0 || action.payload.followUpIndex >= progress.followUpNotes.length) return state
+      return { ...state, interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, updatedAt: action.payload.updatedAt, questionProgress: item.questionProgress.map((entry) => entry.questionId === progress.questionId ? { ...entry, followUpNotes: entry.followUpNotes.filter((_, index) => index !== action.payload.followUpIndex) } : entry) } : item) }
+    }
+
+    case 'MARK_SESSION_QUESTION_ASKED':
+    case 'MARK_SESSION_QUESTION_SKIPPED': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      if (!session || session.status !== 'IN_PROGRESS') return state
+      const index = session.questionProgress.findIndex((item) => item.questionId === action.payload.questionId)
+      if (index < 0 || session.questionProgress[index].status !== 'CURRENT') return state
+      const nextIndex = session.questionProgress.findIndex((item, itemIndex) => itemIndex > index && item.status === 'NOT_ASKED')
+      const changedAt = action.type === 'MARK_SESSION_QUESTION_ASKED' ? action.payload.completedAt : action.payload.skippedAt
+      return { ...state, interviewSessions: state.interviewSessions.map((item) => item.id !== session.id ? item : { ...item, updatedAt: changedAt, currentQuestionId: nextIndex >= 0 ? item.questionProgress[nextIndex].questionId : undefined, questionProgress: item.questionProgress.map((progress, progressIndex) => progressIndex === index ? { ...progress, status: action.type === 'MARK_SESSION_QUESTION_ASKED' ? 'ASKED' : 'SKIPPED', ...(action.type === 'MARK_SESSION_QUESTION_ASKED' ? { completedAt: changedAt } : { skippedAt: changedAt }) } : progressIndex === nextIndex ? { ...progress, status: 'CURRENT', startedAt: progress.startedAt ?? changedAt } : progress) }) }
+    }
+
+    case 'SET_CURRENT_SESSION_QUESTION': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      if (!session || !['IN_PROGRESS', 'PAUSED'].includes(session.status) || !session.questionProgress.some((item) => item.questionId === action.payload.questionId)) return state
+      const selected = session.questionProgress.find((item) => item.questionId === action.payload.questionId)!
+      return { ...state, interviewSessions: state.interviewSessions.map((item) => item.id !== session.id ? item : { ...item, currentQuestionId: selected.questionId, updatedAt: action.payload.changedAt, questionProgress: item.questionProgress.map((progress) => progress.questionId === selected.questionId ? (progress.status === 'NOT_ASKED' ? { ...progress, status: 'CURRENT', startedAt: progress.startedAt ?? action.payload.changedAt } : progress) : progress.status === 'CURRENT' ? { ...progress, status: 'NOT_ASKED' } : progress) }) }
+    }
+
+    case 'UPDATE_INTERVIEW_SESSION_GENERAL_NOTES': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      if (!session || !['IN_PROGRESS', 'PAUSED'].includes(session.status) || action.payload.notes.length > 10000) return state
+      return { ...state, interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, generalNotes: action.payload.notes, updatedAt: action.payload.updatedAt } : item) }
+    }
+
+    case 'COMPLETE_INTERVIEW_SESSION': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
+      const interview = session ? state.interviews.find((item) => item.id === session.interviewId) : undefined
+      if (!session || !interview || !session.startedAt || !['IN_PROGRESS', 'PAUSED'].includes(session.status) || !Number.isFinite(action.payload.activeSecondsSinceResume) || action.payload.activeSecondsSinceResume < 0) return state
+      const asked = session.questionProgress.filter((item) => item.status === 'ASKED').length
+      const skipped = session.questionProgress.filter((item) => item.status === 'SKIPPED').length
+      const notReached = session.questionProgress.length - asked - skipped
+      const completionSummary = `${asked} question${asked === 1 ? '' : 's'} asked, ${skipped} skipped, and ${notReached} not reached.`
+      return { ...state, interviews: state.interviews.map((item) => item.id === interview.id ? { ...item, status: 'COMPLETED', updatedAt: action.payload.completedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id !== session.id ? item : { ...item, status: 'COMPLETED', completedAt: action.payload.completedAt, updatedAt: action.payload.completedAt, currentQuestionId: undefined, accumulatedActiveSeconds: item.accumulatedActiveSeconds + Math.floor(action.payload.activeSecondsSinceResume), completionSummary, questionProgress: item.questionProgress.map((progress) => progress.status === 'CURRENT' || progress.status === 'NOT_ASKED' ? { ...progress, status: 'NOT_REACHED' } : progress) }) }
     }
 
     case 'UPDATE_INTERVIEW_STATUS':

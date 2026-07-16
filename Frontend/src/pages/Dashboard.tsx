@@ -27,6 +27,7 @@ import {
   selectRecentApplications,
   selectUpcomingInterviews,
   selectInterviewPreparationSummary,
+  selectInterviewSessionOperationsSummary,
 } from '../store/demoSelectors'
 import { formatApplicationStage, formatDate, formatInterviewDate, formatInterviewMode, formatInterviewStatus, formatInterviewTime } from '../utils/helpers'
 import { getScreeningRecommendationLabel } from '../utils/recommendation'
@@ -59,6 +60,7 @@ export default function Dashboard() {
   )
   const schedulingCoverage = selectSchedulingPolicyResolutionSummary(state)
   const preparationSummary = selectInterviewPreparationSummary(state)
+  const sessionSummary = selectInterviewSessionOperationsSummary(state, DASHBOARD_NOW)
   const totalApplications = funnel.applications
   const funnelRows = [
     ['Applications', funnel.applications],
@@ -97,6 +99,8 @@ export default function Dashboard() {
       <div className="mt-4">
         <ScreeningAutomationStatus pendingRecruiterReviews={metrics.pendingRecruiterReviews} />
       </div>
+
+      <Card className="mt-4 p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Live interview operations</p><h2 className="mb-0 mt-1 text-lg font-semibold text-depth">Session readiness</h2></div><Link className={textLinkClass} to="/interviews">Open interviews</Link></div><div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-aura-sm bg-harbor/10 sm:grid-cols-4">{[['Ready', sessionSummary.ready], ['In progress', sessionSummary.inProgress], ['Paused', sessionSummary.paused], ['Completed today', sessionSummary.completedToday]].map(([label, value]) => <div className="bg-frost p-3" key={label}><p className="m-0 text-xl font-bold text-depth">{value}</p><p className="mb-0 mt-1 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p></div>)}</div>{sessionSummary.attention.length ? <div className="mt-3 flex flex-wrap gap-3">{sessionSummary.attention.slice(0, 3).map(({ interview, status }) => <Link className="text-xs font-semibold text-aura-warning" key={interview.id} to={status === 'PAUSED' ? `/interviews/${interview.id}/session` : `/interviews/${interview.id}/questions`}>{status === 'PAUSED' ? 'Paused interview' : 'Plan approval needed'} · {formatInterviewTime(interview.scheduledStart)}</Link>)}</div> : null}</Card>
 
       <Card className="mt-4 overflow-hidden">
         <div className="grid lg:grid-cols-[1.1fr_0.9fr]">

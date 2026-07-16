@@ -38,7 +38,7 @@ export function createFreshDemoState(): DemoState {
   return createInitialDemoState()
 }
 
-export function hydratePersistedDemoStateValue(value: string | null): DemoState | undefined {
+export function hydratePersistedDemoStateValue(value: string | null, recoverActiveSessions = true): DemoState | undefined {
   if (value === null) return undefined
   let parsed: unknown
   try {
@@ -49,12 +49,14 @@ export function hydratePersistedDemoStateValue(value: string | null): DemoState 
   const validation = validatePersistedDemoState(parsed)
   if (!validation.valid) return undefined
   return normalizePersistedDemoState(
-    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets'> & {
+    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions'> & {
       screeningQueue?: PersistedDemoState['screeningQueue']
       interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
       interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
       interviewQuestionSets?: PersistedDemoState['interviewQuestionSets']
+      interviewSessions?: PersistedDemoState['interviewSessions']
     },
+    recoverActiveSessions,
   )
 }
 
@@ -90,8 +92,13 @@ export function resolveSynchronizedDemoState(
   value: string | null,
 ): DemoState | undefined {
   if (storageKey !== DEMO_STORAGE_KEY) return undefined
-  const incoming = hydratePersistedDemoStateValue(value)
+  const incoming = hydratePersistedDemoStateValue(value, false)
   return incoming && shouldAcceptSynchronizedDemoState(current, incoming) ? incoming : undefined
+}
+
+export function recoverInterruptedInterviewSessions(state: DemoState): DemoState {
+  if (!state.interviewSessions.some((session) => session.status === 'IN_PROGRESS')) return state
+  return { ...state, interviewSessions: state.interviewSessions.map((session) => session.status === 'IN_PROGRESS' ? { ...session, status: 'PAUSED', pausedAt: session.pausedAt ?? session.updatedAt } : session) }
 }
 
 export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
@@ -116,12 +123,14 @@ export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
 }
 
 export function normalizePersistedDemoState(
-  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets'> & {
+  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions'> & {
     screeningQueue?: DemoState['screeningQueue']
     interviewSchedulingPolicies?: DemoState['interviewSchedulingPolicies']
     interviewSchedulingInvitations?: DemoState['interviewSchedulingInvitations']
     interviewQuestionSets?: DemoState['interviewQuestionSets']
+    interviewSessions?: DemoState['interviewSessions']
   },
+  recoverActiveSessions = true,
 ): DemoState {
   const seedPolicies = createInitialDemoState().interviewSchedulingPolicies
   const persistedPolicies = Array.isArray(state.interviewSchedulingPolicies)
@@ -173,7 +182,7 @@ export function normalizePersistedDemoState(
       : candidate
   })
 
-  return recoverInterruptedScreeningQueue({
+  const normalized = recoverInterruptedScreeningQueue({
     ...state,
     candidates,
     jobs: state.jobs.map((job) => ({
@@ -220,7 +229,9 @@ export function normalizePersistedDemoState(
         })
       : [],
     interviewQuestionSets: migrateLegacyInterviewQuestions(state.interviews, Array.isArray(state.interviewQuestionSets) ? state.interviewQuestionSets : []),
+    interviewSessions: Array.isArray(state.interviewSessions) ? state.interviewSessions.map((session) => ({ ...session, questionProgress: session.questionProgress.map((progress) => ({ ...progress, followUpNotes: [...progress.followUpNotes] })) })) : [],
   })
+  return recoverActiveSessions ? recoverInterruptedInterviewSessions(normalized) : normalized
 }
 
 export function loadPersistedDemoState(): DemoStateHydrationResult {
@@ -284,11 +295,12 @@ export function loadPersistedDemoState(): DemoStateHydrationResult {
 
   return {
     state: normalizePersistedDemoState(
-      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets'> & {
+      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions'> & {
         screeningQueue?: PersistedDemoState['screeningQueue']
         interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
         interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
         interviewQuestionSets?: PersistedDemoState['interviewQuestionSets']
+        interviewSessions?: PersistedDemoState['interviewSessions']
       },
     ),
     source: 'PERSISTED',
