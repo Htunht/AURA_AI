@@ -6,7 +6,9 @@ import type { Decision } from '../types/decision'
 import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
+import type { SchedulingExceptionReason } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
+import type { Interviewer } from '../types/interviewer'
 import type { Job } from '../types/job'
 import type { EvaluationRubric } from '../types/rubric'
 import type {
@@ -17,7 +19,12 @@ import type { ScreeningQueueItem } from '../types/screeningQueue'
 import type { Transcript } from '../types/transcript'
 import { getScreeningRecommendationLabel } from '../utils/recommendation'
 import { evaluateJobReadiness, selectJobRelatedRecordCounts as deriveJobRelatedRecordCounts, type JobReadinessResult, type JobRelatedRecordCounts } from '../utils/jobValidation'
+import { evaluateHiringWorkflowReadiness, selectHiringWorkflowSetupProgress as deriveHiringWorkflowSetupProgress } from '../utils/hiringWorkflowSetup'
+import type { HiringWorkflowReadiness, HiringWorkflowSetupProgress } from '../types/hiringWorkflowSetup'
 import type { DemoState } from './demoReducer'
+import interviewersData from '../data/interviewers.json'
+
+const schedulingInterviewers = interviewersData as Interviewer[]
 
 export function selectJobById(
   state: DemoState,
@@ -37,6 +44,9 @@ export function selectJobReadiness(state: DemoState, jobId: string): JobReadines
 export function selectJobRelatedRecordCounts(state: DemoState, jobId: string): JobRelatedRecordCounts {
   return deriveJobRelatedRecordCounts(state, jobId)
 }
+
+export function selectHiringWorkflowSetupProgress(state: DemoState, jobId: string): HiringWorkflowSetupProgress { return deriveHiringWorkflowSetupProgress(state, jobId) }
+export function selectHiringWorkflowReadiness(state: DemoState, jobId: string): HiringWorkflowReadiness { return evaluateHiringWorkflowReadiness(state, jobId) }
 
 export function selectCandidateById(
   state: DemoState,
@@ -232,6 +242,191 @@ export function selectSchedulingExceptions(
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
 }
 
+export type SchedulingAutomationCardState =
+  | 'PREPARING'
+  | 'READY_TO_SHARE'
+  | 'AWAITING_CANDIDATE'
+  | 'SCHEDULED'
+  | 'EXCEPTION'
+  | 'EXPIRED'
+  | 'CANCELLED'
+
+export type SchedulingProgressStep = {
+  id: string
+  label: string
+  status: 'COMPLETE' | 'CURRENT' | 'PENDING' | 'FAILED'
+}
+
+export type SchedulingAutomationViewModel = {
+  invitation: InterviewSchedulingInvitation
+  candidate: Candidate
+  job: Job
+  interviewerNames: string[]
+  availableSlotCount: number
+  state: SchedulingAutomationCardState
+  responsibility: 'AURA' | 'CANDIDATE' | 'RECRUITER' | 'NONE'
+  progressSteps: SchedulingProgressStep[]
+}
+
+const exceptionLabels: Record<SchedulingExceptionReason, string> = {
+  POLICY_MISSING: 'Interview policy required',
+  INTERVIEWERS_UNAVAILABLE: 'No eligible interviewers are available',
+  NO_AVAILABLE_SLOTS: 'No suitable time slots were found',
+  INVITATION_EXPIRED: 'Candidate invitation expired',
+  SLOT_CONFLICT: 'Selected time is no longer available',
+  RESCHEDULE_LIMIT_REACHED: 'Candidate reached the reschedule limit',
+}
+
+export function getSchedulingExceptionLabel(
+  reason?: SchedulingExceptionReason,
+): string {
+  return reason
+    ? exceptionLabels[reason]
+    : 'Automatic scheduling could not continue'
+}
+
+function deriveSchedulingState(
+  state: DemoState,
+  invitation: InterviewSchedulingInvitation,
+): SchedulingAutomationCardState {
+  const linkedInterview = invitation.scheduledInterviewId
+    ? state.interviews.find((item) => item.id === invitation.scheduledInterviewId)
+    : undefined
+  if (invitation.status === 'CANCELLED' || linkedInterview?.status === 'CANCELLED') return 'CANCELLED'
+  if (invitation.status === 'EXPIRED') return 'EXPIRED'
+  if (invitation.status === 'EXCEPTION_REQUIRED') return 'EXCEPTION'
+  if (invitation.status === 'SCHEDULED' && linkedInterview) return 'SCHEDULED'
+  if (invitation.status === 'PENDING' && invitation.availableSlots.length > 0) return 'READY_TO_SHARE'
+  return 'PREPARING'
+}
+
+function progressStatus(
+  complete: boolean,
+  current: boolean,
+  failed: boolean,
+): SchedulingProgressStep['status'] {
+  if (failed) return 'FAILED'
+  if (complete) return 'COMPLETE'
+  return current ? 'CURRENT' : 'PENDING'
+}
+
+function deriveSchedulingProgress(
+  state: DemoState,
+  invitation: InterviewSchedulingInvitation,
+  cardState: SchedulingAutomationCardState,
+): SchedulingProgressStep[] {
+  const policyComplete = Boolean(
+    state.interviewSchedulingPolicies.find(
+      (policy) => policy.id === invitation.policyId && policy.status === 'ACTIVE',
+    ),
+  )
+  const interviewersComplete = invitation.interviewerIds.length > 0
+  const slotsComplete = invitation.availableSlots.length > 0
+  const candidateSelected = Boolean(invitation.selectedSlotId)
+  const interviewConfirmed = cardState === 'SCHEDULED'
+  const reason = invitation.exceptionReason
+
+  return [
+    {
+      id: 'policy',
+      label: 'Policy applied',
+      status: progressStatus(
+        policyComplete,
+        cardState === 'PREPARING' && !policyComplete,
+        reason === 'POLICY_MISSING',
+      ),
+    },
+    {
+      id: 'interviewers',
+      label: 'Interviewers assigned',
+      status: progressStatus(
+        interviewersComplete,
+        policyComplete && !interviewersComplete && cardState === 'PREPARING',
+        reason === 'INTERVIEWERS_UNAVAILABLE',
+      ),
+    },
+    {
+      id: 'slots',
+      label: 'Available times generated',
+      status: progressStatus(
+        slotsComplete,
+        interviewersComplete && !slotsComplete && cardState === 'PREPARING',
+        reason === 'NO_AVAILABLE_SLOTS',
+      ),
+    },
+    {
+      id: 'invitation',
+      label: cardState === 'EXPIRED' ? 'Scheduling link expired' : 'Scheduling link prepared',
+      status: progressStatus(
+        slotsComplete && cardState !== 'EXPIRED' && cardState !== 'READY_TO_SHARE',
+        slotsComplete && cardState === 'READY_TO_SHARE',
+        cardState === 'EXPIRED' || reason === 'INVITATION_EXPIRED',
+      ),
+    },
+    {
+      id: 'selection',
+      label: 'Candidate selected time',
+      status: progressStatus(
+        candidateSelected,
+        cardState === 'AWAITING_CANDIDATE',
+        reason === 'SLOT_CONFLICT' || reason === 'RESCHEDULE_LIMIT_REACHED',
+      ),
+    },
+    {
+      id: 'confirmation',
+      label: 'Interview confirmed',
+      status: progressStatus(interviewConfirmed, false, false),
+    },
+  ]
+}
+
+function deriveSchedulingResponsibility(
+  cardState: SchedulingAutomationCardState,
+): SchedulingAutomationViewModel['responsibility'] {
+  if (cardState === 'PREPARING') return 'AURA'
+  if (cardState === 'READY_TO_SHARE' || cardState === 'AWAITING_CANDIDATE') return 'CANDIDATE'
+  if (cardState === 'EXCEPTION' || cardState === 'EXPIRED') return 'RECRUITER'
+  return 'NONE'
+}
+
+export function selectSchedulingAutomationViewModels(
+  state: DemoState,
+): SchedulingAutomationViewModel[] {
+  return state.interviewSchedulingInvitations
+    .map((invitation): SchedulingAutomationViewModel | undefined => {
+      const application = selectApplicationById(state, invitation.applicationId)
+      const candidate = application
+        ? selectCandidateById(state, application.candidateId)
+        : undefined
+      const job = selectJobById(state, invitation.jobId)
+      if (!candidate || !job) return undefined
+      const cardState = deriveSchedulingState(state, invitation)
+      return {
+        invitation,
+        candidate,
+        job,
+        interviewerNames: invitation.interviewerIds.map(
+          (id) => schedulingInterviewers.find((person) => person.id === id)?.fullName ?? 'Assigned interviewer',
+        ),
+        availableSlotCount: invitation.availableSlots.length,
+        state: cardState,
+        responsibility: deriveSchedulingResponsibility(cardState),
+        progressSteps: deriveSchedulingProgress(state, invitation, cardState),
+      }
+    })
+    .filter((item): item is SchedulingAutomationViewModel => Boolean(item))
+    .sort((left, right) => right.invitation.updatedAt.localeCompare(left.invitation.updatedAt))
+}
+
+export function selectSchedulingAutomationViewModelByApplicationId(
+  state: DemoState,
+  applicationId: string,
+): SchedulingAutomationViewModel | undefined {
+  return selectSchedulingAutomationViewModels(state).find(
+    (item) => item.invitation.applicationId === applicationId,
+  )
+}
+
 export function selectInvitationsExpiringSoon(
   state: DemoState,
   now: Date,
@@ -282,6 +477,7 @@ export function selectSelfSchedulingCandidates(state: DemoState): SelfScheduling
 }
 
 export type InterviewAutomationSummary = {
+  invitationsReadyToShare: number
   awaitingCandidateScheduling: number
   scheduledInterviews: number
   schedulingExceptions: number
@@ -294,9 +490,18 @@ export function selectInterviewAutomationSummary(
 ): InterviewAutomationSummary {
   const today = now.toISOString().slice(0, 10)
   return {
-    awaitingCandidateScheduling: selectPendingSchedulingInvitations(state).length,
-    scheduledInterviews: state.interviews.filter((item) => item.status === 'SCHEDULED').length,
-    schedulingExceptions: selectSchedulingExceptions(state).length,
+    invitationsReadyToShare: selectSchedulingAutomationViewModels(state).filter(
+      (item) => item.state === 'READY_TO_SHARE',
+    ).length,
+    awaitingCandidateScheduling: selectSchedulingAutomationViewModels(state).filter(
+      (item) => item.state === 'READY_TO_SHARE' || item.state === 'AWAITING_CANDIDATE',
+    ).length,
+    scheduledInterviews: state.interviews.filter(
+      (item) => item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS',
+    ).length,
+    schedulingExceptions: selectSchedulingAutomationViewModels(state).filter(
+      (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
+    ).length,
     interviewsToday: state.interviews.filter(
       (item) => item.status !== 'CANCELLED' && item.scheduledStart.slice(0, 10) === today,
     ).length,

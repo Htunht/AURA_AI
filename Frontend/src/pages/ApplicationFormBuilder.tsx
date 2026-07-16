@@ -209,6 +209,7 @@ export default function ApplicationFormBuilder() {
         fields: publishedForm.fields.map((field) => ({
           ...field,
           options: field.options?.map((option) => ({ ...option })),
+          screeningMapping: field.screeningMapping ? { ...field.screeningMapping, requirementIds: [...field.screeningMapping.requirementIds], criterionKeys: [...field.screeningMapping.criterionKeys] } : undefined,
         })),
         createdAt: DEMO_TIMESTAMP,
         updatedAt: DEMO_TIMESTAMP,

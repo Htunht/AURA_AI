@@ -24,15 +24,22 @@ export type ApplicationFormField = {
   placeholder?: string
   helpText?: string
   options?: ApplicationFormFieldOption[]
+  screeningMapping?: {
+    requirementIds: string[]
+    criterionKeys: string[]
+    evidenceImportance: 'REQUIRED' | 'PREFERRED' | 'SUPPORTING'
+  }
 }
 
 export type ApplicationForm = {
   id: string
   jobId: string
   name: string
+  description?: string
   status: ApplicationFormStatus
   version: number
   fields: ApplicationFormField[]
   createdAt: string
   updatedAt: string
+  requirementFingerprint?: string
 }

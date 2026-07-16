@@ -15,7 +15,7 @@ export default function JobCreate() {
     const timestamp = new Date().toISOString()
     const job: Job = { id: createNextJobId(state.jobs), title: input.title.trim(), department: input.department.trim(), description: input.description.trim(), status: 'DRAFT', positionsCount: input.positionsCount, employmentType: input.employmentType, workArrangement: input.workArrangement, ...(input.location.trim() ? { location: input.location.trim() } : {}), minimumExperienceYears: input.minimumExperienceYears, requiredSkills: draftSkillsToRequirements(input), ...(input.applicationDeadline ? { applicationDeadline: input.applicationDeadline } : {}), createdAt: timestamp, updatedAt: timestamp }
     dispatch({ type: 'ADD_JOB', payload: { job } })
-    navigate(`/jobs/${job.id}`)
+    navigate(`/jobs/${job.id}/setup?step=requirements`)
   }
   return <PageContainer eyebrow="Job setup" title="Create job opening" description="Define the role, hiring requirements, and application timeline."><JobEditorForm initialValue={initialValue} submitLabel="Create draft job" onSubmit={create} onCancel={() => navigate('/jobs')} /></PageContainer>
 }

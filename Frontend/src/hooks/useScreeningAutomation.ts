@@ -132,6 +132,9 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
               (item) => item.jobId === job.id && item.status === 'PUBLISHED',
             )
           : undefined
+        const form = job
+          ? currentState.applicationForms.find((item) => item.jobId === job.id && item.status === 'PUBLISHED')
+          : undefined
 
         if (!application || !candidate || !job || !rubric) {
           actionDispatch({
@@ -157,6 +160,9 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
           applications: currentState.applications,
           evaluations: currentState.evaluations,
           rubric,
+          job,
+          form,
+          candidate,
         })
 
         if (!mountedRef.current) return

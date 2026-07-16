@@ -17,4 +17,6 @@ export type EvaluationRubric = {
   criteria: RubricCriterion[]
   createdAt: string
   updatedAt: string
+  requirementFingerprint?: string
+  requirementRules?: import('./hiringWorkflowSetup').RequirementScreeningRule[]
 }

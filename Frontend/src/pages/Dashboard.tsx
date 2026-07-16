@@ -20,8 +20,7 @@ import {
   selectDraftApplicationFormByJobId,
   selectHiringFunnel,
   selectInterviewAutomationSummary,
-  selectInvitationsExpiringSoon,
-  selectSchedulingExceptions,
+  selectSchedulingAutomationViewModels,
   selectPublishedApplicationFormByJobId,
   selectRecentApplications,
   selectUpcomingInterviews,
@@ -51,8 +50,9 @@ export default function Dashboard() {
   const recentApplications = selectRecentApplications(state)
   const upcomingInterviews = selectUpcomingInterviews(state, DASHBOARD_NOW)
   const schedulingSummary = selectInterviewAutomationSummary(state, DASHBOARD_NOW)
-  const expiringInvitations = selectInvitationsExpiringSoon(state, DASHBOARD_NOW, 24)
-  const schedulingExceptions = selectSchedulingExceptions(state)
+  const schedulingAttention = selectSchedulingAutomationViewModels(state).filter(
+    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
+  )
   const totalApplications = funnel.applications
   const funnelRows = [
     ['Applications', funnel.applications],
@@ -94,8 +94,8 @@ export default function Dashboard() {
 
       <Card className="mt-4 overflow-hidden">
         <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="p-5 md:p-6"><div className="mb-4 flex items-end justify-between"><div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Scheduling automation</p><h2 className="mb-0 mt-1 text-lg font-semibold text-depth">Candidate scheduling flow</h2></div><Link className={textLinkClass} to="/interviews">Open interviews</Link></div><div className="grid grid-cols-2 gap-px overflow-hidden rounded-aura-sm bg-harbor/10 sm:grid-cols-4">{[['Awaiting candidate', schedulingSummary.awaitingCandidateScheduling], ['Scheduled', schedulingSummary.scheduledInterviews], ['Exceptions', schedulingSummary.schedulingExceptions], ['Today', schedulingSummary.interviewsToday]].map(([label, value]) => <div className="bg-frost p-3" key={label}><p className="m-0 text-2xl font-bold text-depth">{value}</p><p className="mb-0 mt-1 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p></div>)}</div></div>
-          <div className="border-t border-harbor/10 bg-frost/50 p-5 lg:border-l lg:border-t-0"><div className="flex items-center gap-2"><AlertTriangle size={16} className={schedulingExceptions.length ? 'text-aura-warning' : 'text-aura-success'} /><h3 className="m-0 text-sm font-semibold text-depth">Operational watchlist</h3></div><div className="mt-3 grid gap-2">{expiringInvitations.slice(0, 2).map((invitation) => { const application = state.applications.find((item) => item.id === invitation.applicationId); const candidate = application ? state.candidates.find((item) => item.id === application.candidateId) : undefined; return <Link className="text-xs font-semibold text-harbor" to="/interviews" key={invitation.id}>{candidate?.fullName ?? 'Candidate'} · invitation expiring soon</Link> })}{schedulingExceptions.slice(0, 2).map((invitation) => { const application = state.applications.find((item) => item.id === invitation.applicationId); const candidate = application ? state.candidates.find((item) => item.id === application.candidateId) : undefined; return <Link className="text-xs font-semibold text-aura-warning" to="/interviews/exceptions" key={invitation.id}>{candidate?.fullName ?? 'Candidate'} · scheduling exception</Link> })}</div>{expiringInvitations.length === 0 && schedulingExceptions.length === 0 ? <p className="mb-0 mt-4 text-xs font-semibold text-aura-success">No scheduling intervention required.</p> : <div className="mt-4 flex flex-wrap gap-4"><Link className={textLinkClass} to="/interviews">View invitations</Link>{schedulingExceptions.length ? <Link className={textLinkClass} to="/interviews/exceptions">Resolve exceptions</Link> : null}</div>}</div>
+          <div className="p-5 md:p-6"><div className="mb-4 flex items-end justify-between"><div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Scheduling automation</p><h2 className="mb-0 mt-1 text-lg font-semibold text-depth">Interview operations</h2><p className="mb-0 mt-1 text-xs text-aura-text-muted">AURA prepares interview teams and approved times; candidates select the final schedule.</p></div><Link className={textLinkClass} to="/interviews">Open interviews</Link></div><div className="grid gap-px overflow-hidden rounded-aura-sm bg-harbor/10 sm:grid-cols-3">{[['Scheduling invitations ready to share', schedulingSummary.invitationsReadyToShare], ['Scheduling exceptions', schedulingSummary.schedulingExceptions], ['Confirmed interviews', schedulingSummary.scheduledInterviews]].map(([label, value]) => <div className="bg-frost p-3" key={label}><p className="m-0 text-2xl font-bold text-depth">{value}</p><p className="mb-0 mt-1 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p></div>)}</div></div>
+          <div className="border-t border-harbor/10 bg-frost/50 p-5 lg:border-l lg:border-t-0"><div className="flex items-center gap-2"><AlertTriangle size={16} className={schedulingAttention.length ? 'text-aura-warning' : 'text-aura-success'} /><h3 className="m-0 text-sm font-semibold text-depth">Recruiter attention</h3></div><div className="mt-3 grid gap-2">{schedulingAttention.slice(0, 3).map((item) => <Link className="text-xs font-semibold text-aura-warning" to="/interviews" key={item.invitation.id}>{item.candidate.fullName} · scheduling requires attention</Link>)}</div>{schedulingAttention.length === 0 ? <p className="mb-0 mt-4 text-xs font-semibold text-aura-success">No scheduling exceptions require recruiter attention.</p> : <div className="mt-4"><Link className={textLinkClass} to="/interviews">Review exceptions</Link></div>}</div>
         </div>
       </Card>
 

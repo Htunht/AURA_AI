@@ -66,8 +66,35 @@ export function normalizePersistedDemoState(
   },
 ): DemoState {
   const seedPolicies = createInitialDemoState().interviewSchedulingPolicies
+  const experienceAnswerKeys = new Set([
+    'years_of_experience',
+    'years_experience',
+    'yearsExperience',
+  ])
+  const candidates = state.candidates.map((candidate) => {
+    if (candidate.yearsExperience > 0) return candidate
+
+    const submittedExperience = state.applications
+      .filter((application) => application.candidateId === candidate.id)
+      .sort((left, right) => right.submittedAt.localeCompare(left.submittedAt))
+      .flatMap((application) => application.answers)
+      .find((answer) => experienceAnswerKeys.has(answer.fieldKey))?.value
+    const normalizedExperience =
+      typeof submittedExperience === 'number'
+        ? submittedExperience
+        : typeof submittedExperience === 'string' &&
+            submittedExperience.trim() !== ''
+          ? Number(submittedExperience)
+          : Number.NaN
+
+    return Number.isFinite(normalizedExperience) && normalizedExperience >= 0
+      ? { ...candidate, yearsExperience: normalizedExperience }
+      : candidate
+  })
+
   return recoverInterruptedScreeningQueue({
     ...state,
+    candidates,
     jobs: state.jobs.map((job) => ({
       ...job,
       employmentType: job.employmentType ?? 'FULL_TIME',
@@ -79,6 +106,14 @@ export function normalizePersistedDemoState(
       openedAt: job.openedAt ?? (job.status === 'OPEN' ? job.createdAt : undefined),
       requiredSkills: job.requiredSkills.map((skill) => ({ ...skill })),
     })),
+    applicationForms: state.applicationForms.map((form) => ({
+      ...form,
+      fields: form.fields.map((field) => ({
+        ...field,
+        options: field.options?.map((option) => ({ ...option })),
+        screeningMapping: field.screeningMapping ? { ...field.screeningMapping, requirementIds: [...field.screeningMapping.requirementIds], criterionKeys: [...field.screeningMapping.criterionKeys] } : undefined,
+      })),
+    })),
     rubrics: state.rubrics.map((rubric) => ({
       ...rubric,
       status: rubric.status ?? 'PUBLISHED',
@@ -86,6 +121,7 @@ export function normalizePersistedDemoState(
       createdAt: rubric.createdAt ?? state.jobs.find((job) => job.id === rubric.jobId)?.createdAt ?? '2026-07-01T00:00:00.000Z',
       updatedAt: rubric.updatedAt ?? rubric.createdAt ?? state.jobs.find((job) => job.id === rubric.jobId)?.createdAt ?? '2026-07-01T00:00:00.000Z',
       criteria: rubric.criteria.map((criterion) => ({ ...criterion })),
+      requirementRules: rubric.requirementRules?.map((rule) => ({ ...rule, fieldKeys: [...rule.fieldKeys] })),
     })),
     screeningQueue: Array.isArray(state.screeningQueue)
       ? state.screeningQueue

@@ -1,6 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { AppShell } from '../app/AppShell'
-import ApplicationFormBuilder from '../pages/ApplicationFormBuilder'
 import CandidateDetail from '../pages/CandidateDetail'
 import Candidates from '../pages/Candidates'
 import Dashboard from '../pages/Dashboard'
@@ -19,6 +18,7 @@ import Login from '../pages/Login'
 import PublicJobApplication from '../pages/PublicJobApplication'
 import PublicInterviewScheduling from '../pages/PublicInterviewScheduling'
 import ScreeningRubricEditor from '../pages/ScreeningRubricEditor'
+import HiringWorkflowSetup from '../pages/HiringWorkflowSetup'
 
 export function AppRoutes() {
   return (
@@ -40,10 +40,11 @@ export function AppRoutes() {
         <Route path="/jobs/new" element={<JobCreate />} />
         <Route path="/jobs/:jobId" element={<JobDetail />} />
         <Route path="/jobs/:jobId/edit" element={<JobEdit />} />
+        <Route path="/jobs/:jobId/setup" element={<HiringWorkflowSetup />} />
         <Route path="/jobs/:jobId/candidates" element={<Candidates />} />
         <Route
           path="/jobs/:jobId/application-form"
-          element={<ApplicationFormBuilder />}
+          element={<LegacyApplicationFormRedirect />}
         />
         <Route path="/jobs/:jobId/screening-rubric" element={<ScreeningRubricEditor />} />
         <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
@@ -53,4 +54,9 @@ export function AppRoutes() {
       <Route path="/schedule/:token" element={<PublicInterviewScheduling />} />
     </Routes>
   )
+}
+
+function LegacyApplicationFormRedirect() {
+  const { jobId = '' } = useParams()
+  return <Navigate to={`/jobs/${jobId}/setup?step=form`} replace />
 }

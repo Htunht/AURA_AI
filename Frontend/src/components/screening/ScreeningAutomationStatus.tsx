@@ -2,7 +2,7 @@ import { AlertCircle, CheckCircle2, LoaderCircle, RotateCcw } from 'lucide-react
 import { Link } from 'react-router-dom'
 import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import { useDemoStore } from '../../hooks/useDemoStore'
-import { selectScreeningQueueSummary } from '../../store/demoSelectors'
+import { selectHiringWorkflowSetupProgress, selectScreeningQueueSummary } from '../../store/demoSelectors'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
@@ -18,13 +18,13 @@ export function ScreeningAutomationStatus({
   const failedItems = state.screeningQueue.filter((item) => item.status === 'FAILED')
   const setupRequiredJobIds = Array.from(new Set(state.applications.flatMap((application) => {
     const hasCompletedEvaluation = state.evaluations.some((evaluation) => evaluation.applicationId === application.id && evaluation.evaluationType === 'SCREENING' && evaluation.status === 'COMPLETED')
-    const hasRubric = state.rubrics.some((rubric) => rubric.jobId === application.jobId && rubric.status === 'PUBLISHED')
-    return !hasCompletedEvaluation && !hasRubric ? [application.jobId] : []
+    const workflowPublished = selectHiringWorkflowSetupProgress(state, application.jobId).status === 'PUBLISHED'
+    return !hasCompletedEvaluation && !workflowPublished ? [application.jobId] : []
   })))
   const hasSetupRequired = setupRequiredJobIds.length > 0
   const retryableApplicationIds = failedItems.filter((item) => {
     const application = state.applications.find((entry) => entry.id === item.applicationId)
-    return application && state.rubrics.some((rubric) => rubric.jobId === application.jobId && rubric.status === 'PUBLISHED')
+    return application && selectHiringWorkflowSetupProgress(state, application.jobId).status === 'PUBLISHED'
   }).map((item) => item.applicationId)
 
   return (
@@ -51,7 +51,7 @@ export function ScreeningAutomationStatus({
             {isProcessing
               ? 'AURA is screening new applications automatically.'
               : hasSetupRequired
-                ? 'Some roles need a published rubric before AURA can screen their applications.'
+                ? 'Some roles have an incomplete application workflow. Finish required evidence questions and screening rules to start automatic screening.'
                 : summary.failed > 0
                   ? 'Some applications require a screening retry.'
                 : 'All submitted applications have been screened.'}
@@ -84,9 +84,9 @@ export function ScreeningAutomationStatus({
             </Button>
           ) : null}
           {setupRequiredJobIds.length === 1 ? (
-            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/jobs/${setupRequiredJobIds[0]}/screening-rubric`}>Configure rubric</Link>
+            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/jobs/${setupRequiredJobIds[0]}/setup`}>Continue setup</Link>
           ) : setupRequiredJobIds.length > 1 ? (
-            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to="/jobs">Configure rubrics</Link>
+            <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to="/jobs">Review workflows</Link>
           ) : null}
           {pendingRecruiterReviews !== undefined ? (
             <Link className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to="/reviews">Open review queue</Link>

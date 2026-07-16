@@ -35,6 +35,10 @@ export function validateApplicationForm(
       errors.push(`Field ${field.id} must have a non-empty label.`)
     }
 
+    if (field.screeningMapping && (new Set(field.screeningMapping.requirementIds).size !== field.screeningMapping.requirementIds.length || new Set(field.screeningMapping.criterionKeys).size !== field.screeningMapping.criterionKeys.length)) {
+      errors.push(`Screening purpose mappings for field ${field.id} must be unique.`)
+    }
+
     if (field.type === 'MULTI_SELECT') {
       const options = field.options ?? []
 

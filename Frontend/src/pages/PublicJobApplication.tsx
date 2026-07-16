@@ -126,7 +126,10 @@ export default function PublicJobApplication() {
         submittedAt: DEMO_TIMESTAMP,
       })
 
-      dispatch({ type: 'ADD_CANDIDATE', payload: prepared.candidate })
+      dispatch({
+        type: existingCandidate ? 'UPDATE_CANDIDATE' : 'ADD_CANDIDATE',
+        payload: prepared.candidate,
+      })
       dispatch({ type: 'ADD_APPLICATION', payload: prepared.application })
       dispatch({
         type: 'QUEUE_SCREENING_APPLICATION',
@@ -172,7 +175,7 @@ export default function PublicJobApplication() {
         <header className="border-b border-harbor/15 pb-5">
           <h2 className="m-0 text-xl font-semibold text-depth">{form.name}</h2>
           <p className="mt-2 mb-0 text-sm leading-6 text-aura-text-secondary">
-            Complete the fields below. Required fields are marked clearly.
+            {form.description ?? 'Complete the fields below. Required fields are marked clearly.'}
           </p>
         </header>
         {errors.length > 0 ? (

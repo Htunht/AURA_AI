@@ -61,11 +61,13 @@ export function createInitialDemoState(): DemoState {
       fields: form.fields.map((field) => ({
         ...field,
         options: field.options?.map((option) => ({ ...option })),
+        screeningMapping: field.screeningMapping ? { ...field.screeningMapping, requirementIds: [...field.screeningMapping.requirementIds], criterionKeys: [...field.screeningMapping.criterionKeys] } : undefined,
       })),
     })),
     rubrics: rubrics.map((rubric) => ({
       ...rubric,
       criteria: rubric.criteria.map((criterion) => ({ ...criterion })),
+      requirementRules: rubric.requirementRules?.map((rule) => ({ ...rule, fieldKeys: [...rule.fieldKeys] })),
     })),
     evaluations: evaluations.map((evaluation) => ({
       ...evaluation,

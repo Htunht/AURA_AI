@@ -19,6 +19,7 @@ import type { ScreeningQueueItem } from '../types/screeningQueue'
 import type { EvaluationRubric } from '../types/rubric'
 import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
 import { canDeleteJob, canOpenJob, isValidJobTransition, validateJob } from '../utils/jobValidation'
+import { evaluateWorkflowArtifacts } from '../utils/hiringWorkflowSetup'
 import { createInitialDemoState } from './demoInitialState'
 import type { DemoState } from './demoStateTypes'
 
@@ -31,6 +32,7 @@ export type DemoAction =
   | { type: 'UPDATE_JOB'; payload: { jobId: string; changes: Partial<Pick<import('../types/job').Job, 'title' | 'department' | 'description' | 'positionsCount' | 'employmentType' | 'workArrangement' | 'location' | 'minimumExperienceYears' | 'requiredSkills' | 'applicationDeadline'>>; updatedAt: string } }
   | { type: 'CHANGE_JOB_STATUS'; payload: { jobId: string; status: import('../types/job').JobStatus; changedAt: string } }
   | { type: 'DELETE_JOB'; payload: { jobId: string } }
+  | { type: 'PUBLISH_HIRING_WORKFLOW'; payload: { jobId: string; formId: string; rubricId: string; publishedAt: string } }
   | {
       type: 'UPDATE_APPLICATION_STATUS'
       payload: { applicationId: string; status: ApplicationStatus }
@@ -73,6 +75,7 @@ export type DemoAction =
   | { type: 'UPDATE_RUBRIC'; payload: { rubric: EvaluationRubric } }
   | { type: 'PUBLISH_RUBRIC'; payload: { rubricId: string; updatedAt: string } }
   | { type: 'ADD_CANDIDATE'; payload: Candidate }
+  | { type: 'UPDATE_CANDIDATE'; payload: Candidate }
   | { type: 'ADD_APPLICATION'; payload: Application }
   | { type: 'ADD_EVALUATION'; payload: Evaluation }
   | {
@@ -200,8 +203,11 @@ function clonePolicy(policy: InterviewSchedulingPolicy): InterviewSchedulingPoli
 }
 
 function cloneRubric(rubric: EvaluationRubric): EvaluationRubric {
-  return { ...rubric, criteria: rubric.criteria.map((criterion) => ({ ...criterion })) }
+  return { ...rubric, criteria: rubric.criteria.map((criterion) => ({ ...criterion })), requirementRules: rubric.requirementRules?.map((rule) => ({ ...rule, fieldKeys: [...rule.fieldKeys] })) }
 }
+
+function cloneApplicationField(field: ApplicationFormField): ApplicationFormField { return { ...field, options: field.options?.map((option) => ({ ...option })), screeningMapping: field.screeningMapping ? { ...field.screeningMapping, requirementIds: [...field.screeningMapping.requirementIds], criterionKeys: [...field.screeningMapping.criterionKeys] } : undefined } }
+function cloneApplicationForm(form: ApplicationForm): ApplicationForm { return { ...form, fields: form.fields.map(cloneApplicationField) } }
 
 function cloneJob(job: import('../types/job').Job): import('../types/job').Job {
   return { ...job, requiredSkills: job.requiredSkills.map((skill) => ({ ...skill })) }
@@ -269,6 +275,18 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       return canDeleteJob(state, action.payload.jobId).allowed
         ? { ...state, jobs: state.jobs.filter((job) => job.id !== action.payload.jobId) }
         : state
+
+    case 'PUBLISH_HIRING_WORKFLOW': {
+      const job = state.jobs.find((item) => item.id === action.payload.jobId)
+      const form = state.applicationForms.find((item) => item.id === action.payload.formId)
+      const rubric = state.rubrics.find((item) => item.id === action.payload.rubricId)
+      if (!job || !form || !rubric || form.jobId !== job.id || rubric.jobId !== job.id || form.status !== 'DRAFT' || rubric.status !== 'DRAFT' || !evaluateWorkflowArtifacts(job, form, rubric).ready) return state
+      return {
+        ...state,
+        applicationForms: state.applicationForms.map((item) => item.id === form.id ? cloneApplicationForm({ ...item, status: 'PUBLISHED', updatedAt: action.payload.publishedAt }) : item.jobId === job.id && item.status === 'PUBLISHED' ? { ...item, status: 'ARCHIVED', updatedAt: action.payload.publishedAt } : item),
+        rubrics: state.rubrics.map((item) => item.id === rubric.id ? cloneRubric({ ...item, status: 'PUBLISHED', updatedAt: action.payload.publishedAt }) : item.jobId === job.id && item.status === 'PUBLISHED' ? { ...item, status: 'ARCHIVED', updatedAt: action.payload.publishedAt } : item),
+      }
+    }
 
     case 'UPDATE_APPLICATION_STATUS':
       return {
@@ -567,6 +585,27 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       }
 
       return { ...state, candidates: [...state.candidates, action.payload] }
+
+    case 'UPDATE_CANDIDATE':
+      if (
+        !state.candidates.some(
+          (candidate) => candidate.id === action.payload.id,
+        ) ||
+        state.candidates.some(
+          (candidate) =>
+            candidate.id !== action.payload.id &&
+            candidate.email.toLowerCase() === action.payload.email.toLowerCase(),
+        )
+      ) {
+        return state
+      }
+
+      return {
+        ...state,
+        candidates: state.candidates.map((candidate) =>
+          candidate.id === action.payload.id ? action.payload : candidate,
+        ),
+      }
 
     case 'ADD_APPLICATION':
       if (

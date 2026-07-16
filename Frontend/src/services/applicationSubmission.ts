@@ -19,6 +19,8 @@ const candidateFieldKeys = new Set([
   'phone',
   'current_position',
   'years_experience',
+  'years_of_experience',
+  'yearsExperience',
   'location',
   'skills',
   'cv',
@@ -52,7 +54,22 @@ export function prepareApplicationSubmission(input: {
     const value = answersByKey.get(key)
     return typeof value === 'string' ? value : ''
   }
-  const yearsExperience = answersByKey.get('years_experience')
+  const readNumber = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = answersByKey.get(key)
+      if (typeof value === 'number' && Number.isFinite(value)) return value
+      if (typeof value === 'string' && value.trim() !== '') {
+        const parsedValue = Number(value)
+        if (Number.isFinite(parsedValue)) return parsedValue
+      }
+    }
+    return undefined
+  }
+  const yearsExperience = readNumber(
+    'years_of_experience',
+    'years_experience',
+    'yearsExperience',
+  )
   const skills = answersByKey.get('skills')
   const fullName = readString('full_name').trim()
   const email = readString('email').trim()
@@ -69,15 +86,30 @@ export function prepareApplicationSubmission(input: {
     (candidate) => candidate.email.toLowerCase() === email.toLowerCase(),
   )
   const candidate: Candidate = existingCandidate
-    ? { ...existingCandidate, skills: [...existingCandidate.skills] }
+    ? {
+        ...existingCandidate,
+        fullName,
+        phone: answersByKey.has('phone')
+          ? readString('phone').trim()
+          : existingCandidate.phone,
+        currentPosition: answersByKey.has('current_position')
+          ? readString('current_position').trim()
+          : existingCandidate.currentPosition,
+        yearsExperience: yearsExperience ?? existingCandidate.yearsExperience,
+        skills: Array.isArray(skills)
+          ? [...skills]
+          : [...existingCandidate.skills],
+        location: answersByKey.has('location')
+          ? readString('location').trim()
+          : existingCandidate.location,
+      }
     : {
         id: input.candidateId,
         fullName,
         email,
         phone: readString('phone').trim(),
         currentPosition: readString('current_position').trim(),
-        yearsExperience:
-          typeof yearsExperience === 'number' ? yearsExperience : 0,
+        yearsExperience: yearsExperience ?? 0,
         skills: Array.isArray(skills) ? [...skills] : [],
         location: readString('location').trim(),
       }
