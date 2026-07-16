@@ -1,5 +1,6 @@
 import { BriefcaseBusiness, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import logo from '../../assets/logo.png'
 
 const navLinkClass =
   'flex min-h-10 items-center gap-2.5 border-l-2 border-transparent px-3 py-2 text-sm font-semibold text-frost/70 no-underline transition-colors duration-150 hover:bg-white/5 hover:text-white max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
@@ -11,9 +12,7 @@ export function Sidebar() {
         className="flex items-center gap-3 lg:pb-7"
         aria-label="AURA AI admin workspace"
       >
-        <span className="inline-grid size-8 flex-none place-items-center rounded-aura-sm border border-glacier/35 bg-harbor text-sm font-bold text-frost">
-          A
-        </span>
+        <img src={logo} alt="AURA Logo" className="size-8 flex-none object-contain" />
         <span className="grid gap-0.5">
           <span className="text-[16px] font-bold tracking-[-0.01em]">
             AURA AI

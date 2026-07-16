@@ -36,7 +36,7 @@ import { validateRecruitmentApplicationForm } from '../utils/applicationFormVali
 const DEMO_TIMESTAMP = '2026-07-16T10:30:00Z'
 
 const secondaryLinkClass =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline transition-colors duration-150 hover:bg-glacier/15'
+  'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-transparent px-4 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf]'
 
 function formStatusTone(status?: string) {
   return status === 'PUBLISHED'

@@ -27,7 +27,7 @@ const tabs: TabItem[] = [
   { id: 'timeline', label: 'Timeline' },
 ]
 
-const backLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline transition-colors hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier'
+const backLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-transparent px-4 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf]'
 
 function renderAnswerValue(answer: ApplicationAnswer) {
   if (Array.isArray(answer.value)) {

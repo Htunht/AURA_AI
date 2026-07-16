@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom'
+import logo from '../assets/logo.png'
 
 export default function Login() {
   return (
     <main className="grid min-h-screen place-items-center bg-frost px-5 py-8">
       <section className="w-full max-w-[570px] rounded-aura-lg border border-harbor/15 bg-white p-8 text-center shadow-aura-md">
-        <span className="mx-auto mb-5 inline-grid size-9 place-items-center rounded-aura-sm bg-harbor text-sm font-bold text-frost">
-          A
-        </span>
+        <img src={logo} alt="AURA Logo" className="mx-auto mb-5 h-9 w-auto object-contain" />
         <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
           AURA AI
         </p>
@@ -17,7 +16,7 @@ export default function Login() {
           Continue to the recruitment operations workspace.
         </p>
         <Link
-          className="mt-6 inline-flex h-10 items-center justify-center rounded-aura-sm border border-harbor bg-harbor px-4 text-sm font-semibold text-frost no-underline transition-colors duration-150 hover:bg-depth"
+          className="mt-6 inline-flex h-10 items-center justify-center rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-4 text-sm font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] hover:bg-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)] duration-150"
           to="/jobs"
         >
           Open job workspace

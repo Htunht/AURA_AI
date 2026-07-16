@@ -1,6 +1,7 @@
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import logo from '../assets/logo.png'
 import { DynamicFormField } from '../components/forms/DynamicFormField'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -58,7 +59,7 @@ export default function PublicJobApplication() {
               </dd>
             </dl>
             <Link
-              className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-harbor bg-harbor px-4 text-sm font-semibold text-frost no-underline transition-colors duration-150 hover:bg-depth"
+              className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-4 text-sm font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] hover:bg-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)] duration-150"
               to="/jobs"
             >
               View open roles
@@ -139,9 +140,7 @@ export default function PublicJobApplication() {
           to="/jobs"
           className="flex items-center gap-3 font-semibold text-depth no-underline"
         >
-          <span className="inline-grid size-8 place-items-center rounded-aura-sm bg-harbor text-sm font-bold text-frost">
-            A
-          </span>
+          <img src={logo} alt="AURA Logo" className="size-8 flex-none object-contain" />
           <span>AURA Technology</span>
         </Link>
         <span>Careers</span>
@@ -207,9 +206,7 @@ function PublicUnavailable({ title, message }: { title: string; message: string 
   return (
     <main className="grid min-h-screen place-items-center bg-frost px-5 py-8">
       <section className="w-full max-w-[570px] rounded-aura-lg border border-harbor/15 bg-white p-8 text-center shadow-aura-md">
-        <span className="mx-auto mb-5 inline-grid size-9 place-items-center rounded-aura-sm bg-harbor text-sm font-bold text-frost">
-          A
-        </span>
+        <img src={logo} alt="AURA Logo" className="mx-auto mb-5 h-9 w-auto object-contain" />
         <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
           Careers at AURA Technology
         </p>
@@ -220,7 +217,7 @@ function PublicUnavailable({ title, message }: { title: string; message: string 
           {message}
         </p>
         <Link
-          className="mt-6 inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline transition-colors duration-150 hover:bg-glacier/15"
+          className="mt-6 inline-flex h-10 items-center justify-center rounded-aura-sm border border-[#72a3bf] bg-transparent px-4 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] duration-150"
           to="/jobs"
         >
           Back to job openings

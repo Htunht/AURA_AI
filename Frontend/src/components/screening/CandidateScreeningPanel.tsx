@@ -30,7 +30,7 @@ export function CandidateScreeningPanel({ applicationId }: { applicationId: stri
         <ScreeningSummary evaluation={evaluation} decision={viewModel.decision} />
         <Card className="flex flex-col gap-3 border-marine/20 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div><p className="m-0 text-sm font-semibold text-depth">{viewModel.decision ? 'Recruiter decision recorded' : 'Recruiter review pending'}</p><p className="mb-0 mt-1 text-xs text-aura-text-muted">{viewModel.decision ? `Final recruiter recommendation: ${getScreeningRecommendationLabel(viewModel.decision.humanRecommendation)}.` : 'Review the recommendation and evidence in the Human Review Queue.'}</p></div>
-          <Link className="inline-flex h-9 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/reviews?applicationId=${applicationId}`}>Open in review queue</Link>
+          <Link className="inline-flex h-9 items-center justify-center rounded-aura-sm border border-[#72a3bf] bg-transparent px-3 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf]" to={`/reviews?applicationId=${applicationId}`}>Open in review queue</Link>
         </Card>
         <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
           <Card className="p-5 md:p-6"><ScreeningCriteria evaluation={evaluation} rubric={viewModel.rubric} /></Card>

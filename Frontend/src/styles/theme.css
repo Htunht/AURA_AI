@@ -1,5 +1,5 @@
 @theme {
-  --color-depth: #030f18;
+  --color-depth: #1D4052;
   --color-harbor: #1d4052;
   --color-marine: #446e87;
   --color-glacier: #72a3bf;
@@ -7,7 +7,7 @@
 
   --color-aura-white: #ffffff;
 
-  --color-aura-ink: #030f18;
+  --color-aura-ink: #1D4052;
   --color-aura-text-secondary: #526371;
   --color-aura-text-muted: #71808b;
 
@@ -33,10 +33,10 @@
   --radius-aura-lg: 0.875rem;
   --radius-aura-xl: 1rem;
 
-  --shadow-aura-xs: 0 1px 1px rgb(3 15 24 / 0.05);
-  --shadow-aura-sm: 0 1px 3px rgb(3 15 24 / 0.08);
-  --shadow-aura-md: 0 8px 24px rgb(3 15 24 / 0.08);
-  --shadow-aura-lg: 0 18px 48px rgb(3 15 24 / 0.12);
+  --shadow-aura-xs: 0 1px 1px rgb(29 64 82 / 0.05);
+  --shadow-aura-sm: 0 1px 3px rgb(29 64 82 / 0.08);
+  --shadow-aura-md: 0 8px 24px rgb(29 64 82 / 0.08);
+  --shadow-aura-lg: 0 18px 48px rgb(29 64 82 / 0.12);
 
   --spacing-sidebar: 15.5rem;
   --spacing-header: 4.5rem;
