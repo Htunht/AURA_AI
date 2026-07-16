@@ -1,20 +1,20 @@
 import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { HumanReviewCard } from '../components/reviews/HumanReviewCard'
-import { HumanReviewTable } from '../components/reviews/HumanReviewTable'
-import { HumanReviewWorkspace } from '../components/reviews/HumanReviewWorkspace'
-import { PageContainer } from '../components/layout/PageContainer'
-import { Card } from '../components/ui/Card'
-import { Dialog } from '../components/ui/Dialog'
-import { Input } from '../components/ui/Input'
-import { useDemoStore } from '../hooks/useDemoStore'
+import { HumanReviewCard } from '../../components/reviews/HumanReviewCard'
+import { HumanReviewTable } from '../../components/reviews/HumanReviewTable'
+import { HumanReviewWorkspace } from '../../components/reviews/HumanReviewWorkspace'
+import { PageContainer } from '../../components/layout/PageContainer'
+import { Card } from '../../components/ui/Card'
+import { Dialog } from '../../components/ui/Dialog'
+import { Input } from '../../components/ui/Input'
+import { useDemoStore } from '../../hooks/useDemoStore'
 import {
   selectHumanReviewQueueItem,
   selectHumanReviewQueueItems,
   selectHumanReviewQueueSummary,
-} from '../store/demoSelectors'
-import type { HumanReviewCategory } from '../types/reviewQueue'
+} from '../../store/demoSelectors'
+import type { HumanReviewCategory } from '../../types/reviewQueue'
 
 type CategoryFilter = HumanReviewCategory | 'ALL'
 type ConfidenceFilter = 'ALL' | 'BELOW_60' | '60_74' | '75_89' | '90_PLUS'

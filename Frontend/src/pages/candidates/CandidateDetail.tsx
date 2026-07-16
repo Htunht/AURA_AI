@@ -1,16 +1,16 @@
 import { ArrowLeft, FileText } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { CandidateProfile } from '../components/candidates/CandidateProfile'
-import { CandidateTimeline } from '../components/candidates/CandidateTimeline'
-import { CandidateInterviewPanel } from '../components/interviews/CandidateInterviewPanel'
-import { CandidateScreeningPanel } from '../components/screening/CandidateScreeningPanel'
-import { PageContainer } from '../components/layout/PageContainer'
-import { Badge } from '../components/ui/Badge'
-import { Button } from '../components/ui/Button'
-import { Card } from '../components/ui/Card'
-import { Tabs, type TabItem } from '../components/ui/Tabs'
-import { useDemoStore } from '../hooks/useDemoStore'
+import { CandidateProfile } from '../../components/candidates/CandidateProfile'
+import { CandidateTimeline } from '../../components/candidates/CandidateTimeline'
+import { CandidateInterviewPanel } from '../../components/interviews/CandidateInterviewPanel'
+import { CandidateScreeningPanel } from '../../components/screening/CandidateScreeningPanel'
+import { PageContainer } from '../../components/layout/PageContainer'
+import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { Tabs, type TabItem } from '../../components/ui/Tabs'
+import { useDemoStore } from '../../hooks/useDemoStore'
 import {
   selectApplicationFormsByJobId,
   selectCandidateApplications,
@@ -20,9 +20,9 @@ import {
   selectInterviewSessionOperationalStatus,
   selectInterviewSessionByInterviewId,
   selectInterviewSessionProgressSummary,
-} from '../store/demoSelectors'
-import type { ApplicationAnswer } from '../types/application'
-import { formatApplicationStage, formatApplicationStatus, formatDateTime } from '../utils/helpers'
+} from '../../store/demoSelectors'
+import type { ApplicationAnswer } from '../../types/application'
+import { formatApplicationStage, formatApplicationStatus, formatDateTime } from '../../utils/helpers'
 
 const tabs: TabItem[] = [
   { id: 'application', label: 'Application' },

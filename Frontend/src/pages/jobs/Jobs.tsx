@@ -1,14 +1,14 @@
 import { ArrowRight, BriefcaseBusiness, Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PageContainer } from '../components/layout/PageContainer'
-import { Badge } from '../components/ui/Badge'
-import { Card } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
-import { useDemoStore } from '../hooks/useDemoStore'
-import { selectApplicationCountByJobId, selectHiringWorkflowSetupProgress, selectPublishedApplicationFormByJobId, selectPublishedRubricByJobId } from '../store/demoSelectors'
-import { getHiringWorkflowPrimaryAction } from '../utils/hiringWorkflowSetup'
-import type { EmploymentType, JobStatus } from '../types/job'
+import { PageContainer } from '../../components/layout/PageContainer'
+import { Badge } from '../../components/ui/Badge'
+import { Card } from '../../components/ui/Card'
+import { Input } from '../../components/ui/Input'
+import { useDemoStore } from '../../hooks/useDemoStore'
+import { selectApplicationCountByJobId, selectHiringWorkflowSetupProgress, selectPublishedApplicationFormByJobId, selectPublishedRubricByJobId } from '../../store/demoSelectors'
+import { getHiringWorkflowPrimaryAction } from '../../utils/hiringWorkflowSetup'
+import type { EmploymentType, JobStatus } from '../../types/job'
 
 type StatusFilter = JobStatus | 'CURRENT' | 'ALL'
 type EmploymentFilter = EmploymentType | 'ALL'
@@ -43,7 +43,7 @@ export default function Jobs() {
 
   return <PageContainer title="Job openings" description="Create roles, track setup readiness, and manage each hiring lifecycle." actions={<Link className={createClass} to="/jobs/new"><Plus size={16} />Create hiring workflow</Link>}>
     <Card className="mb-4 p-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_180px_180px]"><label className="relative block"><span className="sr-only">Search jobs</span><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-aura-text-muted" size={17} /><Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search title, department, or skill" /></label><label><span className="sr-only">Status</span><select className={selectClass} value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)}><option value="CURRENT">Current jobs</option><option value="ALL">All statuses</option><option value="DRAFT">Draft</option><option value="OPEN">Open</option><option value="CLOSED">Closed</option><option value="ARCHIVED">Archived</option></select></label><label><span className="sr-only">Department</span><select className={selectClass} value={department} onChange={(event) => setDepartment(event.target.value)}><option value="ALL">All departments</option>{departments.map((value) => <option key={value}>{value}</option>)}</select></label><label><span className="sr-only">Employment type</span><select className={selectClass} value={employmentType} onChange={(event) => setEmploymentType(event.target.value as EmploymentFilter)}><option value="ALL">All employment types</option>{Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><p className="mb-0 mt-3 text-xs font-medium text-aura-text-muted">Showing {jobs.length} of {state.jobs.length} jobs</p></Card>
-    {jobs.length ? <div className="grid gap-4 xl:grid-cols-2">{jobs.map((job) => {
+    {jobs.length ? <div className="grid gap-4 grid-cols-1">{jobs.map((job) => {
       const form = selectPublishedApplicationFormByJobId(state, job.id)
       const rubric = selectPublishedRubricByJobId(state, job.id)
       const count = selectApplicationCountByJobId(state, job.id)

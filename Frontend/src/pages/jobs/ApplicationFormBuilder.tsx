@@ -8,30 +8,30 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { AddFieldDialog } from '../components/forms/AddFieldDialog'
-import { ApplicationQuestionSuggestionsDialog } from '../components/forms/ApplicationQuestionSuggestionsDialog'
-import { FormFieldList } from '../components/forms/FormFieldList'
-import { FormPreview } from '../components/forms/FormPreview'
-import { PageContainer } from '../components/layout/PageContainer'
-import { Badge } from '../components/ui/Badge'
-import { Button } from '../components/ui/Button'
-import { Card } from '../components/ui/Card'
-import { Tabs } from '../components/ui/Tabs'
-import { useDemoStore } from '../hooks/useDemoStore'
+import { AddFieldDialog } from '../../components/forms/AddFieldDialog'
+import { ApplicationQuestionSuggestionsDialog } from '../../components/forms/ApplicationQuestionSuggestionsDialog'
+import { FormFieldList } from '../../components/forms/FormFieldList'
+import { FormPreview } from '../../components/forms/FormPreview'
+import { PageContainer } from '../../components/layout/PageContainer'
+import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { Tabs } from '../../components/ui/Tabs'
+import { useDemoStore } from '../../hooks/useDemoStore'
 import {
   applicationQuestionSuggestionProgressMessages,
   suggestApplicationQuestions,
-} from '../services/ai'
-import { DemoServiceError } from '../services/DemoServiceError'
+} from '../../services/ai'
+import { DemoServiceError } from '../../services/DemoServiceError'
 import {
   selectApplicationFormsByJobId,
   selectDraftApplicationFormByJobId,
   selectJobById,
   selectPublishedApplicationFormByJobId,
-} from '../store/demoSelectors'
-import type { ApplicationFormField } from '../types/applicationForm'
-import type { SuggestedApplicationQuestion } from '../types/applicationQuestionSuggestion'
-import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
+} from '../../store/demoSelectors'
+import type { ApplicationFormField } from '../../types/applicationForm'
+import type { SuggestedApplicationQuestion } from '../../types/applicationQuestionSuggestion'
+import { validateRecruitmentApplicationForm } from '../../utils/applicationFormValidation'
 
 const DEMO_TIMESTAMP = '2026-07-16T10:30:00Z'
 

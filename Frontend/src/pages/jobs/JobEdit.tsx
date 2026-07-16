@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { JobEditorForm } from '../components/jobs/JobEditorForm'
-import { PageContainer } from '../components/layout/PageContainer'
-import { Card } from '../components/ui/Card'
-import { useDemoStore } from '../hooks/useDemoStore'
-import type { JobDraftInput } from '../types/jobDraft'
-import { draftSkillsToRequirements, jobToDraftInput } from '../utils/jobValidation'
+import { JobEditorForm } from '../../components/jobs/JobEditorForm'
+import { PageContainer } from '../../components/layout/PageContainer'
+import { Card } from '../../components/ui/Card'
+import { useDemoStore } from '../../hooks/useDemoStore'
+import type { JobDraftInput } from '../../types/jobDraft'
+import { draftSkillsToRequirements, jobToDraftInput } from '../../utils/jobValidation'
 
 const normalize = (values: string[]) => values.map((value) => value.trim().toLocaleLowerCase()).sort().join('|')
 

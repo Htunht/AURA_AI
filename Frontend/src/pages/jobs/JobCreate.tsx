@@ -1,10 +1,10 @@
 import { useNavigate } from 'react-router-dom'
-import { JobEditorForm } from '../components/jobs/JobEditorForm'
-import { PageContainer } from '../components/layout/PageContainer'
-import { useDemoStore } from '../hooks/useDemoStore'
-import type { Job } from '../types/job'
-import type { JobDraftInput } from '../types/jobDraft'
-import { createNextJobId, draftSkillsToRequirements } from '../utils/jobValidation'
+import { JobEditorForm } from '../../components/jobs/JobEditorForm'
+import { PageContainer } from '../../components/layout/PageContainer'
+import { useDemoStore } from '../../hooks/useDemoStore'
+import type { Job } from '../../types/job'
+import type { JobDraftInput } from '../../types/jobDraft'
+import { createNextJobId, draftSkillsToRequirements } from '../../utils/jobValidation'
 
 const initialValue: JobDraftInput = { title: '', department: '', description: '', positionsCount: 1, employmentType: 'FULL_TIME', workArrangement: 'HYBRID', location: '', minimumExperienceYears: 0, requiredSkills: [], preferredSkills: [], applicationDeadline: '' }
 

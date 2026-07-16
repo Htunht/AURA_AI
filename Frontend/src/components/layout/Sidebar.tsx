@@ -2,8 +2,10 @@ import { BriefcaseBusiness, CalendarClock, ClipboardCheck, LayoutDashboard, User
 import { NavLink } from 'react-router-dom'
 import logo from '../../assets/logo.png'
 
+// Inactive: hover fades in a subtle background + brightens text
+// Active: solid left border animates in via border-l-2 → border-l-[3px] scale
 const navLinkClass =
-  'flex min-h-10 items-center gap-2.5 border-l-2 border-transparent px-3 py-2 text-sm font-semibold text-frost/70 no-underline transition-colors duration-150 hover:bg-white/5 hover:text-white max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
+  'flex min-h-10 items-center gap-2.5 border-l-2 border-transparent px-3 py-2 text-sm font-semibold text-frost/70 no-underline transition-all duration-200 ease-in-out hover:bg-[#2a4555]/50 hover:text-white hover:border-l-glacier/40 max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
 
 export function Sidebar() {
   return (

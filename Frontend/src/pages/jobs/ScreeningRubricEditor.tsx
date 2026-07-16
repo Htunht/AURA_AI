@@ -1,23 +1,23 @@
 import { ArrowLeft, CheckCircle2, Plus, Scale, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { PageContainer } from '../components/layout/PageContainer'
-import { Badge } from '../components/ui/Badge'
-import { Button } from '../components/ui/Button'
-import { Card } from '../components/ui/Card'
-import { useDemoStore } from '../hooks/useDemoStore'
-import { useScreeningAutomation } from '../hooks/useScreeningAutomation'
+import { PageContainer } from '../../components/layout/PageContainer'
+import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { useDemoStore } from '../../hooks/useDemoStore'
+import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import {
   selectDraftRubricByJobId,
   selectPublishedRubricByJobId,
   selectRubricsByJobId,
-} from '../store/demoSelectors'
-import type { EvaluationRubric, RubricCriterion } from '../types/rubric'
+} from '../../store/demoSelectors'
+import type { EvaluationRubric, RubricCriterion } from '../../types/rubric'
 import {
   createRubricCriterion,
   generateRubricDraft,
   validateRubricDraft,
-} from '../utils/rubricBuilder'
+} from '../../utils/rubricBuilder'
 
 const fieldClass = 'w-full rounded-aura-sm border border-harbor/20 bg-white px-3 py-2.5 text-sm text-depth focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35'
 const backClass = 'inline-flex h-10 items-center gap-2 rounded-aura-sm border border-marine/30 bg-white px-4 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:ring-2 focus-visible:ring-glacier'
