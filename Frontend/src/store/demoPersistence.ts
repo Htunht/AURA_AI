@@ -66,6 +66,29 @@ export function normalizePersistedDemoState(
   },
 ): DemoState {
   const seedPolicies = createInitialDemoState().interviewSchedulingPolicies
+  const persistedPolicies = Array.isArray(state.interviewSchedulingPolicies)
+    ? state.interviewSchedulingPolicies
+    : seedPolicies
+  const normalizedPolicies = persistedPolicies.map((policy) => {
+    const job = policy.jobId ? state.jobs.find((item) => item.id === policy.jobId) : undefined
+    return {
+      ...policy,
+      scope: policy.scope ?? 'JOB' as const,
+      displayName: policy.displayName ?? `Custom policy for ${job?.title ?? 'this job'}`,
+      workingDays: [...policy.workingDays],
+      requiredInterviewerRoles: [...policy.requiredInterviewerRoles],
+      fixedInterviewerIds: [...policy.fixedInterviewerIds],
+    }
+  })
+  const organizationSeed = seedPolicies.find((policy) => policy.scope === 'ORGANIZATION')
+  if (organizationSeed && !normalizedPolicies.some((policy) => policy.scope === 'ORGANIZATION')) {
+    normalizedPolicies.push({
+      ...organizationSeed,
+      workingDays: [...organizationSeed.workingDays],
+      requiredInterviewerRoles: [...organizationSeed.requiredInterviewerRoles],
+      fixedInterviewerIds: [...organizationSeed.fixedInterviewerIds],
+    })
+  }
   const experienceAnswerKeys = new Set([
     'years_of_experience',
     'years_experience',
@@ -126,11 +149,17 @@ export function normalizePersistedDemoState(
     screeningQueue: Array.isArray(state.screeningQueue)
       ? state.screeningQueue
       : [],
-    interviewSchedulingPolicies: Array.isArray(state.interviewSchedulingPolicies)
-      ? state.interviewSchedulingPolicies
-      : seedPolicies,
+    interviewSchedulingPolicies: normalizedPolicies,
     interviewSchedulingInvitations: Array.isArray(state.interviewSchedulingInvitations)
-      ? state.interviewSchedulingInvitations
+      ? state.interviewSchedulingInvitations.map((invitation) => {
+          const delivery = invitation.delivery ?? { provider: 'EMAILJS' as const, status: 'NOT_SENT' as const, attemptCount: 0 }
+          return {
+            ...invitation,
+            delivery: delivery.status === 'SENDING'
+              ? { ...delivery, status: 'QUEUED' as const, sendingStartedAt: undefined }
+              : { ...delivery },
+          }
+        })
       : [],
   })
 }

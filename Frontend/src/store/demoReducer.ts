@@ -14,12 +14,15 @@ import type { Evaluation, EvaluationStatus } from '../types/evaluation'
 import type { Interview, InterviewQuestion, InterviewStatus } from '../types/interview'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
+import type { EmailDeliveryErrorCode } from '../types/emailDelivery'
 import type { Transcript } from '../types/transcript'
 import type { ScreeningQueueItem } from '../types/screeningQueue'
 import type { EvaluationRubric } from '../types/rubric'
 import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
 import { canDeleteJob, canOpenJob, isValidJobTransition, validateJob } from '../utils/jobValidation'
 import { evaluateWorkflowArtifacts } from '../utils/hiringWorkflowSetup'
+import { canRecoverSchedulingEmail } from '../utils/schedulingEmailRecovery'
+import { isSameSchedulingPolicyTarget } from '../utils/interviewSchedulingPolicyResolution'
 import { createInitialDemoState } from './demoInitialState'
 import type { DemoState } from './demoStateTypes'
 
@@ -111,9 +114,16 @@ export type DemoAction =
   | { type: 'CLEAR_COMPLETED_SCREENING_QUEUE_ITEMS' }
   | { type: 'ADD_INTERVIEW'; payload: { interview: Interview } }
   | { type: 'ADD_INTERVIEW_SCHEDULING_POLICY'; payload: { policy: InterviewSchedulingPolicy } }
-  | { type: 'UPDATE_INTERVIEW_SCHEDULING_POLICY'; payload: { policyId: string; changes: Partial<Omit<InterviewSchedulingPolicy, 'id' | 'jobId' | 'version' | 'status' | 'createdAt'>> } }
+  | { type: 'UPDATE_INTERVIEW_SCHEDULING_POLICY'; payload: { policyId: string; changes: Partial<Omit<InterviewSchedulingPolicy, 'id' | 'scope' | 'department' | 'jobId' | 'version' | 'status' | 'createdAt'>> } }
   | { type: 'ACTIVATE_INTERVIEW_SCHEDULING_POLICY'; payload: { policyId: string; updatedAt: string } }
   | { type: 'ARCHIVE_INTERVIEW_SCHEDULING_POLICY'; payload: { policyId: string; updatedAt: string } }
+  | { type: 'QUEUE_SCHEDULING_EMAIL'; payload: { invitationId: string; queuedAt: string } }
+  | { type: 'START_SCHEDULING_EMAIL'; payload: { invitationId: string; startedAt: string } }
+  | { type: 'COMPLETE_SCHEDULING_EMAIL'; payload: { invitationId: string; sentAt: string; providerMessageId?: string } }
+  | { type: 'FAIL_SCHEDULING_EMAIL'; payload: { invitationId: string; failedAt: string; errorCode: EmailDeliveryErrorCode; errorMessage: string } }
+  | { type: 'RETRY_SCHEDULING_EMAIL'; payload: { invitationId: string; queuedAt: string } }
+  | { type: 'RECOVER_SCHEDULING_EMAIL_CONFIGURATION'; payload: { queuedAt: string; invitationId?: string } }
+  | { type: 'RETRY_FAILED_SCHEDULING_EMAILS'; payload: { queuedAt: string } }
   | { type: 'ADD_SCHEDULING_INVITATION'; payload: { invitation: InterviewSchedulingInvitation } }
   | { type: 'UPDATE_SCHEDULING_INVITATION'; payload: { invitationId: string; changes: Partial<Omit<InterviewSchedulingInvitation, 'id' | 'applicationId' | 'jobId' | 'createdAt'>> } }
   | { type: 'MARK_SCHEDULING_EXCEPTION'; payload: { invitation: InterviewSchedulingInvitation } }
@@ -228,6 +238,7 @@ function isPublishableRubric(rubric: EvaluationRubric) {
 function cloneInvitation(invitation: InterviewSchedulingInvitation): InterviewSchedulingInvitation {
   return {
     ...invitation,
+    delivery: { ...invitation.delivery },
     interviewerIds: [...invitation.interviewerIds],
     availableSlots: invitation.availableSlots.map((slot) => ({
       ...slot,
@@ -883,9 +894,15 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
 
     case 'ADD_INTERVIEW_SCHEDULING_POLICY': {
       const policy = action.payload.policy
+      const validTarget = policy.scope === 'ORGANIZATION'
+        ? !policy.department && !policy.jobId
+        : policy.scope === 'DEPARTMENT'
+          ? Boolean(policy.department?.trim()) && !policy.jobId
+          : Boolean(policy.jobId && state.jobs.some((job) => job.id === policy.jobId)) && !policy.department
       if (
         state.interviewSchedulingPolicies.some((item) => item.id === policy.id) ||
-        !state.jobs.some((job) => job.id === policy.jobId) ||
+        !validTarget ||
+        !policy.displayName.trim() ||
         !Number.isInteger(policy.version) ||
         policy.version < 1 ||
         policy.status !== 'DRAFT'
@@ -925,7 +942,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
           if (item.id === policy.id) {
             return { ...item, status: 'ACTIVE', updatedAt: action.payload.updatedAt }
           }
-          if (item.jobId === policy.jobId && item.status === 'ACTIVE') {
+          if (isSameSchedulingPolicyTarget(item, policy) && item.status === 'ACTIVE') {
             return { ...item, status: 'ARCHIVED', updatedAt: action.payload.updatedAt }
           }
           return item
@@ -947,6 +964,60 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         ),
       }
     }
+
+    case 'QUEUE_SCHEDULING_EMAIL':
+    case 'RETRY_SCHEDULING_EMAIL': {
+      const invitation = state.interviewSchedulingInvitations.find((item) => item.id === action.payload.invitationId)
+      if (!invitation || invitation.status !== 'PENDING' || !['NOT_SENT', 'FAILED'].includes(invitation.delivery.status) || invitation.delivery.provider === 'DISABLED') return state
+      return { ...state, interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) => item.id === invitation.id ? { ...item, delivery: { provider: item.delivery.provider, status: 'QUEUED', attemptCount: item.delivery.attemptCount, queuedAt: action.payload.queuedAt } } : item) }
+    }
+
+    case 'RECOVER_SCHEDULING_EMAIL_CONFIGURATION': {
+      const recoverable = state.interviewSchedulingInvitations.some((item) =>
+        (!action.payload.invitationId || item.id === action.payload.invitationId) &&
+        canRecoverSchedulingEmail(item),
+      )
+      if (!recoverable) return state
+
+      return {
+        ...state,
+        interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) =>
+          (!action.payload.invitationId || item.id === action.payload.invitationId) &&
+          canRecoverSchedulingEmail(item)
+            ? {
+                ...item,
+                delivery: {
+                  provider: 'EMAILJS',
+                  status: 'QUEUED',
+                  attemptCount: item.delivery.attemptCount,
+                  queuedAt: action.payload.queuedAt,
+                },
+              }
+            : item,
+        ),
+      }
+    }
+
+    case 'START_SCHEDULING_EMAIL': {
+      const invitation = state.interviewSchedulingInvitations.find((item) => item.id === action.payload.invitationId)
+      if (!invitation || invitation.status !== 'PENDING' || invitation.delivery.status !== 'QUEUED') return state
+      return { ...state, interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) => item.id === invitation.id ? { ...item, delivery: { ...item.delivery, status: 'SENDING', attemptCount: item.delivery.attemptCount + 1, sendingStartedAt: action.payload.startedAt, failedAt: undefined, lastErrorCode: undefined, lastErrorMessage: undefined, providerMessageId: undefined } } : item) }
+    }
+
+    case 'COMPLETE_SCHEDULING_EMAIL': {
+      const invitation = state.interviewSchedulingInvitations.find((item) => item.id === action.payload.invitationId)
+      if (!invitation || invitation.delivery.status !== 'SENDING') return state
+      return { ...state, interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) => item.id === invitation.id ? { ...item, delivery: { ...item.delivery, status: 'SENT', sentAt: action.payload.sentAt, failedAt: undefined, lastErrorCode: undefined, lastErrorMessage: undefined, providerMessageId: action.payload.providerMessageId } } : item) }
+    }
+
+    case 'FAIL_SCHEDULING_EMAIL': {
+      const invitation = state.interviewSchedulingInvitations.find((item) => item.id === action.payload.invitationId)
+      if (!invitation || invitation.delivery.status !== 'SENDING') return state
+      return { ...state, interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) => item.id === invitation.id ? { ...item, delivery: { ...item.delivery, status: 'FAILED', failedAt: action.payload.failedAt, lastErrorCode: action.payload.errorCode, lastErrorMessage: action.payload.errorMessage, providerMessageId: undefined } } : item) }
+    }
+
+    case 'RETRY_FAILED_SCHEDULING_EMAILS':
+      return { ...state, interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) => item.status === 'PENDING' && item.delivery.status === 'FAILED' && item.delivery.provider !== 'DISABLED' ? { ...item, delivery: { provider: item.delivery.provider, status: 'QUEUED', attemptCount: item.delivery.attemptCount, queuedAt: action.payload.queuedAt } } : item) }
 
     case 'ADD_SCHEDULING_INVITATION': {
       const invitation = action.payload.invitation

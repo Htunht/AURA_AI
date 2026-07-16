@@ -10,8 +10,11 @@ import Jobs from '../pages/Jobs'
 import HumanReviewQueue from '../pages/HumanReviewQueue'
 import InterviewDetail from '../pages/InterviewDetail'
 import InterviewSchedulingExceptions from '../pages/InterviewSchedulingExceptions'
-import InterviewSchedulingPolicies from '../pages/InterviewSchedulingPolicies'
 import InterviewSchedulingPolicyEditor from '../pages/InterviewSchedulingPolicyEditor'
+import InterviewSchedulingPolicies from '../pages/InterviewSchedulingPolicies'
+import InterviewSchedulingSettings from '../pages/InterviewSchedulingSettings'
+import InterviewDepartmentTemplates from '../pages/InterviewDepartmentTemplates'
+import InterviewDepartmentTemplateEditor from '../pages/InterviewDepartmentTemplateEditor'
 import InterviewSchedule from '../pages/InterviewSchedule'
 import Interviews from '../pages/Interviews'
 import Login from '../pages/Login'
@@ -32,6 +35,10 @@ export function AppRoutes() {
         <Route path="/reviews" element={<HumanReviewQueue />} />
         <Route path="/interviews" element={<Interviews />} />
         <Route path="/interviews/schedule" element={<InterviewSchedule />} />
+        <Route path="/interviews/settings" element={<InterviewSchedulingSettings />} />
+        <Route path="/interviews/settings/organization" element={<InterviewSchedulingPolicyEditor scope="ORGANIZATION" />} />
+        <Route path="/interviews/settings/departments" element={<InterviewDepartmentTemplates />} />
+        <Route path="/interviews/settings/departments/:department" element={<InterviewDepartmentTemplateEditor />} />
         <Route path="/interviews/policies" element={<InterviewSchedulingPolicies />} />
         <Route path="/interviews/policies/:jobId" element={<InterviewSchedulingPolicyEditor />} />
         <Route path="/interviews/exceptions" element={<InterviewSchedulingExceptions />} />

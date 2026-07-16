@@ -3,6 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useRef } from 'react
 import { prepareSchedulingInvitation } from '../services/interviewSchedulingAutomation'
 import type { Interviewer } from '../types/interviewer'
 import { useDemoStore } from './useDemoStore'
+import { getEmailConfig } from '../config/emailConfig'
+import { canRecoverPolicyMissingSchedulingException } from '../utils/interviewSchedulingPolicyResolution'
 
 const interviewers = interviewersData as Interviewer[]
 
@@ -21,11 +23,13 @@ export function useInterviewSchedulingAutomationController(): InterviewSchedulin
   stateRef.current = state
 
   const prepare = useCallback((applicationId: string, invitationId?: string) => {
+    const emailConfig = getEmailConfig()
     const result = prepareSchedulingInvitation({
       state: stateRef.current,
       applicationId,
       interviewers,
       now: new Date(),
+      emailProvider: emailConfig.provider === 'emailjs' && emailConfig.emailJs ? 'EMAILJS' : 'DISABLED',
     })
     if (!result.invitation) return
     if (invitationId) {
@@ -55,6 +59,11 @@ export function useInterviewSchedulingAutomationController(): InterviewSchedulin
     for (const invitation of state.interviewSchedulingInvitations) {
       if (invitation.status === 'PENDING' && now >= new Date(invitation.expiresAt)) {
         dispatch({ type: 'EXPIRE_SCHEDULING_INVITATION', payload: { invitationId: invitation.id, updatedAt: now.toISOString() } })
+      }
+    }
+    for (const invitation of state.interviewSchedulingInvitations) {
+      if (canRecoverPolicyMissingSchedulingException({ policies: state.interviewSchedulingPolicies, jobs: state.jobs, invitation })) {
+        prepare(invitation.applicationId, invitation.id)
       }
     }
     for (const application of state.applications) {

@@ -41,6 +41,7 @@ function createFixtureState(): DemoState {
     updatedAt: '2026-07-16T09:00:00.000Z',
     expiresAt: '2026-07-19T09:00:00.000Z',
     rescheduleCount: 0,
+    delivery: { provider: 'EMAILJS', status: 'QUEUED', attemptCount: 0, queuedAt: '2026-07-16T09:00:00.000Z' },
   }
   const secondApplication = initialDemoState.applications.find((item) => item.id !== application.id && item.jobId === application.jobId)!
   const scheduledInterview: Interview = {

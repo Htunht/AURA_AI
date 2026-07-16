@@ -3,6 +3,8 @@ import type { InterviewSchedulingInvitation, SchedulingExceptionReason } from '.
 import type { Interviewer } from '../types/interviewer'
 import { assignInterviewers } from '../utils/interviewerAssignment'
 import { generateInterviewSlots } from '../utils/interviewSlotGeneration'
+import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyResolution'
+import type { InterviewSchedulingPolicySource } from '../types/resolvedInterviewSchedulingPolicy'
 
 export type PrepareSchedulingInvitationResult = {
   invitation?: InterviewSchedulingInvitation
@@ -21,6 +23,7 @@ function exceptionInvitation(input: {
   jobId: string
   policyId?: string
   policyVersion?: number
+  policySource?: InterviewSchedulingPolicySource
   now: Date
   reason: SchedulingExceptionReason
   error: string
@@ -32,6 +35,7 @@ function exceptionInvitation(input: {
     applicationId: input.applicationId,
     jobId: input.jobId,
     policyId: input.policyId ?? '',
+    policySource: input.policySource,
     interviewerIds: [],
     availableSlots: [],
     status: 'EXCEPTION_REQUIRED',
@@ -41,6 +45,7 @@ function exceptionInvitation(input: {
     rescheduleCount: 0,
     exceptionReason: input.reason,
     lastError: input.error,
+    delivery: { provider: 'DISABLED', status: 'NOT_SENT', attemptCount: 0 },
   }
 }
 
@@ -49,6 +54,7 @@ export function prepareSchedulingInvitation(input: {
   applicationId: string
   interviewers: Interviewer[]
   now: Date
+  emailProvider?: 'EMAILJS' | 'DISABLED'
 }): PrepareSchedulingInvitationResult {
   const application = input.state.applications.find((item) => item.id === input.applicationId)
   const candidate = application
@@ -63,29 +69,28 @@ export function prepareSchedulingInvitation(input: {
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
   const positive = decision?.humanRecommendation === 'STRONG_YES' || decision?.humanRecommendation === 'YES' || decision?.humanRecommendation === 'REVIEW'
   if (!positive || application.currentStage !== 'SHORTLIST_REVIEW') return { errors: ['A positive human-reviewed shortlist decision is required.'] }
-  const policy = input.state.interviewSchedulingPolicies
-    .filter((item) => item.jobId === job.id && item.status === 'ACTIVE')
-    .sort((left, right) => right.version - left.version)[0]
-  if (!policy) {
-    const error = 'No active interview scheduling policy exists for this job.'
+  const resolvedPolicy = resolveInterviewSchedulingPolicy({ policies: input.state.interviewSchedulingPolicies, job })
+  if (!resolvedPolicy) {
+    const error = 'No organization, department, or custom scheduling setup is available for this job.'
     return {
       invitation: exceptionInvitation({ applicationId: application.id, jobId: job.id, now: input.now, reason: 'POLICY_MISSING', error }),
       errors: [error],
     }
   }
+  const policy = resolvedPolicy.policy
   const windowStart = new Date(input.now.getTime() + policy.schedulingWindowStartDays * 86_400_000).toISOString()
   const windowEnd = new Date(input.now.getTime() + (policy.schedulingWindowEndDays + 1) * 86_400_000).toISOString()
   const assignment = assignInterviewers({ policy, interviewers: input.interviewers, interviews: input.state.interviews, windowStart, windowEnd })
   if (assignment.errors.length) {
     return {
-      invitation: exceptionInvitation({ applicationId: application.id, jobId: job.id, policyId: policy.id, policyVersion: policy.version, now: input.now, reason: 'INTERVIEWERS_UNAVAILABLE', error: assignment.errors[0]! }),
+      invitation: exceptionInvitation({ applicationId: application.id, jobId: job.id, policyId: policy.id, policyVersion: policy.version, policySource: resolvedPolicy.source, now: input.now, reason: 'INTERVIEWERS_UNAVAILABLE', error: assignment.errors[0]! }),
       errors: assignment.errors,
     }
   }
   const generated = generateInterviewSlots({ policy, interviewerIds: assignment.interviewerIds, interviewers: input.interviewers, existingInterviews: input.state.interviews, now: input.now })
   if (generated.errors.length) {
     return {
-      invitation: exceptionInvitation({ applicationId: application.id, jobId: job.id, policyId: policy.id, policyVersion: policy.version, now: input.now, reason: 'NO_AVAILABLE_SLOTS', error: generated.errors[0]! }),
+      invitation: exceptionInvitation({ applicationId: application.id, jobId: job.id, policyId: policy.id, policyVersion: policy.version, policySource: resolvedPolicy.source, now: input.now, reason: 'NO_AVAILABLE_SLOTS', error: generated.errors[0]! }),
       errors: generated.errors,
     }
   }
@@ -96,6 +101,7 @@ export function prepareSchedulingInvitation(input: {
       applicationId: application.id,
       jobId: job.id,
       policyId: policy.id,
+      policySource: resolvedPolicy.source,
       interviewerIds: assignment.interviewerIds,
       availableSlots: generated.slots.map((slot) => ({ ...slot, id: `slot-${application.id}-${slot.id.slice(5)}` })),
       status: 'PENDING',
@@ -103,6 +109,9 @@ export function prepareSchedulingInvitation(input: {
       updatedAt: timestamp,
       expiresAt: new Date(input.now.getTime() + policy.invitationExpiryHours * 3_600_000).toISOString(),
       rescheduleCount: 0,
+      delivery: input.emailProvider === 'DISABLED'
+        ? { provider: 'DISABLED', status: 'NOT_SENT', attemptCount: 0 }
+        : { provider: 'EMAILJS', status: 'QUEUED', attemptCount: 0, queuedAt: timestamp },
     },
     errors: [],
   }

@@ -21,6 +21,8 @@ import {
   selectHiringFunnel,
   selectInterviewAutomationSummary,
   selectSchedulingAutomationViewModels,
+  selectSchedulingEmailDeliverySummary,
+  selectSchedulingPolicyResolutionSummary,
   selectPublishedApplicationFormByJobId,
   selectRecentApplications,
   selectUpcomingInterviews,
@@ -50,9 +52,11 @@ export default function Dashboard() {
   const recentApplications = selectRecentApplications(state)
   const upcomingInterviews = selectUpcomingInterviews(state, DASHBOARD_NOW)
   const schedulingSummary = selectInterviewAutomationSummary(state, DASHBOARD_NOW)
+  const emailSummary = selectSchedulingEmailDeliverySummary(state)
   const schedulingAttention = selectSchedulingAutomationViewModels(state).filter(
-    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
+    (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED' || item.deliveryStatus === 'FAILED' || (item.invitation.status === 'PENDING' && item.deliveryStatus === 'NOT_SENT'),
   )
+  const schedulingCoverage = selectSchedulingPolicyResolutionSummary(state)
   const totalApplications = funnel.applications
   const funnelRows = [
     ['Applications', funnel.applications],
@@ -94,8 +98,8 @@ export default function Dashboard() {
 
       <Card className="mt-4 overflow-hidden">
         <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="p-5 md:p-6"><div className="mb-4 flex items-end justify-between"><div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Scheduling automation</p><h2 className="mb-0 mt-1 text-lg font-semibold text-depth">Interview operations</h2><p className="mb-0 mt-1 text-xs text-aura-text-muted">AURA prepares interview teams and approved times; candidates select the final schedule.</p></div><Link className={textLinkClass} to="/interviews">Open interviews</Link></div><div className="grid gap-px overflow-hidden rounded-aura-sm bg-harbor/10 sm:grid-cols-3">{[['Scheduling invitations ready to share', schedulingSummary.invitationsReadyToShare], ['Scheduling exceptions', schedulingSummary.schedulingExceptions], ['Confirmed interviews', schedulingSummary.scheduledInterviews]].map(([label, value]) => <div className="bg-frost p-3" key={label}><p className="m-0 text-2xl font-bold text-depth">{value}</p><p className="mb-0 mt-1 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p></div>)}</div></div>
-          <div className="border-t border-harbor/10 bg-frost/50 p-5 lg:border-l lg:border-t-0"><div className="flex items-center gap-2"><AlertTriangle size={16} className={schedulingAttention.length ? 'text-aura-warning' : 'text-aura-success'} /><h3 className="m-0 text-sm font-semibold text-depth">Recruiter attention</h3></div><div className="mt-3 grid gap-2">{schedulingAttention.slice(0, 3).map((item) => <Link className="text-xs font-semibold text-aura-warning" to="/interviews" key={item.invitation.id}>{item.candidate.fullName} · scheduling requires attention</Link>)}</div>{schedulingAttention.length === 0 ? <p className="mb-0 mt-4 text-xs font-semibold text-aura-success">No scheduling exceptions require recruiter attention.</p> : <div className="mt-4"><Link className={textLinkClass} to="/interviews">Review exceptions</Link></div>}</div>
+          <div className="p-5 md:p-6"><div className="mb-4 flex items-end justify-between"><div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Scheduling automation</p><h2 className="mb-0 mt-1 text-lg font-semibold text-depth">Interview operations</h2><p className="mb-0 mt-1 text-xs text-aura-text-muted">AURA prepares interview teams, approved times, and scheduling invitation emails.</p></div><Link className={textLinkClass} to="/interviews">Open interviews</Link></div><div className="grid grid-cols-2 gap-px overflow-hidden rounded-aura-sm bg-harbor/10 xl:grid-cols-4">{[['Invitation emails sending', emailSummary.queued + emailSummary.sending], ['Awaiting candidate response', emailSummary.sent], ['Email delivery failures', emailSummary.failed], ['Confirmed interviews', schedulingSummary.scheduledInterviews]].map(([label, value]) => <div className="bg-frost p-3" key={label}><p className="m-0 text-2xl font-bold text-depth">{value}</p><p className="mb-0 mt-1 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p></div>)}</div></div>
+          <div className="border-t border-harbor/10 bg-frost/50 p-5 lg:border-l lg:border-t-0"><div className="flex items-center gap-2"><AlertTriangle size={16} className={schedulingAttention.length ? 'text-aura-warning' : 'text-aura-success'} /><h3 className="m-0 text-sm font-semibold text-depth">Recruiter attention</h3></div><div className="mt-3 grid gap-2">{schedulingAttention.slice(0, 3).map((item) => <Link className="text-xs font-semibold text-aura-warning" to="/interviews" key={item.invitation.id}>{item.candidate.fullName} · scheduling requires attention</Link>)}</div>{schedulingAttention.length === 0 ? <p className="mb-0 mt-4 text-xs font-semibold text-aura-success">No scheduling exceptions require recruiter attention.</p> : <div className="mt-4"><Link className={textLinkClass} to="/interviews">Review exceptions</Link></div>}<div className="mt-4 border-t border-harbor/10 pt-4"><p className="m-0 text-xs font-semibold text-depth">Scheduling coverage</p><p className={`mb-0 mt-1 text-xs ${schedulingCoverage.unresolvedJobs ? 'text-aura-warning' : 'text-aura-success'}`}>{schedulingCoverage.unresolvedJobs ? `${schedulingCoverage.unresolvedJobs} active jobs need scheduling defaults.` : 'All active jobs have automatic scheduling coverage.'}</p><Link className={`${textLinkClass} mt-2`} to="/interviews/settings">Review scheduling settings</Link></div></div>
         </div>
       </Card>
 

@@ -1,57 +1,20 @@
-import { CheckCircle2 } from 'lucide-react'
-import { Badge } from '../ui/Badge'
+import { Activity } from 'lucide-react'
 import { Card } from '../ui/Card'
 
 type SchedulingAutomationSummaryProps = {
-  readyToShareCount: number
+  sendingCount: number
+  awaitingCount: number
   scheduledCount: number
   exceptionCount: number
   preparingCount?: number
 }
 
-export function SchedulingAutomationSummary({
-  readyToShareCount,
-  scheduledCount,
-  exceptionCount,
-  preparingCount = 0,
-}: SchedulingAutomationSummaryProps) {
-  return (
-    <Card className="mb-7 overflow-hidden border-marine/15">
-      <div className="grid gap-5 p-5 md:grid-cols-[1fr_auto] md:items-center md:p-6">
-        <div className="flex items-start gap-3">
-          <span className="inline-grid size-10 flex-none place-items-center rounded-aura-sm bg-glacier/20 text-marine">
-            <CheckCircle2 size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="m-0 text-base font-semibold text-depth">AURA scheduling automation</h2>
-              <Badge tone="accent">AURA completed</Badge>
-            </div>
-            <p className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-aura-text-secondary">
-              AURA applied interview policies, assigned interviewers, and generated candidate-ready time slots.
-            </p>
-            <p className="mb-0 mt-1 text-xs font-medium text-aura-text-muted">
-              {preparingCount > 0
-                ? 'AURA is preparing interview availability for shortlisted candidates.'
-                : 'All eligible candidates have a scheduling invitation or confirmed interview.'}
-            </p>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-aura-sm bg-harbor/10 text-center">
-          <SummaryValue label="Ready to share" value={readyToShareCount} />
-          <SummaryValue label="Scheduled" value={scheduledCount} />
-          <SummaryValue label="Need attention" value={exceptionCount} warning={exceptionCount > 0} />
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-function SummaryValue({ label, value, warning = false }: { label: string; value: number; warning?: boolean }) {
-  return (
-    <div className="min-w-24 bg-frost px-3 py-3">
-      <p className={`m-0 text-xl font-bold ${warning ? 'text-aura-warning' : 'text-depth'}`}>{value}</p>
-      <p className="mb-0 mt-1 text-[9px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p>
-    </div>
-  )
+export function SchedulingAutomationSummary({ sendingCount, awaitingCount, scheduledCount, exceptionCount, preparingCount = 0 }: SchedulingAutomationSummaryProps) {
+  const metrics = [
+    { label: 'Need attention', value: exceptionCount, warning: exceptionCount > 0 },
+    { label: 'In progress', value: sendingCount + preparingCount },
+    { label: 'Awaiting response', value: awaitingCount },
+    { label: 'Scheduled', value: scheduledCount },
+  ]
+  return <Card className="mb-5 p-3.5"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-center gap-2.5"><span className="inline-grid size-8 place-items-center rounded-aura-sm bg-glacier/20 text-marine"><Activity size={16} aria-hidden="true" /></span><div><p className="m-0 text-sm font-semibold text-depth">Scheduling overview</p><p className="mb-0 mt-0.5 text-xs text-aura-text-muted">AURA handles routine scheduling. Review only what needs action.</p></div></div><div className="flex flex-wrap gap-2">{metrics.map((metric) => <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${metric.warning ? 'border-aura-warning/25 bg-aura-warning-soft text-aura-warning' : 'border-harbor/10 bg-frost text-harbor'}`} key={metric.label}><strong className="text-sm">{metric.value}</strong>{metric.label}</span>)}</div></div></Card>
 }

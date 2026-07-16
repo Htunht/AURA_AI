@@ -6,15 +6,18 @@ import App from './App.tsx'
 import { DemoProvider } from './store'
 import { ScreeningAutomationProvider } from './providers/ScreeningAutomationProvider'
 import { InterviewSchedulingAutomationProvider } from './providers/InterviewSchedulingAutomationProvider'
+import { SchedulingEmailAutomationProvider } from './providers/SchedulingEmailAutomationProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <DemoProvider>
       <ScreeningAutomationProvider>
         <InterviewSchedulingAutomationProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <SchedulingEmailAutomationProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </SchedulingEmailAutomationProvider>
         </InterviewSchedulingAutomationProvider>
       </ScreeningAutomationProvider>
     </DemoProvider>

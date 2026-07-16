@@ -8,39 +8,62 @@ import { Card } from '../components/ui/Card'
 import interviewersData from '../data/interviewers.json'
 import { useDemoStore } from '../hooks/useDemoStore'
 import type { Interviewer } from '../types/interviewer'
-import type { InterviewSchedulingPolicy, InterviewSchedulingWorkingDay } from '../types/interviewSchedulingPolicy'
+import type { InterviewSchedulingPolicy, InterviewSchedulingPolicyScope, InterviewSchedulingWorkingDay } from '../types/interviewSchedulingPolicy'
 import { validateInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyValidation'
+import { createNextSchedulingPolicyId, isSameSchedulingPolicyTarget } from '../utils/interviewSchedulingPolicyResolution'
+import { selectResolvedInterviewSchedulingPolicy } from '../store/demoSelectors'
 
 const interviewers = interviewersData as Interviewer[]
 const days: InterviewSchedulingWorkingDay[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 const fieldClass = 'h-10 w-full rounded-aura-sm border border-harbor/20 bg-white px-3 text-sm text-depth focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35'
 const backClass = 'inline-flex h-10 items-center gap-2 rounded-aura-sm border border-marine/30 bg-white px-4 text-sm font-semibold text-harbor no-underline focus-visible:ring-2 focus-visible:ring-glacier'
 
-function defaultPolicy(jobId: string, version: number, timestamp: string): InterviewSchedulingPolicy {
-  return { id: `interview-policy-${jobId}-v${version}`, jobId, version, status: 'DRAFT', interviewMode: 'VIDEO', durationMinutes: 60, bufferMinutes: 15, candidateTimezoneStrategy: 'WORKSPACE_TIMEZONE', workspaceTimezone: 'Asia/Yangon', schedulingWindowStartDays: 1, schedulingWindowEndDays: 14, minimumNoticeHours: 24, workingDays: ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'], dailyStartTime: '09:00', dailyEndTime: '17:00', interviewerSelectionStrategy: 'LEAST_BOOKED', requiredInterviewerRoles: [], fixedInterviewerIds: [], interviewerCount: 2, candidateSlotCount: 5, slotIntervalMinutes: 30, meetingLinkTemplate: 'https://meet.aura.local/{interviewId}', candidateRescheduleLimit: 2, invitationExpiryHours: 72, createdAt: timestamp, updatedAt: timestamp }
+function defaultPolicy(target: { scope: InterviewSchedulingPolicyScope; department?: string; jobId?: string; displayName: string }, version: number, timestamp: string, policies: InterviewSchedulingPolicy[]): InterviewSchedulingPolicy {
+  return { id: createNextSchedulingPolicyId(policies, target), scope: target.scope, displayName: target.displayName, department: target.department, jobId: target.jobId, version, status: 'DRAFT', interviewMode: 'VIDEO', durationMinutes: target.scope === 'ORGANIZATION' ? 45 : 60, bufferMinutes: 15, candidateTimezoneStrategy: 'WORKSPACE_TIMEZONE', workspaceTimezone: 'Asia/Yangon', schedulingWindowStartDays: 1, schedulingWindowEndDays: 14, minimumNoticeHours: 24, workingDays: ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'], dailyStartTime: '09:00', dailyEndTime: '17:00', interviewerSelectionStrategy: 'LEAST_BOOKED', requiredInterviewerRoles: [], fixedInterviewerIds: [], interviewerCount: 2, candidateSlotCount: 5, slotIntervalMinutes: 30, meetingLinkTemplate: 'https://meet.aura.local/{interviewId}', candidateRescheduleLimit: 2, invitationExpiryHours: 72, createdAt: timestamp, updatedAt: timestamp }
 }
 
-export default function InterviewSchedulingPolicyEditor() {
-  const { jobId = '' } = useParams()
+export default function InterviewSchedulingPolicyEditor({ scope = 'JOB' }: { scope?: InterviewSchedulingPolicyScope }) {
+  const { jobId = '', department = '' } = useParams()
   const { state, dispatch } = useDemoStore()
+  const [archiveWarning, setArchiveWarning] = useState(false)
   const job = state.jobs.find((item) => item.id === jobId)
-  const policies = state.interviewSchedulingPolicies.filter((item) => item.jobId === jobId).sort((a,b) => b.version - a.version)
+  const target = scope === 'ORGANIZATION'
+    ? { scope, displayName: 'Standard interview scheduling' }
+    : scope === 'DEPARTMENT'
+      ? { scope, department, displayName: `${department} interview scheduling` }
+      : { scope, jobId, displayName: `Custom policy for ${job?.title ?? 'this job'}` }
+  const policies = state.interviewSchedulingPolicies.filter((item) => isSameSchedulingPolicyTarget(item, target)).sort((a,b) => b.version - a.version)
   const active = policies.find((item) => item.status === 'ACTIVE')
   const draft = policies.find((item) => item.status === 'DRAFT')
-  if (!job) return <PageContainer eyebrow="Scheduling policy" title="Job not found"><Card className="p-8 text-center text-sm text-aura-text-secondary">The requested job opening could not be resolved.</Card></PageContainer>
-  const resolvedJob = job
+  const inherited = scope === 'JOB' ? selectResolvedInterviewSchedulingPolicy(state, jobId) : undefined
+  const organizationDefault = state.interviewSchedulingPolicies.find((item) => item.scope === 'ORGANIZATION' && item.status === 'ACTIVE')
+  if (scope === 'JOB' && !job) return <PageContainer eyebrow="Scheduling policy" title="Job not found"><Card className="p-8 text-center text-sm text-aura-text-secondary">The requested job opening could not be resolved.</Card></PageContainer>
+  if (scope === 'DEPARTMENT' && !department.trim()) return <PageContainer eyebrow="Scheduling settings" title="Department not found"><Card className="p-8 text-center text-sm text-aura-text-secondary">The requested department could not be resolved.</Card></PageContainer>
 
   function createDraft() {
     const timestamp = new Date().toISOString()
     const version = Math.max(0, ...policies.map((item) => item.version)) + 1
-    const policy = active
-      ? { ...active, id: `interview-policy-${resolvedJob.id}-v${version}`, version, status: 'DRAFT' as const, workingDays: [...active.workingDays], requiredInterviewerRoles: [...active.requiredInterviewerRoles], fixedInterviewerIds: [...active.fixedInterviewerIds], createdAt: timestamp, updatedAt: timestamp }
-      : defaultPolicy(resolvedJob.id, version, timestamp)
+    const base = active ?? (scope === 'JOB' ? inherited?.policy : scope === 'DEPARTMENT' ? organizationDefault : undefined)
+    const policy = base
+      ? { ...base, id: createNextSchedulingPolicyId(state.interviewSchedulingPolicies, target), scope, displayName: target.displayName, department: target.department, jobId: target.jobId, version, status: 'DRAFT' as const, workingDays: [...base.workingDays], requiredInterviewerRoles: [...base.requiredInterviewerRoles], fixedInterviewerIds: [...base.fixedInterviewerIds], createdAt: timestamp, updatedAt: timestamp }
+      : defaultPolicy(target, version, timestamp, state.interviewSchedulingPolicies)
     dispatch({ type: 'ADD_INTERVIEW_SCHEDULING_POLICY', payload: { policy } })
   }
 
-  return <PageContainer eyebrow="Scheduling policy" title={job.title} description="Configure candidate availability rules and automatic interviewer assignment." actions={<Link className={backClass} to="/interviews/policies"><ArrowLeft size={16} />All policies</Link>}>
-    {draft ? <PolicyForm key={draft.id} policy={draft} /> : <><Card className="mb-4 p-5 md:p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><div className="flex items-center gap-2"><h2 className="m-0 text-lg font-semibold text-depth">{active ? `Active policy · Version ${active.version}` : 'No active policy'}</h2>{active ? <Badge tone="success">Active</Badge> : null}</div><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{active ? 'Active policies are read-only. Create a draft version to make changes.' : 'Create and activate a policy before AURA can prepare candidate scheduling invitations.'}</p></div><Button onClick={createDraft}>{active ? 'Create draft version' : 'Create initial draft'}</Button></div></Card>{active ? <PolicySnapshot policy={active} /> : null}</>}
+  function archiveActive() {
+    if (!active) return
+    dispatch({ type: 'ARCHIVE_INTERVIEW_SCHEDULING_POLICY', payload: { policyId: active.id, updatedAt: new Date().toISOString() } })
+    setArchiveWarning(false)
+  }
+
+  const title = scope === 'ORGANIZATION' ? 'Organization default' : scope === 'DEPARTMENT' ? `${department} template` : 'Custom interview scheduling'
+  const description = scope === 'ORGANIZATION'
+    ? 'Used when a job has no department template or custom override.'
+    : scope === 'DEPARTMENT'
+      ? `A complete scheduling template for ${department} jobs. Jobs fall back to the organization default when this template is unavailable.`
+      : `This job currently ${inherited?.source === 'JOB_OVERRIDE' ? 'uses a custom policy' : `inherits ${inherited?.sourceLabel ?? 'no scheduling defaults'}`}. Create an override only when ${job?.title} needs different rules.`
+  return <PageContainer eyebrow="Scheduling settings" title={title} description={description} actions={<Link className={backClass} to={scope === 'DEPARTMENT' ? '/interviews/settings/departments' : '/interviews/settings'}><ArrowLeft size={16} />Scheduling settings</Link>}>
+    {draft ? <PolicyForm key={draft.id} policy={draft} /> : <><Card className="mb-4 p-5 md:p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><div className="flex items-center gap-2"><h2 className="m-0 text-lg font-semibold text-depth">{active ? `Active policy · Version ${active.version}` : 'No active policy'}</h2>{active ? <Badge tone="success">Active</Badge> : null}</div><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{active ? 'Active policies are read-only. Create a draft version to make changes.' : 'Create and activate a complete scheduling setup before it can be inherited.'}</p></div><div className="flex flex-wrap gap-2">{active ? <Button variant="secondary" onClick={() => setArchiveWarning(true)}>Archive</Button> : null}<Button onClick={createDraft}>{active ? 'Create new version' : 'Create initial draft'}</Button></div></div>{archiveWarning ? <div className="mt-4 rounded-aura-sm border border-aura-warning/25 bg-aura-warning-soft p-4" role="alert"><p className="m-0 text-sm font-semibold text-depth">Archive this active version?</p><p className="mb-0 mt-1 text-xs leading-5 text-aura-text-secondary">{scope === 'ORGANIZATION' ? 'Jobs without department templates or custom overrides will require scheduling setup.' : 'Jobs using this template will fall back to the next available scheduling default.'}</p><div className="mt-3 flex gap-2"><Button variant="ghost" onClick={() => setArchiveWarning(false)}>Keep active</Button><Button variant="secondary" onClick={archiveActive}>Archive version</Button></div></div> : null}</Card>{active ? <PolicySnapshot policy={active} /> : null}</>}
   </PageContainer>
 
   function PolicyForm({ policy }: { policy: InterviewSchedulingPolicy }) {

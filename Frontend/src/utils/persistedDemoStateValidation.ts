@@ -244,7 +244,14 @@ export function validatePersistedDemoState(
     policies,
     'interviewSchedulingPolicies',
     (record) =>
-      hasStringProperties(record, ['id', 'jobId', 'status', 'interviewMode']) &&
+      hasStringProperties(record, ['id', 'status', 'interviewMode']) &&
+      (
+        (record.scope === undefined && typeof record.jobId === 'string') ||
+        (
+          ['ORGANIZATION', 'DEPARTMENT', 'JOB'].includes(record.scope as string) &&
+          typeof record.displayName === 'string'
+        )
+      ) &&
       Number.isInteger(record.version) &&
       Array.isArray(record.workingDays) &&
       Array.isArray(record.requiredInterviewerRoles) &&
@@ -261,7 +268,12 @@ export function validatePersistedDemoState(
       ]) &&
       Array.isArray(record.interviewerIds) &&
       Array.isArray(record.availableSlots) &&
-      Number.isInteger(record.rescheduleCount),
+      Number.isInteger(record.rescheduleCount) &&
+      (record.delivery === undefined ||
+        (isRecord(record.delivery) &&
+          typeof record.delivery.provider === 'string' &&
+          typeof record.delivery.status === 'string' &&
+          Number.isInteger(record.delivery.attemptCount))),
     errors,
   )
 

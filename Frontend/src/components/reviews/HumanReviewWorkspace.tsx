@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import { useDemoStore } from '../../hooks/useDemoStore'
-import { selectActiveInterviewSchedulingPolicy, selectSchedulingInvitationByApplicationId } from '../../store/demoSelectors'
+import { selectResolvedInterviewSchedulingPolicy, selectSchedulingInvitationByApplicationId } from '../../store/demoSelectors'
 import type { Decision } from '../../types/decision'
 import type { Recommendation } from '../../types/evaluation'
 import type { HumanReviewQueueItem } from '../../types/reviewQueue'
@@ -33,7 +33,7 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
   const evaluation = item.evaluation
   const rubric = state.rubrics.find((entry) => entry.jobId === item.job.id && entry.status === 'PUBLISHED')
   const schedulingInvitation = selectSchedulingInvitationByApplicationId(state, item.application.id)
-  const schedulingPolicy = selectActiveInterviewSchedulingPolicy(state, item.job.id)
+  const schedulingPolicy = selectResolvedInterviewSchedulingPolicy(state, item.job.id)
 
   function recordDecision(
     reviewAction: Decision['reviewAction'],
@@ -123,7 +123,7 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
           </dl>
           {item.decision.overrideReason ? <div className="mt-4 border-l-2 border-glacier pl-4"><p className="m-0 text-xs font-bold uppercase tracking-wide text-aura-text-muted">Override reason</p><p className="mb-0 mt-1.5 text-sm leading-6 text-aura-text-secondary">{item.decision.overrideReason}</p></div> : null}
           <p className="mb-0 mt-5 flex items-center gap-2 text-xs font-medium text-harbor"><CheckCircle2 size={15} aria-hidden="true" />This audit record is append-only and cannot be edited.</p>
-          {schedulingInvitation?.status === 'PENDING' ? <p className="mb-0 mt-4 text-sm font-semibold text-aura-success">Scheduling invitation prepared</p> : schedulingInvitation?.status === 'EXCEPTION_REQUIRED' ? <Link className="mt-4 inline-flex font-semibold text-harbor" to="/interviews/exceptions">Scheduling exception · Resolve scheduling</Link> : !schedulingPolicy ? <Link className="mt-4 inline-flex font-semibold text-harbor" to={`/interviews/policies/${item.job.id}`}>Interview scheduling policy required</Link> : <p className="mb-0 mt-4 text-sm text-aura-text-secondary">Preparing interview availability automatically.</p>}
+          {schedulingInvitation?.status === 'PENDING' ? schedulingInvitation.delivery.status === 'SENT' ? <p className="mb-0 mt-4 text-sm font-semibold text-aura-success">Scheduling invitation sent</p> : schedulingInvitation.delivery.status === 'FAILED' || schedulingInvitation.delivery.status === 'NOT_SENT' ? <Link className="mt-4 inline-flex font-semibold text-aura-warning" to="/interviews">Resolve delivery issue</Link> : <p className="mb-0 mt-4 text-sm font-semibold text-harbor">Scheduling prepared using {schedulingPolicy?.sourceLabel.toLocaleLowerCase() ?? 'inherited defaults'}</p> : schedulingInvitation?.status === 'EXCEPTION_REQUIRED' ? <Link className="mt-4 inline-flex font-semibold text-harbor" to="/interviews/exceptions">Scheduling exception · Resolve scheduling</Link> : !schedulingPolicy ? <Link className="mt-4 inline-flex font-semibold text-harbor" to="/interviews/settings">Scheduling defaults required</Link> : <p className="mb-0 mt-4 text-sm text-aura-text-secondary">Preparing interview availability using {schedulingPolicy.sourceLabel.toLocaleLowerCase()}.</p>}
         </Card>
       ) : evaluation ? (
         <Card className="border-marine/25 p-5 md:p-6">

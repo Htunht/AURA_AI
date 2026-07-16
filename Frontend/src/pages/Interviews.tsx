@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, Settings2 } from 'lucide-react'
+import { Settings2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { InterviewCard } from '../components/interviews/InterviewCard'
 import { InterviewTable } from '../components/interviews/InterviewTable'
@@ -8,105 +9,62 @@ import { PageContainer } from '../components/layout/PageContainer'
 import { Badge } from '../components/ui/Badge'
 import { Card } from '../components/ui/Card'
 import { useDemoStore } from '../hooks/useDemoStore'
-import {
-  getSchedulingExceptionLabel,
-  selectInterviewListItems,
-  selectSchedulingAutomationViewModels,
-  type SchedulingAutomationViewModel,
-} from '../store/demoSelectors'
+import { useSchedulingEmailAutomation } from '../hooks/useSchedulingEmailAutomation'
+import { getSchedulingExceptionLabel, selectInterviewListItems, selectJobsWithoutResolvedSchedulingPolicy, selectSchedulingAutomationViewModels, type SchedulingAutomationViewModel } from '../store/demoSelectors'
 
+type OperationsTab = 'attention' | 'progress' | 'awaiting' | 'scheduled' | 'history'
 const utilityLinkClass = 'inline-flex items-center gap-2 text-sm font-semibold text-harbor no-underline transition-colors hover:text-depth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier'
-const exceptionLinkClass = 'inline-flex h-9 items-center justify-center rounded-aura-sm border border-aura-warning/30 bg-white px-3 text-sm font-semibold text-harbor no-underline transition-colors hover:bg-aura-warning-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier'
-
-function recommendedAction(model: SchedulingAutomationViewModel) {
-  switch (model.invitation.exceptionReason) {
-    case 'POLICY_MISSING': return 'Review scheduling setup'
-    case 'INTERVIEWERS_UNAVAILABLE': return 'Review interviewer coverage'
-    case 'NO_AVAILABLE_SLOTS': return 'Review interview availability'
-    case 'INVITATION_EXPIRED': return 'Prepare a new invitation'
-    case 'SLOT_CONFLICT': return 'Retry scheduling'
-    case 'RESCHEDULE_LIMIT_REACHED': return 'Contact the candidate'
-    default: return model.state === 'EXPIRED' ? 'Prepare a new invitation' : 'Review scheduling setup'
-  }
-}
 
 export default function Interviews() {
   const { state } = useDemoStore()
+  const { retryAllFailed } = useSchedulingEmailAutomation()
   const items = selectInterviewListItems(state)
   const automation = selectSchedulingAutomationViewModels(state)
-  const invitations = automation.filter((item) => item.state === 'READY_TO_SHARE' || item.state === 'AWAITING_CANDIDATE')
-  const attention = automation.filter((item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED')
-  const preparing = automation.filter((item) => item.state === 'PREPARING')
+  const inProgress = automation.filter((item) => item.state === 'PREPARING' || (item.invitation.status === 'PENDING' && (item.deliveryStatus === 'QUEUED' || item.deliveryStatus === 'SENDING')))
+  const awaiting = automation.filter((item) => item.invitation.status === 'PENDING' && item.deliveryStatus === 'SENT')
+  const attention = automation.filter((item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED' || (item.invitation.status === 'PENDING' && (item.deliveryStatus === 'FAILED' || item.deliveryStatus === 'NOT_SENT')))
   const current = items.filter((item) => item.interview.status === 'SCHEDULED' || item.interview.status === 'IN_PROGRESS')
   const history = items.filter((item) => item.interview.status === 'COMPLETED' || item.interview.status === 'CANCELLED')
+  const [activeTab, setActiveTab] = useState<OperationsTab>(attention.length ? 'attention' : current.length ? 'scheduled' : 'awaiting')
+  const tabs: Array<{ id: OperationsTab; label: string; count: number }> = [
+    { id: 'attention', label: 'Action needed', count: attention.length },
+    { id: 'progress', label: 'In progress', count: inProgress.length },
+    { id: 'awaiting', label: 'Awaiting response', count: awaiting.length },
+    { id: 'scheduled', label: 'Scheduled', count: current.length },
+    { id: 'history', label: 'History', count: history.length },
+  ]
+  const failedCount = attention.filter((item) => item.deliveryStatus === 'FAILED').length
+  const unresolvedJobs = selectJobsWithoutResolvedSchedulingPolicy(state)
 
-  return (
-    <PageContainer
-      eyebrow="Interview operations"
-      title="Interview scheduling"
-      description="AURA prepares interviewer availability and approved time slots. Candidates choose a suitable time, while recruiters handle exceptions."
-      actions={<Link className={utilityLinkClass} to="/interviews/policies"><Settings2 size={15} aria-hidden="true" />Scheduling policies</Link>}
-    >
-      <p className="mb-5 mt-[-0.5rem] text-xs font-medium text-aura-text-muted">
-        Most scheduling is handled automatically after a positive recruiter decision.
-      </p>
+  useEffect(() => {
+    if (attention.length > 0) setActiveTab('attention')
+  }, [attention.length])
 
-      <SchedulingAutomationSummary
-        readyToShareCount={invitations.length}
-        scheduledCount={current.length}
-        exceptionCount={attention.length}
-        preparingCount={preparing.length}
-      />
+  return <PageContainer eyebrow="Interview operations" title="Interview scheduling" description="AURA applies organization and department scheduling defaults automatically. Recruiters only manage exceptions and special overrides." actions={<Link className={utilityLinkClass} to="/interviews/settings"><Settings2 size={15} />Scheduling settings</Link>}>
+    {unresolvedJobs.length ? <Card className="mb-4 border-aura-warning/25 bg-aura-warning-soft/35 p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="m-0 text-base font-semibold text-depth">Scheduling defaults required</h2><p className="mb-0 mt-1 text-sm text-aura-text-secondary">{unresolvedJobs.length} job{unresolvedJobs.length === 1 ? '' : 's'} cannot prepare interview availability because no organization or department scheduling setup is available.</p></div><Link className={utilityLinkClass} to="/interviews/settings/organization">Set up organization default</Link></div></Card> : null}
+    <SchedulingAutomationSummary sendingCount={inProgress.length} awaitingCount={awaiting.length} scheduledCount={current.length} exceptionCount={attention.length} />
 
-      <section className="mb-8" aria-labelledby="attention-heading">
-        <SectionHeader id="attention-heading" eyebrow="Recruiter attention" title="Needs recruiter attention" description="These candidates could not continue through automatic scheduling." count={attention.length} tone="warning" />
-        {attention.length ? (
-          <div className="grid gap-3">
-            {attention.map((model) => {
-              const completed = model.progressSteps.filter((step) => step.status === 'COMPLETE').map((step) => step.label)
-              return (
-                <Card className="border-aura-warning/25 p-5" key={model.invitation.id}>
-                  <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-                    <div className="flex items-start gap-3">
-                      <span className="inline-grid size-10 flex-none place-items-center rounded-aura-sm bg-aura-warning-soft text-aura-warning"><AlertTriangle size={18} aria-hidden="true" /></span>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2"><h3 className="m-0 text-base font-semibold text-depth">{model.candidate.fullName}</h3><Badge tone="warning">Recruiter attention</Badge></div>
-                        <p className="mb-0 mt-1 text-sm text-aura-text-secondary">{model.job.title}</p>
-                        <p className="mb-0 mt-3 text-sm font-semibold text-depth">{getSchedulingExceptionLabel(model.invitation.exceptionReason)}</p>
-                        <p className="mb-0 mt-1 text-xs leading-5 text-aura-text-muted">{completed.length ? `AURA completed: ${completed.join(', ')}.` : 'AURA could not begin interview availability preparation.'}</p>
-                        <p className="mb-0 mt-1 text-xs font-semibold text-aura-warning">Recommended: {recommendedAction(model)}</p>
-                      </div>
-                    </div>
-                    <Link className={exceptionLinkClass} to={`/candidates/${model.candidate.id}`}>Review exception</Link>
-                  </div>
-                </Card>
-              )
-            })}
-            <div className="flex justify-end"><Link className={utilityLinkClass} to="/interviews/exceptions">View all exceptions</Link></div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 rounded-aura-sm border border-aura-success/20 bg-aura-success-soft px-4 py-3 text-sm text-aura-success"><CheckCircle2 size={17} aria-hidden="true" /><span className="font-semibold">No scheduling exceptions require recruiter attention.</span></div>
-        )}
-      </section>
+    <div className="mb-4 overflow-x-auto border-b border-harbor/15" role="tablist" aria-label="Interview operation states">
+      <div className="flex min-w-max gap-1">{tabs.map((tab) => <button className={`relative flex h-11 items-center gap-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-glacier ${activeTab === tab.id ? 'text-depth after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-marine' : 'text-aura-text-muted hover:text-harbor'}`} key={tab.id} role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}<span className={`rounded-full px-2 py-0.5 text-[10px] ${activeTab === tab.id ? 'bg-glacier/20 text-harbor' : 'bg-frost text-aura-text-muted'}`}>{tab.count}</span></button>)}</div>
+    </div>
 
-      <section className="mb-8" aria-labelledby="invitations-heading">
-        <SectionHeader id="invitations-heading" eyebrow="Candidate action" title="Candidate scheduling invitations" description="AURA prepared interview availability. Share each invitation link so candidates can choose a time." count={invitations.length} tone="accent" />
-        {invitations.length ? <div className="grid gap-4 xl:grid-cols-2">{invitations.map((model) => <SchedulingInvitationCard model={model} key={model.invitation.id} />)}</div> : <Card className="p-6 text-center text-sm text-aura-text-secondary">No scheduling invitations are waiting to be shared.</Card>}
-      </section>
-
-      <section className="mb-8" aria-labelledby="upcoming-heading">
-        <SectionHeader id="upcoming-heading" eyebrow="Interview confirmed" title="Upcoming interviews" description="Candidates who selected a time and have a confirmed interview." count={current.length} />
-        {current.length ? <><div className="hidden xl:block"><InterviewTable items={current} confirmedLabel /></div><div className="grid gap-3 xl:hidden">{current.map((item) => <InterviewCard item={item} confirmedLabel key={item.interview.id} />)}</div></> : <Card className="p-6 text-center text-sm text-aura-text-secondary">Confirmed candidate interview times will appear here.</Card>}
-      </section>
-
-      <section aria-labelledby="past-heading">
-        <SectionHeader id="past-heading" title="Past interviews" description="Completed and cancelled interview records." count={history.length} tone="neutral" />
-        {history.length ? <><div className="hidden xl:block"><InterviewTable items={history} /></div><div className="grid gap-3 xl:hidden">{history.map((item) => <InterviewCard item={item} key={item.interview.id} />)}</div></> : <Card className="p-6 text-center text-sm text-aura-text-secondary">No completed or cancelled interviews.</Card>}
-      </section>
-    </PageContainer>
-  )
+    <section role="tabpanel" aria-live="polite">
+      {activeTab === 'attention' ? <OperationPanel title="Action needed" description="Only items requiring recruiter intervention." action={failedCount > 1 ? <button className={utilityLinkClass} onClick={retryAllFailed}>Retry all failed emails</button> : undefined}>{attention.length ? <div className="grid gap-2">{attention.map((model) => model.invitation.status === 'PENDING' ? <SchedulingInvitationCard compact model={model} key={model.invitation.id} /> : <ExceptionRow model={model} key={model.invitation.id} />)}</div> : <EmptyState message="Nothing needs your attention." />}</OperationPanel> : null}
+      {activeTab === 'progress' ? <OperationPanel title="In progress" description="AURA is preparing or delivering these invitations.">{inProgress.length ? <div className="grid gap-2">{inProgress.map((model) => <SchedulingInvitationCard compact model={model} key={model.invitation.id} />)}</div> : <EmptyState message="No scheduling work is currently in progress." />}</OperationPanel> : null}
+      {activeTab === 'awaiting' ? <OperationPanel title="Awaiting response" description="Invitation delivered; candidate action is next.">{awaiting.length ? <div className="grid gap-2">{awaiting.map((model) => <SchedulingInvitationCard compact model={model} key={model.invitation.id} />)}</div> : <EmptyState message="No candidates are currently awaiting a response." />}</OperationPanel> : null}
+      {activeTab === 'scheduled' ? <OperationPanel title="Scheduled" description="Confirmed upcoming interviews.">{current.length ? <><div className="hidden xl:block"><InterviewTable items={current} confirmedLabel /></div><div className="grid gap-2 xl:hidden">{current.map((item) => <InterviewCard item={item} confirmedLabel key={item.interview.id} />)}</div></> : <EmptyState message="No upcoming interviews are confirmed." />}</OperationPanel> : null}
+      {activeTab === 'history' ? <OperationPanel title="History" description="Completed and cancelled interviews.">{history.length ? <><div className="hidden xl:block"><InterviewTable items={history} /></div><div className="grid gap-2 xl:hidden">{history.map((item) => <InterviewCard item={item} key={item.interview.id} />)}</div></> : <EmptyState message="No past interview records." />}</OperationPanel> : null}
+    </section>
+  </PageContainer>
 }
 
-function SectionHeader({ id, title, description, count, eyebrow, tone = 'neutral' }: { id: string; title: string; description: string; count: number; eyebrow?: string; tone?: 'neutral' | 'warning' | 'accent' }) {
-  return <div className="mb-3 flex items-end justify-between gap-4"><div>{eyebrow ? <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">{eyebrow}</p> : null}<h2 className="mb-0 mt-1 text-lg font-semibold text-depth" id={id}>{title}</h2><p className="mb-0 mt-1 text-xs leading-5 text-aura-text-muted">{description}</p></div><Badge tone={tone}>{count}</Badge></div>
+function OperationPanel({ title, description, action, children }: { title: string; description: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return <div><div className="mb-3 flex flex-wrap items-end justify-between gap-3"><div><h2 className="m-0 text-lg font-semibold text-depth">{title}</h2><p className="mb-0 mt-1 text-xs text-aura-text-muted">{description}</p></div>{action}</div>{children}</div>
 }
+
+function ExceptionRow({ model }: { model: SchedulingAutomationViewModel }) {
+  const completed = model.progressSteps.filter((step) => step.status === 'COMPLETE').map((step) => step.label)
+  return <Card className="overflow-hidden"><details className="group"><summary className="grid cursor-pointer list-none gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-glacier sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div><div className="flex flex-wrap items-center gap-2"><h3 className="m-0 text-sm font-semibold text-depth">{model.candidate.fullName}</h3><span className="text-xs text-aura-text-muted">{model.job.title}</span></div><p className="mb-0 mt-1 text-xs font-medium text-aura-warning">{getSchedulingExceptionLabel(model.invitation.exceptionReason)}</p></div><div className="flex items-center justify-between gap-3 sm:justify-end"><Badge tone="warning">Recruiter attention</Badge><span className="text-xs font-semibold text-harbor group-open:hidden">View details</span><span className="hidden text-xs font-semibold text-harbor group-open:inline">Hide details</span></div></summary><div className="flex flex-col gap-3 border-t border-harbor/10 bg-frost/35 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="m-0 text-xs leading-5 text-aura-text-secondary">{completed.length ? `Completed: ${completed.join(', ')}.` : 'Scheduling preparation could not start.'}</p><p className="mb-0 mt-1 text-xs text-aura-text-muted">{model.invitation.lastError}</p></div><div className="flex flex-wrap gap-3">{model.invitation.exceptionReason === 'POLICY_MISSING' ? <Link className={utilityLinkClass} to="/interviews/settings">Set up scheduling defaults</Link> : null}<Link className={utilityLinkClass} to={`/candidates/${model.candidate.id}`}>Candidate profile</Link></div></div></details></Card>
+}
+
+function EmptyState({ message }: { message: string }) { return <div className="rounded-aura-sm border border-dashed border-harbor/15 bg-frost/40 px-4 py-8 text-center text-sm text-aura-text-secondary">{message}</div> }

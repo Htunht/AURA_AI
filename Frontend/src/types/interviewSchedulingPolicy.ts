@@ -1,6 +1,7 @@
 import type { InterviewMode } from './interview'
 
 export type InterviewSchedulingPolicyStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED'
+export type InterviewSchedulingPolicyScope = 'ORGANIZATION' | 'DEPARTMENT' | 'JOB'
 export type InterviewSchedulingWorkingDay =
   | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY'
 export type InterviewerSelectionStrategy =
@@ -8,7 +9,10 @@ export type InterviewerSelectionStrategy =
 
 export type InterviewSchedulingPolicy = {
   id: string
-  jobId: string
+  scope: InterviewSchedulingPolicyScope
+  displayName: string
+  department?: string
+  jobId?: string
   version: number
   status: InterviewSchedulingPolicyStatus
   interviewMode: InterviewMode

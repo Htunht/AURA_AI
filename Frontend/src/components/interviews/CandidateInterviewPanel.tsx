@@ -4,7 +4,7 @@ import { useInterviewSchedulingAutomation } from '../../hooks/useInterviewSchedu
 import { useDemoStore } from '../../hooks/useDemoStore'
 import {
   getSchedulingExceptionLabel,
-  selectActiveInterviewSchedulingPolicy,
+  selectResolvedInterviewSchedulingPolicy,
   selectInterviewByApplicationId,
   selectSchedulingAutomationViewModelByApplicationId,
 } from '../../store/demoSelectors'
@@ -13,6 +13,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { SchedulingInvitationCard } from './SchedulingInvitationCard'
+import { SchedulingPolicySource } from './SchedulingPolicySource'
 
 const linkClass = 'inline-flex h-10 items-center justify-center rounded-aura-sm border border-harbor bg-harbor px-4 text-sm font-semibold text-white no-underline hover:bg-depth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier'
 
@@ -22,7 +23,7 @@ export function CandidateInterviewPanel({ applicationId }: { applicationId: stri
   const application = state.applications.find((item) => item.id === applicationId)
   const interview = selectInterviewByApplicationId(state, applicationId)
   const model = selectSchedulingAutomationViewModelByApplicationId(state, applicationId)
-  const policy = application ? selectActiveInterviewSchedulingPolicy(state, application.jobId) : undefined
+  const resolvedPolicy = application ? selectResolvedInterviewSchedulingPolicy(state, application.jobId) : undefined
   const decision = state.decisions.filter((item) => item.applicationId === applicationId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
   const positive = decision?.humanRecommendation === 'STRONG_YES' || decision?.humanRecommendation === 'YES' || decision?.humanRecommendation === 'REVIEW'
 
@@ -66,7 +67,7 @@ export function CandidateInterviewPanel({ applicationId }: { applicationId: stri
   }
 
   if (positive && application?.currentStage === 'SHORTLIST_REVIEW') {
-    return <Card className="p-6"><h2 className="m-0 text-lg font-semibold text-depth">{policy ? 'Preparing interview availability' : 'Interview scheduling policy required'}</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{policy ? 'AURA is assigning the interview team and generating candidate-selectable times.' : 'This role needs an active policy before scheduling can continue.'}</p></Card>
+    return <Card className="p-6"><h2 className="m-0 text-lg font-semibold text-depth">{resolvedPolicy ? 'Interview scheduling is prepared automatically' : 'Scheduling defaults required'}</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{resolvedPolicy ? 'AURA is assigning the interview team and generating candidate-selectable times.' : 'No organization, department, or custom scheduling setup currently covers this role.'}</p>{resolvedPolicy ? <div className="mt-4"><SchedulingPolicySource resolved={resolvedPolicy} /></div> : <Link className="mt-4 inline-flex font-semibold text-harbor" to="/interviews/settings">Set up scheduling defaults</Link>}</Card>
   }
 
   return <Card className="p-8 text-center"><h2 className="m-0 text-lg font-semibold text-depth">Interview scheduling not started</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">A positive recruiter decision is required before interview availability is prepared.</p></Card>

@@ -23,6 +23,9 @@ import { evaluateHiringWorkflowReadiness, selectHiringWorkflowSetupProgress as d
 import type { HiringWorkflowReadiness, HiringWorkflowSetupProgress } from '../types/hiringWorkflowSetup'
 import type { DemoState } from './demoReducer'
 import interviewersData from '../data/interviewers.json'
+import type { EmailDeliveryStatus } from '../types/emailDelivery'
+import type { ResolvedInterviewSchedulingPolicy } from '../types/resolvedInterviewSchedulingPolicy'
+import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyResolution'
 
 const schedulingInterviewers = interviewersData as Interviewer[]
 
@@ -205,9 +208,36 @@ export function selectActiveInterviewSchedulingPolicy(
   state: DemoState,
   jobId: string,
 ): InterviewSchedulingPolicy | undefined {
-  return state.interviewSchedulingPolicies
-    .filter((policy) => policy.jobId === jobId && policy.status === 'ACTIVE')
-    .sort((left, right) => right.version - left.version)[0]
+  return selectResolvedInterviewSchedulingPolicy(state, jobId)?.policy
+}
+
+export function selectResolvedInterviewSchedulingPolicy(
+  state: DemoState,
+  jobId: string,
+): ResolvedInterviewSchedulingPolicy | undefined {
+  const job = selectJobById(state, jobId)
+  return job ? resolveInterviewSchedulingPolicy({ policies: state.interviewSchedulingPolicies, job }) : undefined
+}
+
+export function selectJobsWithoutResolvedSchedulingPolicy(state: DemoState): Job[] {
+  return state.jobs.filter((job) => !selectResolvedInterviewSchedulingPolicy(state, job.id))
+}
+
+export type SchedulingPolicyResolutionSummary = {
+  jobOverrides: number
+  departmentTemplates: number
+  organizationDefaults: number
+  unresolvedJobs: number
+}
+
+export function selectSchedulingPolicyResolutionSummary(state: DemoState): SchedulingPolicyResolutionSummary {
+  const resolved = state.jobs.map((job) => selectResolvedInterviewSchedulingPolicy(state, job.id))
+  return {
+    jobOverrides: resolved.filter((item) => item?.source === 'JOB_OVERRIDE').length,
+    departmentTemplates: resolved.filter((item) => item?.source === 'DEPARTMENT_TEMPLATE').length,
+    organizationDefaults: resolved.filter((item) => item?.source === 'ORGANIZATION_DEFAULT').length,
+    unresolvedJobs: resolved.filter((item) => !item).length,
+  }
 }
 
 export function selectSchedulingInvitationByToken(
@@ -266,10 +296,15 @@ export type SchedulingAutomationViewModel = {
   state: SchedulingAutomationCardState
   responsibility: 'AURA' | 'CANDIDATE' | 'RECRUITER' | 'NONE'
   progressSteps: SchedulingProgressStep[]
+  deliveryStatus: EmailDeliveryStatus
+  deliveryAttemptCount: number
+  deliveryError?: string
+  sentAt?: string
+  policySourceLabel?: string
 }
 
 const exceptionLabels: Record<SchedulingExceptionReason, string> = {
-  POLICY_MISSING: 'Interview policy required',
+  POLICY_MISSING: 'Scheduling defaults required',
   INTERVIEWERS_UNAVAILABLE: 'No eligible interviewers are available',
   NO_AVAILABLE_SLOTS: 'No suitable time slots were found',
   INVITATION_EXPIRED: 'Candidate invitation expired',
@@ -296,7 +331,7 @@ function deriveSchedulingState(
   if (invitation.status === 'EXPIRED') return 'EXPIRED'
   if (invitation.status === 'EXCEPTION_REQUIRED') return 'EXCEPTION'
   if (invitation.status === 'SCHEDULED' && linkedInterview) return 'SCHEDULED'
-  if (invitation.status === 'PENDING' && invitation.availableSlots.length > 0) return 'READY_TO_SHARE'
+  if (invitation.status === 'PENDING' && invitation.availableSlots.length > 0) return invitation.delivery.status === 'SENT' ? 'AWAITING_CANDIDATE' : 'READY_TO_SHARE'
   return 'PREPARING'
 }
 
@@ -317,7 +352,7 @@ function deriveSchedulingProgress(
 ): SchedulingProgressStep[] {
   const policyComplete = Boolean(
     state.interviewSchedulingPolicies.find(
-      (policy) => policy.id === invitation.policyId && policy.status === 'ACTIVE',
+      (policy) => policy.id === invitation.policyId,
     ),
   )
   const interviewersComplete = invitation.interviewerIds.length > 0
@@ -401,6 +436,14 @@ export function selectSchedulingAutomationViewModels(
       const job = selectJobById(state, invitation.jobId)
       if (!candidate || !job) return undefined
       const cardState = deriveSchedulingState(state, invitation)
+      const storedPolicy = state.interviewSchedulingPolicies.find((policy) => policy.id === invitation.policyId)
+      const sourceLabel = invitation.policySource === 'JOB_OVERRIDE'
+        ? 'Custom policy for this job'
+        : invitation.policySource === 'DEPARTMENT_TEMPLATE'
+          ? `${storedPolicy?.department ?? job.department} default`
+          : invitation.policySource === 'ORGANIZATION_DEFAULT'
+            ? 'Organization default'
+            : storedPolicy?.displayName
       return {
         invitation,
         candidate,
@@ -412,10 +455,29 @@ export function selectSchedulingAutomationViewModels(
         state: cardState,
         responsibility: deriveSchedulingResponsibility(cardState),
         progressSteps: deriveSchedulingProgress(state, invitation, cardState),
+        deliveryStatus: invitation.delivery.status,
+        deliveryAttemptCount: invitation.delivery.attemptCount,
+        deliveryError: invitation.delivery.lastErrorMessage,
+        sentAt: invitation.delivery.sentAt,
+        policySourceLabel: sourceLabel,
       }
     })
     .filter((item): item is SchedulingAutomationViewModel => Boolean(item))
     .sort((left, right) => right.invitation.updatedAt.localeCompare(left.invitation.updatedAt))
+}
+
+export function selectInvitationsPendingEmailDelivery(state: DemoState): InterviewSchedulingInvitation[] {
+  return state.interviewSchedulingInvitations.filter((item) => item.delivery.status === 'QUEUED' || item.delivery.status === 'SENDING')
+}
+
+export function selectFailedEmailInvitations(state: DemoState): InterviewSchedulingInvitation[] {
+  return state.interviewSchedulingInvitations.filter((item) => item.delivery.status === 'FAILED')
+}
+
+export type SchedulingEmailDeliverySummary = { queued: number; sending: number; sent: number; failed: number; notSent: number }
+export function selectSchedulingEmailDeliverySummary(state: DemoState): SchedulingEmailDeliverySummary {
+  const statuses = state.interviewSchedulingInvitations.map((item) => item.delivery.status)
+  return { queued: statuses.filter((item) => item === 'QUEUED').length, sending: statuses.filter((item) => item === 'SENDING').length, sent: statuses.filter((item) => item === 'SENT').length, failed: statuses.filter((item) => item === 'FAILED').length, notSent: statuses.filter((item) => item === 'NOT_SENT').length }
 }
 
 export function selectSchedulingAutomationViewModelByApplicationId(
@@ -456,7 +518,7 @@ export function selectSelfSchedulingCandidates(state: DemoState): SelfScheduling
       const candidate = selectCandidateById(state, application.candidateId)
       const job = selectJobById(state, application.jobId)
       const decision = selectLatestDecisionByApplicationId(state, application.id)
-      const policy = selectActiveInterviewSchedulingPolicy(state, application.jobId)
+      const policy = selectResolvedInterviewSchedulingPolicy(state, application.jobId)?.policy
       const invitation = selectSchedulingInvitationByApplicationId(state, application.id)
       const interview = selectInterviewByApplicationId(state, application.id)
       const positive = decision?.humanRecommendation === 'STRONG_YES' ||

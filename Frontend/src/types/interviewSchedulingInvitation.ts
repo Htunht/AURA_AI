@@ -23,6 +23,7 @@ export type InterviewSchedulingInvitation = {
   applicationId: string
   jobId: string
   policyId: string
+  policySource?: import('./resolvedInterviewSchedulingPolicy').InterviewSchedulingPolicySource
   interviewerIds: string[]
   availableSlots: InterviewSlot[]
   status: SchedulingInvitationStatus
@@ -35,4 +36,19 @@ export type InterviewSchedulingInvitation = {
   lastRescheduledAt?: string
   exceptionReason?: SchedulingExceptionReason
   lastError?: string
+  delivery: SchedulingInvitationDelivery
+}
+import type { EmailDeliveryErrorCode, EmailDeliveryProvider, EmailDeliveryStatus } from './emailDelivery'
+
+export type SchedulingInvitationDelivery = {
+  provider: EmailDeliveryProvider
+  status: EmailDeliveryStatus
+  attemptCount: number
+  queuedAt?: string
+  sendingStartedAt?: string
+  sentAt?: string
+  failedAt?: string
+  lastErrorCode?: EmailDeliveryErrorCode
+  lastErrorMessage?: string
+  providerMessageId?: string
 }
