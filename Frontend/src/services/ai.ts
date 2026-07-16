@@ -1,6 +1,11 @@
 import type { Application } from '../types/application'
 import type { ApplicationFormField } from '../types/applicationForm'
 import type {
+  BatchScreeningCandidateInput,
+  BatchScreeningProgressEvent,
+  BatchScreeningResult,
+} from '../types/batchScreening'
+import type {
   ApplicationQuestionSuggestionResult,
   SuggestedApplicationQuestion,
 } from '../types/applicationQuestionSuggestion'
@@ -9,8 +14,10 @@ import type {
   CommunicationType,
 } from '../types/communication'
 import type {
+  CriterionScore,
   Evaluation,
   EvidenceReference,
+  Recommendation,
 } from '../types/evaluation'
 import type { Interview, InterviewQuestion } from '../types/interview'
 import type { Job } from '../types/job'
@@ -60,9 +67,18 @@ export type CandidateEmailResult = {
 
 export const screeningProgressMessages: readonly string[] = [
   'Reviewing candidate profile...',
-  'Reading candidate evidence...',
-  'Comparing job requirements...',
+  'Reading application evidence...',
+  'Comparing role requirements...',
   'Evaluating selection criteria...',
+  'Preparing the screening recommendation...',
+]
+
+export const batchScreeningProgressMessages: readonly string[] = [
+  'Preparing candidate screening queue...',
+  'Reviewing candidate applications...',
+  'Comparing role requirements...',
+  'Evaluating candidate evidence...',
+  'Building screening recommendations...',
 ]
 
 export const interviewQuestionProgressMessages: readonly string[] = [
@@ -352,10 +368,153 @@ function createTranscriptInsight(
   }
 }
 
+function formatApplicationEvidenceValue(
+  value: Application['answers'][number]['value'],
+): string {
+  if (Array.isArray(value)) return value.join(', ')
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  return String(value)
+}
+
+function recommendationForScore(score: number): Recommendation {
+  if (score >= 85) return 'STRONG_YES'
+  if (score >= 75) return 'YES'
+  if (score >= 60) return 'REVIEW'
+  if (score >= 45) return 'NO'
+  return 'STRONG_NO'
+}
+
+function createScreeningEvaluation(input: {
+  application: Application
+  rubric: EvaluationRubric
+  createdAt: string
+}): Evaluation {
+  const { application, rubric } = input
+  const populatedAnswers = application.answers.filter((answer) => {
+    if (Array.isArray(answer.value)) return answer.value.length > 0
+    return String(answer.value).trim().length > 0
+  })
+
+  if (populatedAnswers.length === 0 && application.documents.length === 0) {
+    throw new DemoServiceError(
+      'INVALID_SERVICE_INPUT',
+      'AI screening requires application evidence.',
+    )
+  }
+
+  const completionRatio =
+    application.answers.length === 0
+      ? 0
+      : populatedAnswers.length / application.answers.length
+  const substantiveRatio =
+    populatedAnswers.length === 0
+      ? 0
+      : populatedAnswers.filter(
+          (answer) => formatApplicationEvidenceValue(answer.value).length >= 40,
+        ).length / populatedAnswers.length
+  const evidenceBase = Math.min(
+    95,
+    Math.round(
+      55 +
+        completionRatio * 20 +
+        substantiveRatio * 15 +
+        (application.documents.length > 0 ? 5 : 0),
+    ),
+  )
+  const offsets = [2, 0, -2, 1, -1]
+  const criterionScores: CriterionScore[] = rubric.criteria.map(
+    (criterion, index) => {
+      const answer =
+        populatedAnswers.find((item) => {
+          const source = `${item.fieldKey} ${item.label}`.toLowerCase()
+          return criterion.key
+            .split('_')
+            .some((fragment) => fragment.length > 3 && source.includes(fragment))
+        }) ?? populatedAnswers[index % Math.max(populatedAnswers.length, 1)]
+      const document = application.documents[0]
+      const evidence: EvidenceReference[] = answer
+        ? [
+            {
+              sourceType: 'APPLICATION_ANSWER',
+              sourceId: answer.id,
+              excerpt: formatApplicationEvidenceValue(answer.value),
+            },
+          ]
+        : document
+          ? [
+              {
+                sourceType: 'DOCUMENT',
+                sourceId: document.id,
+                excerpt: `${document.documentType} submitted as ${document.fileName}.`,
+              },
+            ]
+          : []
+      const score = Math.max(
+        0,
+        Math.min(100, evidenceBase + (offsets[index % offsets.length] ?? 0)),
+      )
+
+      return {
+        criterionKey: criterion.key,
+        name: criterion.name,
+        weight: criterion.weight,
+        score,
+        rationale: `${criterion.name} was assessed from the candidate’s submitted application evidence against the configured role guidance.`,
+        evidence,
+      }
+    },
+  )
+  const overallScore = calculateWeightedScore(criterionScores)
+  const recommendation = recommendationForScore(overallScore)
+  const strongestCriterion = [...criterionScores].sort(
+    (left, right) => right.score - left.score,
+  )[0]
+  const weakestCriterion = [...criterionScores].sort(
+    (left, right) => left.score - right.score,
+  )[0]
+
+  return {
+    id: `evaluation-screening-${application.id}`,
+    applicationId: application.id,
+    evaluationType: 'SCREENING',
+    status: 'COMPLETED',
+    overallScore,
+    recommendation,
+    confidence: Math.min(95, Math.round(70 + completionRatio * 15 + substantiveRatio * 10)),
+    summary: `The application was compared with ${rubric.name}. The recommendation reflects the available submitted evidence and requires recruiter review.`,
+    strengths: strongestCriterion
+      ? [
+          {
+            id: `insight-screening-${application.id}-strength-01`,
+            title: `Evidence for ${strongestCriterion.name.toLowerCase()}`,
+            description: strongestCriterion.rationale,
+            evidence: strongestCriterion.evidence.map(copyEvidence),
+          },
+        ]
+      : [],
+    concerns:
+      weakestCriterion && weakestCriterion.score < 75
+        ? [
+            {
+              id: `insight-screening-${application.id}-concern-01`,
+              title: `Limited evidence for ${weakestCriterion.name.toLowerCase()}`,
+              description:
+                'The submitted application provides less supporting detail for this criterion.',
+              evidence: weakestCriterion.evidence.map(copyEvidence),
+            },
+          ]
+        : [],
+    criterionScores,
+    createdAt: input.createdAt,
+  }
+}
+
 export async function runCandidateScreening(input: {
   applicationId: string
   applications: Application[]
   evaluations: Evaluation[]
+  rubric?: EvaluationRubric
+  generatedAt?: string
   delayMs?: number
 }): Promise<CandidateScreeningResult> {
   const application = input.applications.find(
@@ -366,6 +525,13 @@ export async function runCandidateScreening(input: {
     throw new DemoServiceError(
       'APPLICATION_NOT_FOUND',
       `Application ${input.applicationId} was not found.`,
+    )
+  }
+
+  if (input.rubric && input.rubric.jobId !== application.jobId) {
+    throw new DemoServiceError(
+      'RUBRIC_NOT_FOUND',
+      'The evaluation rubric does not belong to this application’s role.',
     )
   }
 
@@ -380,14 +546,148 @@ export async function runCandidateScreening(input: {
     )
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
 
-  if (!evaluation) {
+  if (!evaluation && !input.rubric) {
     throw new DemoServiceError(
-      'SCREENING_RESULT_NOT_FOUND',
-      `No completed screening result exists for application ${application.id}.`,
+      'RUBRIC_NOT_FOUND',
+      'AI screening requires an evaluation rubric for this role.',
     )
   }
 
-  return { evaluation: copyEvaluation(evaluation) }
+  return {
+    evaluation: evaluation
+      ? copyEvaluation(evaluation)
+      : createScreeningEvaluation({
+          application,
+          rubric: input.rubric!,
+          createdAt: input.generatedAt ?? new Date().toISOString(),
+        }),
+  }
+}
+
+function emitBatchProgress(
+  callback: ((event: BatchScreeningProgressEvent) => void) | undefined,
+  event: BatchScreeningProgressEvent,
+) {
+  if (!callback) return
+  try {
+    callback(event)
+  } catch {
+    // Progress observers cannot interrupt the screening worker pool.
+  }
+}
+
+export async function runBatchCandidateScreening(input: {
+  candidates: BatchScreeningCandidateInput[]
+  concurrency?: number
+  delayMsPerCandidate?: number
+  onProgress?: (event: BatchScreeningProgressEvent) => void
+  shouldFailApplication?: (applicationId: string) => boolean
+}): Promise<BatchScreeningResult> {
+  const concurrency = input.concurrency ?? 3
+  const delayMsPerCandidate = input.delayMsPerCandidate ?? 900
+
+  if (!Number.isFinite(concurrency) || !Number.isInteger(concurrency) || concurrency < 1) {
+    throw new DemoServiceError(
+      'INVALID_SERVICE_INPUT',
+      'Batch screening concurrency must be a positive integer.',
+    )
+  }
+  if (!Number.isFinite(delayMsPerCandidate) || delayMsPerCandidate < 0) {
+    throw new DemoServiceError(
+      'INVALID_SERVICE_INPUT',
+      'Batch screening delay must be zero or greater.',
+    )
+  }
+
+  const seenApplicationIds = new Set<string>()
+  const candidates = input.candidates.filter((candidateInput) => {
+    if (seenApplicationIds.has(candidateInput.application.id)) return false
+    seenApplicationIds.add(candidateInput.application.id)
+    return true
+  })
+  if (candidates.length === 0) return { completed: [], failed: [] }
+
+  type OrderedResult =
+    | { status: 'COMPLETED'; evaluation: Evaluation }
+    | { status: 'FAILED'; applicationId: string; message: string }
+  const results: Array<OrderedResult | undefined> = new Array(candidates.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < candidates.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const candidateInput = candidates[index]
+      if (!candidateInput) continue
+      const applicationId = candidateInput.application.id
+      emitBatchProgress(input.onProgress, {
+        type: 'ITEM_STARTED',
+        applicationId,
+      })
+
+      try {
+        if (
+          candidateInput.application.candidateId !== candidateInput.candidate.id ||
+          candidateInput.application.jobId !== candidateInput.job.id ||
+          candidateInput.rubric.jobId !== candidateInput.job.id
+        ) {
+          throw new DemoServiceError(
+            'INVALID_SERVICE_INPUT',
+            'Candidate screening inputs could not be resolved for this application.',
+          )
+        }
+        if (input.shouldFailApplication?.(applicationId)) {
+          throw new DemoServiceError(
+            'INVALID_SERVICE_INPUT',
+            'Screening could not be completed for this application.',
+          )
+        }
+
+        const { evaluation } = await runCandidateScreening({
+          applicationId,
+          applications: [candidateInput.application],
+          evaluations: [],
+          rubric: candidateInput.rubric,
+          delayMs: delayMsPerCandidate,
+        })
+        results[index] = { status: 'COMPLETED', evaluation }
+        emitBatchProgress(input.onProgress, {
+          type: 'ITEM_COMPLETED',
+          applicationId,
+          evaluation,
+        })
+      } catch (error) {
+        const message =
+          error instanceof DemoServiceError
+            ? error.message
+            : 'Screening could not be completed for this application.'
+        results[index] = { status: 'FAILED', applicationId, message }
+        emitBatchProgress(input.onProgress, {
+          type: 'ITEM_FAILED',
+          applicationId,
+          message,
+        })
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(concurrency, candidates.length) },
+      () => worker(),
+    ),
+  )
+
+  return {
+    completed: results.flatMap((result) =>
+      result?.status === 'COMPLETED' ? [result.evaluation] : [],
+    ),
+    failed: results.flatMap((result) =>
+      result?.status === 'FAILED'
+        ? [{ applicationId: result.applicationId, message: result.message }]
+        : [],
+    ),
+  }
 }
 
 export async function generateInterviewQuestions(input: {

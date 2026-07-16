@@ -3,7 +3,7 @@ import type { Recommendation } from '../types/evaluation'
 const screeningLabels: Record<Recommendation, string> = {
   STRONG_YES: 'Strong Shortlist',
   YES: 'Shortlist',
-  REVIEW: 'Review',
+  REVIEW: 'Needs Review',
   NO: 'Not Recommended',
   STRONG_NO: 'Strong Not Recommended',
 }

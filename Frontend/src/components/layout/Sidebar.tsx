@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, LayoutDashboard, Users } from 'lucide-react'
+import { BriefcaseBusiness, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 const navLinkClass =
@@ -59,6 +59,15 @@ export function Sidebar() {
           >
             <Users size={18} aria-hidden="true" />
             Candidates
+          </NavLink>
+          <NavLink
+            to="/reviews"
+            className={({ isActive }) =>
+              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+            }
+          >
+            <ClipboardCheck size={18} aria-hidden="true" />
+            Review Queue
           </NavLink>
         </div>
       </nav>

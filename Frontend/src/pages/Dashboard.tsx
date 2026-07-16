@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageContainer } from '../components/layout/PageContainer'
+import { ScreeningAutomationStatus } from '../components/screening/ScreeningAutomationStatus'
 import { Badge } from '../components/ui/Badge'
 import { Card } from '../components/ui/Card'
 import { Progress } from '../components/ui/Progress'
@@ -56,7 +57,7 @@ export default function Dashboard() {
   const metricCards = [
     { label: 'Active job openings', value: metrics.activeJobs, description: 'Roles currently accepting applications', icon: BriefcaseBusiness },
     { label: 'Total candidates', value: metrics.totalCandidates, description: 'Candidate profiles in the workspace', icon: Users },
-    { label: 'Pending AI reviews', value: metrics.pendingAiReviews, description: 'Recommendations awaiting human review', icon: ScanSearch },
+    { label: 'Pending recruiter reviews', value: metrics.pendingRecruiterReviews, description: 'Review recommendations requiring attention', icon: ScanSearch },
     { label: 'Interviews today', value: metrics.interviewsToday, description: 'Sessions scheduled for Jul 16', icon: CalendarClock },
   ]
 
@@ -78,6 +79,10 @@ export default function Dashboard() {
             <p className="mb-0 mt-2 text-xs leading-5 text-aura-text-muted">{description}</p>
           </Card>
         ))}
+      </div>
+
+      <div className="mt-4">
+        <ScreeningAutomationStatus pendingRecruiterReviews={metrics.pendingRecruiterReviews} />
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
@@ -139,7 +144,7 @@ export default function Dashboard() {
             <p className="mb-0 mt-1 text-xs text-aura-text-muted">Newest submissions across all roles</p>
           </div>
           <div className="divide-y divide-harbor/10">
-            {recentApplications.map(({ candidate, application, job, screeningEvaluation }) => (
+            {recentApplications.map(({ candidate, application, job, screeningEvaluation, decision }) => (
               <article className="grid gap-3 px-5 py-4 md:grid-cols-[1fr_1fr_auto] md:items-center md:px-6" key={application.id}>
                 <div className="min-w-0">
                   <Link className="font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
@@ -149,7 +154,7 @@ export default function Dashboard() {
                   <Link className="text-sm font-medium text-harbor no-underline hover:text-depth" to={`/jobs/${job.id}`}>{job.title}</Link>
                   <p className="mb-0 mt-1 text-xs text-aura-text-muted">{formatDate(application.submittedAt)} · {formatApplicationStage(application.currentStage)}</p>
                 </div>
-                <Badge tone={recommendationTone(screeningEvaluation?.recommendation)}>{screeningEvaluation ? getScreeningRecommendationLabel(screeningEvaluation.recommendation) : 'Not screened'}</Badge>
+                <div><Badge tone={recommendationTone(decision?.humanRecommendation ?? screeningEvaluation?.recommendation)}>{decision ? getScreeningRecommendationLabel(decision.humanRecommendation) : screeningEvaluation ? getScreeningRecommendationLabel(screeningEvaluation.recommendation) : 'Not screened'}</Badge>{decision ? <span className="mt-1 block text-[10px] text-aura-text-muted">Recruiter {decision.reviewAction === 'CONFIRM' ? 'confirmed' : 'overrode'}</span> : null}</div>
               </article>
             ))}
           </div>

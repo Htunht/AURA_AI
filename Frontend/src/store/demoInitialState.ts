@@ -94,6 +94,7 @@ export function createInitialDemoState(): DemoState {
       ...communication,
     })),
     decisions: [],
+    screeningQueue: [],
   }
 }
 

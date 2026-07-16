@@ -4,13 +4,16 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { DemoProvider } from './store'
+import { ScreeningAutomationProvider } from './providers/ScreeningAutomationProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <DemoProvider>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <ScreeningAutomationProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </ScreeningAutomationProvider>
     </DemoProvider>
   </StrictMode>,
 )

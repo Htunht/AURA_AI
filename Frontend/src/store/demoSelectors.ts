@@ -6,7 +6,14 @@ import type { Decision } from '../types/decision'
 import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
 import type { Job } from '../types/job'
+import type { EvaluationRubric } from '../types/rubric'
+import type {
+  HumanReviewCategory,
+  HumanReviewQueueItem,
+} from '../types/reviewQueue'
+import type { ScreeningQueueItem } from '../types/screeningQueue'
 import type { Transcript } from '../types/transcript'
+import { getScreeningRecommendationLabel } from '../utils/recommendation'
 import type { DemoState } from './demoReducer'
 
 export function selectJobById(
@@ -98,11 +105,24 @@ function selectLatestEvaluationByType(
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
 }
 
+export function selectScreeningEvaluationsByApplicationId(
+  state: DemoState,
+  applicationId: string,
+): Evaluation[] {
+  return state.evaluations
+    .filter(
+      (evaluation) =>
+        evaluation.applicationId === applicationId &&
+        evaluation.evaluationType === 'SCREENING',
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+}
+
 export function selectLatestScreeningEvaluation(
   state: DemoState,
   applicationId: string,
 ): Evaluation | undefined {
-  return selectLatestEvaluationByType(state, applicationId, 'SCREENING')
+  return selectScreeningEvaluationsByApplicationId(state, applicationId)[0]
 }
 
 export function selectLatestFinalEvaluation(
@@ -143,15 +163,66 @@ export function selectDecisionByApplicationId(
   state: DemoState,
   applicationId: string,
 ): Decision | undefined {
+  return selectLatestDecisionByApplicationId(state, applicationId)
+}
+
+export function selectLatestDecisionByApplicationId(
+  state: DemoState,
+  applicationId: string,
+): Decision | undefined {
   return state.decisions
     .filter((decision) => decision.applicationId === applicationId)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
 }
 
+export type CandidateScreeningViewModel = {
+  candidate: Candidate
+  application: Application
+  job: Job
+  rubric?: EvaluationRubric
+  screeningEvaluation?: Evaluation
+  decision?: Decision
+}
+
+export function selectCandidateScreeningViewModel(
+  state: DemoState,
+  applicationId: string,
+): CandidateScreeningViewModel | undefined {
+  const application = selectApplicationById(state, applicationId)
+  const candidate = application
+    ? selectCandidateById(state, application.candidateId)
+    : undefined
+  const job = application ? selectJobById(state, application.jobId) : undefined
+
+  if (!application || !candidate || !job) return undefined
+
+  const screeningEvaluation = selectLatestScreeningEvaluation(
+    state,
+    application.id,
+  )
+
+  return {
+    candidate,
+    application,
+    job,
+    rubric: state.rubrics.find((rubric) => rubric.jobId === job.id),
+    screeningEvaluation,
+    decision: screeningEvaluation
+      ? state.decisions
+          .filter(
+            (decision) => decision.evaluationId === screeningEvaluation.id,
+          )
+          .sort((left, right) =>
+            right.createdAt.localeCompare(left.createdAt),
+          )[0]
+      : undefined,
+  }
+}
+
 export type DashboardMetrics = {
   activeJobs: number
   totalCandidates: number
-  pendingAiReviews: number
+  pendingRecruiterReviews: number
   interviewsToday: number
 }
 
@@ -164,11 +235,13 @@ export function selectDashboardMetrics(
   return {
     activeJobs: state.jobs.filter((job) => job.status === 'OPEN').length,
     totalCandidates: state.candidates.length,
-    pendingAiReviews: state.applications.filter((application) => {
+    pendingRecruiterReviews: state.applications.filter((application) => {
       const evaluation = selectLatestScreeningEvaluation(state, application.id)
       const decision = selectDecisionByApplicationId(state, application.id)
-
-      return evaluation?.recommendation === 'REVIEW' && !decision
+      return (
+        evaluation?.status === 'COMPLETED' &&
+        !decision
+      )
     }).length,
     interviewsToday: state.interviews.filter(
       (interview) => interview.scheduledStart.slice(0, 10) === calendarDate,
@@ -203,10 +276,10 @@ export function selectHiringFunnel(
       ),
     ).length,
     shortlisted: applications.filter((application) => {
-      const recommendation = selectLatestScreeningEvaluation(
-        state,
-        application.id,
-      )?.recommendation
+      const recommendation =
+        selectLatestDecisionByApplicationId(state, application.id)
+          ?.humanRecommendation ??
+        selectLatestScreeningEvaluation(state, application.id)?.recommendation
 
       return recommendation === 'STRONG_YES' || recommendation === 'YES'
     }).length,
@@ -239,6 +312,7 @@ export type RecentApplicationItem = {
   candidate: Candidate
   job: Job
   screeningEvaluation?: Evaluation
+  decision?: Decision
 }
 
 export function selectRecentApplications(
@@ -256,6 +330,10 @@ export function selectRecentApplications(
             candidate,
             job,
             screeningEvaluation: selectLatestScreeningEvaluation(
+              state,
+              application.id,
+            ),
+            decision: selectLatestDecisionByApplicationId(
               state,
               application.id,
             ),
@@ -369,6 +447,141 @@ export type CandidateListItem = {
   screeningEvaluation?: Evaluation
   interview?: Interview
   decision?: Decision
+  screeningQueueItem?: ScreeningQueueItem
+  screeningStatus: CandidateScreeningDisplayStatus
+}
+
+export type CandidateScreeningDisplayStatus =
+  | 'NOT_SCREENED'
+  | 'QUEUED'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+
+export function selectScreeningQueueItemByApplicationId(
+  state: DemoState,
+  applicationId: string,
+): ScreeningQueueItem | undefined {
+  return state.screeningQueue.find(
+    (item) => item.applicationId === applicationId,
+  )
+}
+
+export function selectScreeningQueueItems(
+  state: DemoState,
+): ScreeningQueueItem[] {
+  return state.screeningQueue
+    .map((item) => item)
+    .sort((left, right) => left.queuedAt.localeCompare(right.queuedAt))
+}
+
+export function selectActiveScreeningQueueItems(
+  state: DemoState,
+): ScreeningQueueItem[] {
+  return selectScreeningQueueItems(state).filter(
+    (item) => item.status === 'QUEUED' || item.status === 'PROCESSING',
+  )
+}
+
+export function selectFailedScreeningQueueItems(
+  state: DemoState,
+): ScreeningQueueItem[] {
+  return selectScreeningQueueItems(state).filter(
+    (item) => item.status === 'FAILED',
+  )
+}
+
+export type ScreeningQueueSummary = {
+  total: number
+  queued: number
+  processing: number
+  completed: number
+  failed: number
+}
+
+export function selectScreeningQueueSummary(
+  state: DemoState,
+): ScreeningQueueSummary {
+  return state.screeningQueue.reduce<ScreeningQueueSummary>(
+    (summary, item) => ({
+      ...summary,
+      total: summary.total + 1,
+      queued: summary.queued + (item.status === 'QUEUED' ? 1 : 0),
+      processing:
+        summary.processing + (item.status === 'PROCESSING' ? 1 : 0),
+      completed:
+        summary.completed + (item.status === 'COMPLETED' ? 1 : 0),
+      failed: summary.failed + (item.status === 'FAILED' ? 1 : 0),
+    }),
+    { total: 0, queued: 0, processing: 0, completed: 0, failed: 0 },
+  )
+}
+
+export function selectUnscreenedApplicationIds(
+  state: DemoState,
+  jobId?: string,
+): string[] {
+  return state.applications
+    .filter((application) => !jobId || application.jobId === jobId)
+    .filter(
+      (application) =>
+        !state.evaluations.some(
+          (evaluation) =>
+            evaluation.applicationId === application.id &&
+            evaluation.evaluationType === 'SCREENING' &&
+            evaluation.status === 'COMPLETED',
+        ),
+    )
+    .filter((application) => {
+      const queueItem = selectScreeningQueueItemByApplicationId(
+        state,
+        application.id,
+      )
+      return (
+        !queueItem ||
+        (queueItem.status !== 'QUEUED' &&
+          queueItem.status !== 'PROCESSING' &&
+          queueItem.status !== 'FAILED')
+      )
+    })
+    .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt))
+    .map((application) => application.id)
+}
+
+export function findApplicationsRequiringAutomaticScreening(
+  state: DemoState,
+): string[] {
+  return state.applications
+    .filter((application) => {
+      const hasCompletedEvaluation = state.evaluations.some(
+        (evaluation) =>
+          evaluation.applicationId === application.id &&
+          evaluation.evaluationType === 'SCREENING' &&
+          evaluation.status === 'COMPLETED',
+      )
+      const hasBlockingQueueItem = state.screeningQueue.some(
+        (item) =>
+          item.applicationId === application.id &&
+          (item.status === 'QUEUED' ||
+            item.status === 'PROCESSING' ||
+            item.status === 'FAILED'),
+      )
+
+      return !hasCompletedEvaluation && !hasBlockingQueueItem
+    })
+    .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt))
+    .map((application) => application.id)
+}
+
+function deriveCandidateScreeningStatus(
+  evaluation: Evaluation | undefined,
+  queueItem: ScreeningQueueItem | undefined,
+): CandidateScreeningDisplayStatus {
+  if (evaluation?.status === 'COMPLETED') return 'COMPLETED'
+  if (queueItem?.status === 'PROCESSING') return 'PROCESSING'
+  if (queueItem?.status === 'QUEUED') return 'QUEUED'
+  if (queueItem?.status === 'FAILED') return 'FAILED'
+  return 'NOT_SCREENED'
 }
 
 export function selectCandidateListItems(
@@ -380,18 +593,28 @@ export function selectCandidateListItems(
     .map((application): CandidateListItem | undefined => {
       const candidate = selectCandidateById(state, application.candidateId)
       const job = selectJobById(state, application.jobId)
+      const screeningEvaluation = selectLatestScreeningEvaluation(
+        state,
+        application.id,
+      )
+      const screeningQueueItem = selectScreeningQueueItemByApplicationId(
+        state,
+        application.id,
+      )
 
       return candidate && job
         ? {
             candidate,
             application,
             job,
-            screeningEvaluation: selectLatestScreeningEvaluation(
-              state,
-              application.id,
-            ),
+            screeningEvaluation,
             interview: selectInterviewByApplicationId(state, application.id),
             decision: selectDecisionByApplicationId(state, application.id),
+            screeningQueueItem,
+            screeningStatus: deriveCandidateScreeningStatus(
+              screeningEvaluation,
+              screeningQueueItem,
+            ),
           }
         : undefined
     })
@@ -401,6 +624,173 @@ export function selectCandidateListItems(
         left.application.submittedAt,
       ),
     )
+}
+
+const humanReviewPriority: Record<HumanReviewCategory, number> = {
+  NEEDS_REVIEW: 0,
+  FAILED: 1,
+  RECOMMENDED: 2,
+  NOT_RECOMMENDED: 3,
+  REVIEWED: 4,
+}
+
+function deriveHumanReviewCategory(input: {
+  evaluation?: Evaluation
+  decision?: Decision
+  queueItem?: ScreeningQueueItem
+}): { category?: HumanReviewCategory; reviewReasons: string[] } {
+  const { evaluation, decision, queueItem } = input
+
+  if (decision) {
+    return { category: 'REVIEWED', reviewReasons: ['Recruiter decision recorded'] }
+  }
+
+  if (queueItem?.status === 'FAILED' || evaluation?.status === 'FAILED') {
+    return { category: 'FAILED', reviewReasons: ['Screening failed'] }
+  }
+
+  if (!evaluation || evaluation.status !== 'COMPLETED') {
+    return { reviewReasons: [] }
+  }
+
+  const reviewReasons: string[] = []
+  if (evaluation.recommendation === 'REVIEW') {
+    reviewReasons.push('AI requested human review')
+  }
+  if (evaluation.confidence < 75) {
+    reviewReasons.push('Low AI confidence')
+  }
+  if (reviewReasons.length > 0 && evaluation.concerns.length > 0) {
+    reviewReasons.push('Screening concerns require recruiter attention')
+  }
+  if (reviewReasons.length > 0) {
+    return { category: 'NEEDS_REVIEW', reviewReasons }
+  }
+
+  if (
+    evaluation.recommendation === 'STRONG_YES' ||
+    evaluation.recommendation === 'YES'
+  ) {
+    return {
+      category: 'RECOMMENDED',
+      reviewReasons: ['Ready for recruiter confirmation'],
+    }
+  }
+
+  return {
+    category: 'NOT_RECOMMENDED',
+    reviewReasons: ['Negative recommendation requires recruiter review'],
+  }
+}
+
+export function selectHumanReviewQueueItems(
+  state: DemoState,
+  jobId?: string,
+): HumanReviewQueueItem[] {
+  return state.applications
+    .filter((application) => !jobId || application.jobId === jobId)
+    .map((application): HumanReviewQueueItem | undefined => {
+      const candidate = selectCandidateById(state, application.candidateId)
+      const job = selectJobById(state, application.jobId)
+      if (!candidate || !job) return undefined
+
+      const evaluation = selectLatestScreeningEvaluation(state, application.id)
+      const decision = selectLatestDecisionByApplicationId(state, application.id)
+      const queueItem = selectScreeningQueueItemByApplicationId(
+        state,
+        application.id,
+      )
+      const derived = deriveHumanReviewCategory({
+        evaluation,
+        decision,
+        queueItem,
+      })
+      if (!derived.category) return undefined
+
+      return {
+        application,
+        candidate,
+        job,
+        evaluation,
+        decision,
+        category: derived.category,
+        finalRecommendation:
+          decision?.humanRecommendation ??
+          (evaluation?.status === 'COMPLETED'
+            ? evaluation.recommendation
+            : undefined),
+        reviewReasons: derived.reviewReasons,
+      }
+    })
+    .filter((item): item is HumanReviewQueueItem => item !== undefined)
+    .sort((left, right) => {
+      const categoryDifference =
+        humanReviewPriority[left.category] - humanReviewPriority[right.category]
+      if (categoryDifference !== 0) return categoryDifference
+
+      if (left.category === 'NEEDS_REVIEW') {
+        const confidenceDifference =
+          (left.evaluation?.confidence ?? 101) -
+          (right.evaluation?.confidence ?? 101)
+        if (confidenceDifference !== 0) return confidenceDifference
+      }
+      if (left.category === 'RECOMMENDED') {
+        const scoreDifference =
+          (right.evaluation?.overallScore ?? -1) -
+          (left.evaluation?.overallScore ?? -1)
+        if (scoreDifference !== 0) return scoreDifference
+      }
+
+      return right.application.submittedAt.localeCompare(
+        left.application.submittedAt,
+      )
+    })
+}
+
+export type HumanReviewQueueSummary = {
+  total: number
+  recommended: number
+  needsReview: number
+  notRecommended: number
+  failed: number
+  reviewed: number
+}
+
+export function selectHumanReviewQueueSummary(
+  state: DemoState,
+  jobId?: string,
+): HumanReviewQueueSummary {
+  return selectHumanReviewQueueItems(state, jobId).reduce<HumanReviewQueueSummary>(
+    (summary, item) => ({
+      total: summary.total + 1,
+      recommended:
+        summary.recommended + (item.category === 'RECOMMENDED' ? 1 : 0),
+      needsReview:
+        summary.needsReview + (item.category === 'NEEDS_REVIEW' ? 1 : 0),
+      notRecommended:
+        summary.notRecommended +
+        (item.category === 'NOT_RECOMMENDED' ? 1 : 0),
+      failed: summary.failed + (item.category === 'FAILED' ? 1 : 0),
+      reviewed: summary.reviewed + (item.category === 'REVIEWED' ? 1 : 0),
+    }),
+    {
+      total: 0,
+      recommended: 0,
+      needsReview: 0,
+      notRecommended: 0,
+      failed: 0,
+      reviewed: 0,
+    },
+  )
+}
+
+export function selectHumanReviewQueueItem(
+  state: DemoState,
+  applicationId: string,
+): HumanReviewQueueItem | undefined {
+  return selectHumanReviewQueueItems(state).find(
+    (item) => item.application.id === applicationId,
+  )
 }
 
 export type CandidateTimelineEvent = {
@@ -497,11 +887,23 @@ export function selectCandidateTimeline(
   state.decisions
     .filter((decision) => decision.applicationId === applicationId)
     .forEach((decision) => {
+      const aiLabel = getScreeningRecommendationLabel(
+        decision.aiRecommendation,
+      )
+      const humanLabel = getScreeningRecommendationLabel(
+        decision.humanRecommendation,
+      )
       events.push({
         id: `decision-recorded-${decision.id}`,
         type: 'DECISION_RECORDED',
-        title: 'Human decision recorded',
-        description: 'A hiring decision was recorded for this application.',
+        title:
+          decision.reviewAction === 'CONFIRM'
+            ? 'Screening recommendation confirmed'
+            : 'Screening recommendation overridden',
+        description:
+          decision.reviewAction === 'CONFIRM'
+            ? `The recruiter confirmed AURA’s recommendation of “${humanLabel}”.`
+            : `AURA recommended “${aiLabel}”. The recruiter recorded “${humanLabel}”.`,
         occurredAt: decision.createdAt,
       })
     })

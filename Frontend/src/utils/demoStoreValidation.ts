@@ -53,6 +53,7 @@ function validateInitialCounts(errors: string[]) {
     ['transcripts', transcriptsData.length],
     ['communications', communicationsData.length],
     ['decisions', 0],
+    ['screeningQueue', 0],
   ]
 
   for (const [collection, expectedCount] of expectedCounts) {

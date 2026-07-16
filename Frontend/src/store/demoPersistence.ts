@@ -37,6 +37,40 @@ export function createFreshDemoState(): DemoState {
   return createInitialDemoState()
 }
 
+export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
+  const hasInterruptedItems = state.screeningQueue.some(
+    (item) => item.status === 'PROCESSING',
+  )
+
+  if (!hasInterruptedItems) return state
+
+  return {
+    ...state,
+    screeningQueue: state.screeningQueue.map((item) =>
+      item.status === 'PROCESSING'
+        ? {
+            ...item,
+            status: 'QUEUED',
+            startedAt: undefined,
+          }
+        : item,
+    ),
+  }
+}
+
+export function normalizePersistedDemoState(
+  state: Omit<DemoState, 'screeningQueue'> & {
+    screeningQueue?: DemoState['screeningQueue']
+  },
+): DemoState {
+  return recoverInterruptedScreeningQueue({
+    ...state,
+    screeningQueue: Array.isArray(state.screeningQueue)
+      ? state.screeningQueue
+      : [],
+  })
+}
+
 export function loadPersistedDemoState(): DemoStateHydrationResult {
   if (!canUseLocalStorage()) {
     return {
@@ -97,7 +131,11 @@ export function loadPersistedDemoState(): DemoStateHydrationResult {
   }
 
   return {
-    state: parsedValue as PersistedDemoState,
+    state: normalizePersistedDemoState(
+      parsedValue as Omit<PersistedDemoState, 'screeningQueue'> & {
+        screeningQueue?: PersistedDemoState['screeningQueue']
+      },
+    ),
     source: 'PERSISTED',
     errors: [],
   }

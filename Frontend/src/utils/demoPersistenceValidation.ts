@@ -33,6 +33,7 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
     'transcripts',
     'communications',
     'decisions',
+    'screeningQueue',
   ]
   const freshState = createFreshDemoState()
 

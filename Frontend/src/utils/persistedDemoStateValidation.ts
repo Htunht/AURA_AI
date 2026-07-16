@@ -16,7 +16,6 @@ const collectionNames = [
   'decisions',
 ] as const
 
-type CollectionName = (typeof collectionNames)[number]
 type UnknownRecord = Record<string, unknown>
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -32,7 +31,7 @@ function hasStringProperties(
 
 function validateRecords(
   collection: unknown[],
-  collectionName: CollectionName,
+  collectionName: string,
   validate: (record: UnknownRecord) => boolean,
   errors: string[],
 ) {
@@ -53,7 +52,7 @@ function stringIds(collection: unknown[]): Set<string> {
 
 function validateReference(
   collection: unknown[],
-  collectionName: CollectionName,
+  collectionName: string,
   property: string,
   referencedIds: Set<string>,
   errors: string[],
@@ -89,6 +88,13 @@ export function validatePersistedDemoState(
     }
   }
 
+  if (
+    value.screeningQueue !== undefined &&
+    !Array.isArray(value.screeningQueue)
+  ) {
+    errors.push('Persisted demo state screeningQueue must be an array.')
+  }
+
   if (errors.length > 0) {
     return { valid: false, errors }
   }
@@ -103,6 +109,9 @@ export function validatePersistedDemoState(
   const transcripts = value.transcripts as unknown[]
   const communications = value.communications as unknown[]
   const decisions = value.decisions as unknown[]
+  const screeningQueue = Array.isArray(value.screeningQueue)
+    ? value.screeningQueue
+    : []
 
   validateRecords(
     jobs,
@@ -188,6 +197,30 @@ export function validatePersistedDemoState(
     (record) => hasStringProperties(record, ['id', 'applicationId']),
     errors,
   )
+  validateRecords(
+    screeningQueue,
+    'screeningQueue',
+    (record) =>
+      hasStringProperties(record, [
+        'id',
+        'applicationId',
+        'jobId',
+        'status',
+        'queuedAt',
+      ]) &&
+      typeof record.attemptCount === 'number' &&
+      Number.isInteger(record.attemptCount) &&
+      record.attemptCount >= 0 &&
+      ['QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED'].includes(
+        record.status as string,
+      ) &&
+      (record.startedAt === undefined ||
+        typeof record.startedAt === 'string') &&
+      (record.completedAt === undefined ||
+        typeof record.completedAt === 'string') &&
+      (record.error === undefined || typeof record.error === 'string'),
+    errors,
+  )
 
   const jobIds = stringIds(jobs)
   const candidateIds = stringIds(candidates)
@@ -237,6 +270,20 @@ export function validatePersistedDemoState(
     'decisions',
     'applicationId',
     applicationIds,
+    errors,
+  )
+  validateReference(
+    screeningQueue,
+    'screeningQueue',
+    'applicationId',
+    applicationIds,
+    errors,
+  )
+  validateReference(
+    screeningQueue,
+    'screeningQueue',
+    'jobId',
+    jobIds,
     errors,
   )
 

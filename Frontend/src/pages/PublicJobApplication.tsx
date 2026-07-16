@@ -118,6 +118,13 @@ export default function PublicJobApplication() {
 
       dispatch({ type: 'ADD_CANDIDATE', payload: prepared.candidate })
       dispatch({ type: 'ADD_APPLICATION', payload: prepared.application })
+      dispatch({
+        type: 'QUEUE_SCREENING_APPLICATION',
+        payload: {
+          applicationId: prepared.application.id,
+          queuedAt: prepared.application.submittedAt,
+        },
+      })
       setSubmitted(prepared)
       setErrors([])
     } catch (error) {

@@ -13,6 +13,7 @@ import type { Decision } from '../types/decision'
 import type { Evaluation, EvaluationStatus } from '../types/evaluation'
 import type { InterviewQuestion, InterviewStatus } from '../types/interview'
 import type { Transcript } from '../types/transcript'
+import type { ScreeningQueueItem } from '../types/screeningQueue'
 import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
 import { createInitialDemoState } from './demoInitialState'
 import type { DemoState } from './demoStateTypes'
@@ -69,6 +70,31 @@ export type DemoAction =
     }
   | { type: 'CONFIRM_RECOMMENDATION'; payload: { decision: Decision } }
   | { type: 'OVERRIDE_RECOMMENDATION'; payload: { decision: Decision } }
+  | {
+      type: 'QUEUE_SCREENING_APPLICATION'
+      payload: { applicationId: string; queuedAt: string }
+    }
+  | {
+      type: 'QUEUE_SCREENING_APPLICATIONS'
+      payload: { applicationIds: string[]; queuedAt: string }
+    }
+  | {
+      type: 'START_SCREENING_QUEUE_ITEM'
+      payload: { queueItemId: string; startedAt: string }
+    }
+  | {
+      type: 'COMPLETE_SCREENING_QUEUE_ITEM'
+      payload: { queueItemId: string; completedAt: string }
+    }
+  | {
+      type: 'FAIL_SCREENING_QUEUE_ITEM'
+      payload: { queueItemId: string; completedAt: string; error: string }
+    }
+  | {
+      type: 'RETRY_SCREENING_QUEUE_ITEM'
+      payload: { queueItemId: string; queuedAt: string }
+    }
+  | { type: 'CLEAR_COMPLETED_SCREENING_QUEUE_ITEMS' }
   | {
       type: 'ADD_INTERVIEW_QUESTIONS'
       payload: { interviewId: string; questions: InterviewQuestion[] }
@@ -379,6 +405,14 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       }
 
     case 'ADD_EVALUATION':
+      if (
+        state.evaluations.some(
+          (evaluation) => evaluation.id === action.payload.id,
+        )
+      ) {
+        return state
+      }
+
       return {
         ...state,
         evaluations: [...state.evaluations, action.payload],
@@ -396,13 +430,30 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
 
     case 'CONFIRM_RECOMMENDATION': {
       const { decision } = action.payload
+      const evaluation = state.evaluations.find(
+        (item) => item.id === decision.evaluationId,
+      )
+      const application = state.applications.find(
+        (item) => item.id === decision.applicationId,
+      )
 
       if (
         decision.reviewAction !== 'CONFIRM' ||
-        decision.aiRecommendation !== decision.humanRecommendation
+        decision.aiRecommendation !== decision.humanRecommendation ||
+        !evaluation ||
+        evaluation.evaluationType !== 'SCREENING' ||
+        evaluation.status !== 'COMPLETED' ||
+        !application ||
+        evaluation.applicationId !== decision.applicationId ||
+        evaluation.recommendation !== decision.aiRecommendation ||
+        state.decisions.some(
+          (item) =>
+            item.id === decision.id ||
+            item.evaluationId === decision.evaluationId,
+        )
       ) {
         warnInvalidDecision(
-          'Invalid confirmation: recommendations must match and reviewAction must be CONFIRM.',
+          'Invalid confirmation: the evaluation must be valid, recommendations must match, and no decision may already exist.',
         )
         return state
       }
@@ -412,19 +463,198 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
 
     case 'OVERRIDE_RECOMMENDATION': {
       const { decision } = action.payload
+      const evaluation = state.evaluations.find(
+        (item) => item.id === decision.evaluationId,
+      )
+      const application = state.applications.find(
+        (item) => item.id === decision.applicationId,
+      )
 
       if (
         decision.reviewAction !== 'OVERRIDE' ||
-        !decision.overrideReason?.trim()
+        decision.aiRecommendation === decision.humanRecommendation ||
+        (decision.overrideReason?.trim().length ?? 0) < 15 ||
+        !evaluation ||
+        evaluation.evaluationType !== 'SCREENING' ||
+        evaluation.status !== 'COMPLETED' ||
+        !application ||
+        evaluation.applicationId !== decision.applicationId ||
+        evaluation.recommendation !== decision.aiRecommendation ||
+        state.decisions.some(
+          (item) =>
+            item.id === decision.id ||
+            item.evaluationId === decision.evaluationId,
+        )
       ) {
         warnInvalidDecision(
-          'Invalid override: reviewAction must be OVERRIDE and a reason is required.',
+          'Invalid override: the evaluation and changed recommendation must be valid, a reason is required, and no decision may already exist.',
         )
         return state
       }
 
       return { ...state, decisions: [...state.decisions, decision] }
     }
+
+    case 'QUEUE_SCREENING_APPLICATION':
+    case 'QUEUE_SCREENING_APPLICATIONS': {
+      const seenIds = new Set<string>()
+      const queueItems: ScreeningQueueItem[] = []
+      const applicationIds =
+        action.type === 'QUEUE_SCREENING_APPLICATION'
+          ? [action.payload.applicationId]
+          : action.payload.applicationIds
+
+      for (const applicationId of applicationIds) {
+        if (seenIds.has(applicationId)) continue
+        seenIds.add(applicationId)
+        const application = state.applications.find(
+          (item) => item.id === applicationId,
+        )
+        const hasCompletedEvaluation = state.evaluations.some(
+          (evaluation) =>
+            evaluation.applicationId === applicationId &&
+            evaluation.evaluationType === 'SCREENING' &&
+            evaluation.status === 'COMPLETED',
+        )
+        const hasQueueRecord = state.screeningQueue.some(
+          (item) => item.applicationId === applicationId,
+        )
+
+        if (!application || hasCompletedEvaluation || hasQueueRecord) continue
+
+        queueItems.push({
+          id: `screening-queue-${application.id}`,
+          applicationId: application.id,
+          jobId: application.jobId,
+          status: 'QUEUED',
+          queuedAt: action.payload.queuedAt,
+          attemptCount: 0,
+        })
+      }
+
+      if (queueItems.length === 0) return state
+
+      const queuedApplicationIds = new Set(
+        queueItems.map((item) => item.applicationId),
+      )
+
+      return {
+        ...state,
+        applications: state.applications.map((application) =>
+          queuedApplicationIds.has(application.id)
+            ? { ...application, currentStage: 'AI_SCREENING' }
+            : application,
+        ),
+        screeningQueue: [...state.screeningQueue, ...queueItems],
+      }
+    }
+
+    case 'START_SCREENING_QUEUE_ITEM': {
+      const item = state.screeningQueue.find(
+        (queueItem) => queueItem.id === action.payload.queueItemId,
+      )
+      if (!item || item.status !== 'QUEUED') return state
+
+      return {
+        ...state,
+        screeningQueue: state.screeningQueue.map((queueItem) =>
+          queueItem.id === item.id
+            ? {
+                ...queueItem,
+                status: 'PROCESSING',
+                startedAt: action.payload.startedAt,
+                completedAt: undefined,
+                error: undefined,
+                attemptCount: queueItem.attemptCount + 1,
+              }
+            : queueItem,
+        ),
+      }
+    }
+
+    case 'COMPLETE_SCREENING_QUEUE_ITEM':
+      if (
+        !state.screeningQueue.some(
+          (item) =>
+            item.id === action.payload.queueItemId &&
+            item.status === 'PROCESSING',
+        )
+      ) {
+        return state
+      }
+      return {
+        ...state,
+        screeningQueue: state.screeningQueue.map((item) =>
+          item.id === action.payload.queueItemId
+            ? {
+                ...item,
+                status: 'COMPLETED',
+                completedAt: action.payload.completedAt,
+                error: undefined,
+              }
+            : item,
+        ),
+      }
+
+    case 'FAIL_SCREENING_QUEUE_ITEM':
+      if (
+        !state.screeningQueue.some(
+          (item) =>
+            item.id === action.payload.queueItemId &&
+            item.status === 'PROCESSING',
+        )
+      ) {
+        return state
+      }
+      return {
+        ...state,
+        screeningQueue: state.screeningQueue.map((item) =>
+          item.id === action.payload.queueItemId
+            ? {
+                ...item,
+                status: 'FAILED',
+                completedAt: action.payload.completedAt,
+                error: action.payload.error,
+              }
+            : item,
+        ),
+      }
+
+    case 'RETRY_SCREENING_QUEUE_ITEM':
+      if (
+        !state.screeningQueue.some(
+          (item) =>
+            item.id === action.payload.queueItemId && item.status === 'FAILED',
+        )
+      ) {
+        return state
+      }
+      return {
+        ...state,
+        screeningQueue: state.screeningQueue.map((item) =>
+          item.id === action.payload.queueItemId
+            ? {
+                ...item,
+                status: 'QUEUED',
+                queuedAt: action.payload.queuedAt,
+                startedAt: undefined,
+                completedAt: undefined,
+                error: undefined,
+              }
+            : item,
+        ),
+      }
+
+    case 'CLEAR_COMPLETED_SCREENING_QUEUE_ITEMS':
+      if (!state.screeningQueue.some((item) => item.status === 'COMPLETED')) {
+        return state
+      }
+      return {
+        ...state,
+        screeningQueue: state.screeningQueue.filter(
+          (item) => item.status !== 'COMPLETED',
+        ),
+      }
 
     case 'ADD_INTERVIEW_QUESTIONS': {
       const interview = state.interviews.find(

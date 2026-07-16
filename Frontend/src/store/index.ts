@@ -7,6 +7,8 @@ export {
   createFreshDemoState,
   DEMO_STORAGE_KEY,
   loadPersistedDemoState,
+  normalizePersistedDemoState,
+  recoverInterruptedScreeningQueue,
   savePersistedDemoState,
 } from './demoPersistence'
 
