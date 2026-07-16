@@ -1,18 +1,33 @@
 import { BriefcaseBusiness } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
+const navLinkClass =
+  'flex min-h-10 items-center gap-2.5 border-l-2 border-transparent px-3 py-2 text-sm font-semibold text-frost/70 no-underline transition-colors duration-150 hover:bg-white/5 hover:text-white max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
+
 export function Sidebar() {
   return (
-    <aside className="sidebar">
-      <div className="sidebar__brand" aria-label="AURA AI admin workspace">
-        <span className="sidebar__brand-mark">A</span>
-        <span>AURA AI</span>
+    <aside className="static flex items-center justify-between border-r border-white/10 bg-depth px-5 py-4 text-frost lg:sticky lg:top-0 lg:block lg:h-screen lg:px-5 lg:py-6">
+      <div
+        className="flex items-center gap-3 lg:pb-7"
+        aria-label="AURA AI admin workspace"
+      >
+        <span className="inline-grid size-8 flex-none place-items-center rounded-aura-sm border border-glacier/35 bg-harbor text-sm font-bold text-frost">
+          A
+        </span>
+        <span className="grid gap-0.5">
+          <span className="text-[16px] font-bold tracking-[-0.01em]">
+            AURA AI
+          </span>
+          <span className="hidden text-[11px] font-medium text-frost/55 lg:block">
+            Recruitment Operations
+          </span>
+        </span>
       </div>
-      <nav className="sidebar__nav" aria-label="Admin navigation">
+      <nav className="block lg:grid lg:gap-1" aria-label="Admin navigation">
         <NavLink
           to="/jobs"
           className={({ isActive }) =>
-            `sidebar__link${isActive ? ' sidebar__link--active' : ''}`
+            `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
           }
         >
           <BriefcaseBusiness size={18} aria-hidden="true" />

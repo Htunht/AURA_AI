@@ -18,7 +18,7 @@ export function AddFieldDialog({
   return (
     <Dialog
       open={open}
-      title={field ? 'Edit Application Field' : 'Add Application Field'}
+      title={field ? 'Edit application field' : 'Add application field'}
       onClose={onClose}
     >
       <FormFieldEditor

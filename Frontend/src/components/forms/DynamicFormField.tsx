@@ -22,6 +22,7 @@ export function DynamicFormField({
     if (field.type === 'TEXTAREA') {
       return (
         <textarea
+          className="w-full rounded-aura-sm border border-harbor/20 bg-white px-3 py-2.5 text-sm text-depth shadow-aura-xs placeholder:text-harbor/45 focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35 disabled:bg-frost disabled:text-harbor/50"
           id={controlId}
           value={stringValue}
           placeholder={field.placeholder}
@@ -36,10 +37,17 @@ export function DynamicFormField({
       const selectedValues = Array.isArray(value) ? value : []
 
       return (
-        <div className="multi-select" aria-describedby={error ? `${controlId}-error` : undefined}>
+        <div
+          className="grid gap-2 md:grid-cols-2"
+          aria-describedby={error ? `${controlId}-error` : undefined}
+        >
           {(field.options ?? []).map((option) => (
-            <label className="check-control" key={option.id}>
+            <label
+              className="flex items-center gap-2.5 rounded-aura-sm border border-harbor/15 bg-frost/55 px-3 py-2.5 text-sm font-medium text-depth transition-colors duration-150 has-[:checked]:border-marine/40 has-[:checked]:bg-glacier/15"
+              key={option.id}
+            >
               <input
+                className="size-4 accent-marine"
                 type="checkbox"
                 checked={selectedValues.includes(option.value)}
                 onChange={(event) =>
@@ -66,9 +74,13 @@ export function DynamicFormField({
             onChange={(event) => onChange(event.target.files?.[0]?.name ?? '')}
             aria-invalid={Boolean(error)}
           />
-          {stringValue ? <p className="file-name">Selected: {stringValue}</p> : null}
-          <p className="field-note">
-            Demo mode: the selected file is represented by filename metadata only.
+          {stringValue ? (
+            <p className="mt-2 mb-0 text-xs font-semibold text-harbor">
+              Selected: {stringValue}
+            </p>
+          ) : null}
+          <p className="mt-2 mb-0 text-xs leading-5 text-aura-text-muted">
+            PDF or DOC format recommended.
           </p>
         </div>
       )
@@ -117,14 +129,37 @@ export function DynamicFormField({
   }
 
   return (
-    <div className="dynamic-field">
-      <label className="dynamic-field__label" htmlFor={field.type === 'MULTI_SELECT' ? undefined : controlId}>
+    <div className="grid gap-2">
+      <label
+        className="flex items-center justify-between gap-3 text-sm font-semibold text-depth"
+        htmlFor={field.type === 'MULTI_SELECT' ? undefined : controlId}
+      >
         {field.label}
-        {field.required ? <span className="required-marker">Required</span> : <span className="optional-marker">Optional</span>}
+        {field.required ? (
+          <span className="text-[11px] font-bold uppercase tracking-wide text-aura-danger">
+            Required
+          </span>
+        ) : (
+          <span className="text-[11px] font-bold uppercase tracking-wide text-aura-text-muted">
+            Optional
+          </span>
+        )}
       </label>
-      {field.helpText ? <p className="dynamic-field__help">{field.helpText}</p> : null}
+      {field.helpText ? (
+        <p className="m-0 text-xs leading-5 text-aura-text-muted">
+          {field.helpText}
+        </p>
+      ) : null}
       {renderControl()}
-      {error ? <p id={`${controlId}-error`} className="field-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p
+          id={`${controlId}-error`}
+          className="m-0 text-xs font-semibold text-aura-danger"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   )
 }

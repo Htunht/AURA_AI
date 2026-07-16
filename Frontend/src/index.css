@@ -1,82 +1,83 @@
-:root {
-  --ink: #172033;
-  --ink-soft: #364153;
-  --muted: #667085;
-  --canvas: #f4f6f8;
-  --paper: #ffffff;
-  --paper-subtle: #f9fafb;
-  --line: #d9dee7;
-  --line-strong: #c4cbd7;
-  --action: #2357d9;
-  --action-hover: #1947bb;
-  --action-soft: #edf3ff;
-  --success: #147a55;
-  --success-soft: #eaf7f1;
-  --warning: #9a5b13;
-  --warning-soft: #fff5e6;
-  --danger: #b42318;
-  --danger-soft: #fff0ee;
-  --shadow: 0 12px 28px rgba(30, 42, 66, 0.08);
-  --font-body: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-utility: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+@import "tailwindcss";
+@import "./styles/theme.css";
 
-  font-family: var(--font-body);
-  color: var(--ink);
-  background: var(--canvas);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-width: 320px;
+    min-height: 100%;
+    background: var(--surface-canvas);
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background: var(--surface-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin-top: 0;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px var(--surface-primary),
+      0 0 0 4px var(--focus-ring);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-glacier) 45%, transparent);
+    color: var(--color-depth);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  min-width: 320px;
-  background: var(--canvas);
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  background: var(--canvas);
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-a {
-  color: inherit;
-}
-
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 3px solid rgba(35, 87, 217, 0.22);
-  outline-offset: 2px;
-}
-
-h1,
-h2,
-h3,
-p {
-  margin-top: 0;
-}
-
-#root {
-  min-height: 100vh;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
 }

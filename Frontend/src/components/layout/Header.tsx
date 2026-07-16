@@ -7,7 +7,7 @@ export function Header() {
   function handleReset() {
     if (
       window.confirm(
-        'Reset all AURA AI demo changes and restore the original seed data?',
+        'Reset workspace changes and restore the original AURA data?',
       )
     ) {
       resetDemoState()
@@ -15,15 +15,18 @@ export function Header() {
   }
 
   return (
-    <header className="workspace-header">
+    <header className="flex min-h-header items-center justify-between border-b border-harbor/15 bg-white px-5 py-3 md:px-8 xl:px-10">
       <div>
-        <p className="workspace-header__title">AURA AI Demo</p>
-        <p className="workspace-header__label">AURA Technology</p>
+        <p className="m-0 text-[15px] font-bold tracking-[-0.01em] text-depth">
+          AURA Technology
+        </p>
+        <p className="m-0 text-xs font-medium text-aura-text-muted">
+          Hiring workspace
+        </p>
       </div>
-      <div className="workspace-header__actions">
-        <span className="workspace-header__mode">Demo workspace</span>
+      <div className="flex items-center gap-2.5">
         <Button variant="ghost" onClick={handleReset}>
-          Reset Demo Data
+          Reset Workspace Data
         </Button>
       </div>
     </header>

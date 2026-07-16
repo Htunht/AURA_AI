@@ -44,9 +44,13 @@ export function FormFieldList({
 
   if (fields.length === 0) {
     return (
-      <Card className="empty-state">
-        <h3>No application fields yet</h3>
-        <p>Add identity and role-specific questions before publishing.</p>
+      <Card className="p-8 text-center">
+        <h3 className="m-0 text-lg font-semibold text-depth">
+          No fields have been added yet.
+        </h3>
+        <p className="mt-2 mb-0 text-sm text-aura-text-secondary">
+          Add a field or ask AURA for suggestions.
+        </p>
       </Card>
     )
   }
@@ -69,7 +73,7 @@ export function FormFieldList({
         items={fields.map((field) => field.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="field-ledger">
+        <div className="grid gap-2">
           {fields.map((field, index) => (
             <SortableFormFieldRow
               key={field.id}

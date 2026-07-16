@@ -54,33 +54,44 @@ export function SortableFormFieldRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={isDragging ? 'sortable-field sortable-field--dragging' : 'sortable-field'}
+      className={isDragging ? 'relative z-10' : 'relative z-0'}
     >
-      <Card className="field-ledger__row">
-        <span className="field-ledger__sequence" aria-hidden="true">
+      <Card
+        className={`grid min-h-[82px] grid-cols-[44px_minmax(0,1fr)] overflow-hidden transition-colors duration-150 md:grid-cols-[52px_minmax(0,1fr)_auto] ${
+          isDragging ? 'border-glacier bg-glacier/10 shadow-aura-md' : ''
+        } ${!editable ? 'bg-white/80' : ''}`}
+      >
+        <span
+          className="grid place-items-center border-r border-harbor/10 bg-frost font-utility text-xs font-bold text-harbor/70"
+          aria-hidden="true"
+        >
           {String(index + 1).padStart(2, '0')}
         </span>
-        <div className="field-ledger__content">
-          <div className="field-ledger__title-row">
-            <h3>{field.label}</h3>
+        <div className="min-w-0 px-4 py-3.5 md:px-5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h3 className="m-0 text-[15px] font-semibold text-depth">
+              {field.label}
+            </h3>
             <Badge tone={field.required ? 'warning' : 'neutral'}>
               {field.required ? 'Required' : 'Optional'}
             </Badge>
-            {aiSuggested ? <Badge>AI Suggested</Badge> : null}
+            {aiSuggested ? <Badge tone="accent">Suggested by AURA</Badge> : null}
           </div>
-          <div className="field-ledger__meta">
+          <div className="mt-2 flex flex-wrap items-center gap-2.5 text-xs font-medium text-aura-text-muted">
+            <code className="rounded-aura-xs bg-frost px-1.5 py-1 font-utility text-[11px] text-harbor">
+              {field.key}
+            </code>
             <span>{field.type.replace('_', ' ')}</span>
-            <code>{field.key}</code>
             {field.type === 'MULTI_SELECT' ? (
               <span>{field.options?.length ?? 0} options</span>
             ) : null}
           </div>
         </div>
         {editable ? (
-          <div className="field-ledger__actions">
+          <div className="col-span-2 flex flex-wrap justify-end gap-1 px-3 pb-3 md:col-span-1 md:items-center md:px-4 md:py-0">
             <button
               type="button"
-              className="icon-button drag-handle"
+              className="inline-grid size-9 touch-none place-items-center rounded-aura-sm border border-harbor/15 bg-white text-marine transition-colors duration-150 hover:bg-glacier/15 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={`Drag ${field.label} to reorder`}
               title="Drag to reorder"
               {...attributes}
@@ -90,7 +101,7 @@ export function SortableFormFieldRow({
             </button>
             <button
               type="button"
-              className="icon-button"
+              className="inline-grid size-9 place-items-center rounded-aura-sm border border-harbor/15 bg-white text-harbor transition-colors duration-150 hover:bg-glacier/15 disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => onMoveUp(field.id)}
               disabled={isFirst}
               aria-label={`Move ${field.label} up`}
@@ -100,7 +111,7 @@ export function SortableFormFieldRow({
             </button>
             <button
               type="button"
-              className="icon-button"
+              className="inline-grid size-9 place-items-center rounded-aura-sm border border-harbor/15 bg-white text-harbor transition-colors duration-150 hover:bg-glacier/15 disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => onMoveDown(field.id)}
               disabled={isLast}
               aria-label={`Move ${field.label} down`}
@@ -110,7 +121,7 @@ export function SortableFormFieldRow({
             </button>
             <button
               type="button"
-              className="icon-button"
+              className="inline-grid size-9 place-items-center rounded-aura-sm border border-harbor/15 bg-white text-harbor transition-colors duration-150 hover:bg-glacier/15 disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => onEdit(field)}
               aria-label={`Edit ${field.label}`}
               title="Edit field"
@@ -119,7 +130,7 @@ export function SortableFormFieldRow({
             </button>
             <button
               type="button"
-              className="icon-button icon-button--danger"
+              className="inline-grid size-9 place-items-center rounded-aura-sm border border-aura-danger/30 bg-white text-aura-danger transition-colors duration-150 hover:bg-aura-danger-soft disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => onRemove(field.id)}
               aria-label={`Remove ${field.label}`}
               title="Remove field"

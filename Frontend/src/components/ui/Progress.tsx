@@ -7,13 +7,16 @@ export function Progress({ value }: ProgressProps) {
 
   return (
     <div
-      className="progress"
+      className="progress h-2 overflow-hidden rounded-full bg-harbor/10"
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={clampedValue}
     >
-      <span className="progress__bar" style={{ width: `${clampedValue}%` }} />
+      <span
+        className="progress__bar block h-full bg-marine"
+        style={{ width: `${clampedValue}%` }}
+      />
     </div>
   )
 }

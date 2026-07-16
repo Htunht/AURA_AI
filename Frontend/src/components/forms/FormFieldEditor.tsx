@@ -90,20 +90,33 @@ export function FormFieldEditor({
   }
 
   return (
-    <form className="field-editor" onSubmit={handleSubmit}>
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
-      <div className="form-grid form-grid--two">
-        <label className="form-control">
-          <span>Field label</span>
+    <form className="grid gap-5" onSubmit={handleSubmit}>
+      {error ? (
+        <p
+          className="m-0 rounded-aura-sm border border-aura-danger/30 bg-aura-danger-soft px-3 py-2 text-sm font-medium text-aura-danger"
+          role="alert"
+        >
+          {error}
+        </p>
+      ) : null}
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-depth">Field label</span>
           <Input value={label} onChange={(event) => setLabel(event.target.value)} />
         </label>
-        <label className="form-control">
-          <span>Field key</span>
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-depth">Field key</span>
           <Input value={key} onChange={(event) => setKey(event.target.value)} />
         </label>
-        <label className="form-control">
-          <span>Field type</span>
-          <select value={type} onChange={(event) => setType(event.target.value as ApplicationFormFieldType)}>
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-depth">Field type</span>
+          <select
+            className="w-full rounded-aura-sm border border-harbor/20 bg-white px-3 py-2.5 text-sm text-depth shadow-aura-xs focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35"
+            value={type}
+            onChange={(event) =>
+              setType(event.target.value as ApplicationFormFieldType)
+            }
+          >
             {fieldTypes.map((fieldType) => (
               <option key={fieldType} value={fieldType}>
                 {fieldType.replace('_', ' ')}
@@ -111,32 +124,40 @@ export function FormFieldEditor({
             ))}
           </select>
         </label>
-        <label className="form-control">
-          <span>Placeholder</span>
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-depth">Placeholder</span>
           <Input value={placeholder} onChange={(event) => setPlaceholder(event.target.value)} />
         </label>
       </div>
-      <label className="form-control">
-        <span>Help text</span>
+      <label className="grid gap-2">
+        <span className="text-sm font-semibold text-depth">Help text</span>
         <Input value={helpText} onChange={(event) => setHelpText(event.target.value)} />
       </label>
-      <label className="check-control">
-        <input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} />
+      <label className="flex items-center gap-2.5 text-sm font-medium text-harbor">
+        <input
+          className="size-4 accent-marine"
+          type="checkbox"
+          checked={required}
+          onChange={(event) => setRequired(event.target.checked)}
+        />
         <span>This field is required</span>
       </label>
       {type === 'MULTI_SELECT' ? (
-        <label className="form-control">
-          <span>Options</span>
+        <label className="grid gap-2">
+          <span className="text-sm font-semibold text-depth">Options</span>
           <textarea
+            className="w-full rounded-aura-sm border border-harbor/20 bg-white px-3 py-2.5 text-sm text-depth shadow-aura-xs placeholder:text-harbor/45 focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35"
             value={optionLines}
             onChange={(event) => setOptionLines(event.target.value)}
             rows={6}
             placeholder={'React\nTypeScript\nJavaScript'}
           />
-          <small>Enter one option per line.</small>
+          <small className="text-xs text-aura-text-muted">
+            Enter one option per line.
+          </small>
         </label>
       ) : null}
-      <div className="dialog__actions">
+      <div className="flex flex-wrap justify-end gap-2 border-t border-harbor/15 pt-5">
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit">{initialField ? 'Save field' : 'Add field'}</Button>
       </div>

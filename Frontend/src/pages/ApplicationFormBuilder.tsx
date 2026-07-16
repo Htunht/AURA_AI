@@ -2,9 +2,9 @@ import {
   ExternalLink,
   Eye,
   FilePlus2,
+  Lightbulb,
   Plus,
   Send,
-  Sparkles,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -34,6 +34,17 @@ import type { SuggestedApplicationQuestion } from '../types/applicationQuestionS
 import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
 
 const DEMO_TIMESTAMP = '2026-07-16T10:30:00Z'
+
+const secondaryLinkClass =
+  'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline transition-colors duration-150 hover:bg-glacier/15'
+
+function formStatusTone(status?: string) {
+  return status === 'PUBLISHED'
+    ? 'accent'
+    : status === 'DRAFT'
+      ? 'warning'
+      : 'neutral'
+}
 
 function normalizeKey(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -84,7 +95,11 @@ export default function ApplicationFormBuilder() {
   if (!job) {
     return (
       <PageContainer title="Application form not found">
-        <Card className="empty-state"><p>The requested job opening does not exist.</p></Card>
+        <Card className="p-8 text-center">
+          <p className="m-0 text-sm text-aura-text-secondary">
+            The requested job opening does not exist.
+          </p>
+        </Card>
       </PageContainer>
     )
   }
@@ -173,7 +188,7 @@ export default function ApplicationFormBuilder() {
     setSelectedSuggestionIds([])
     setSuggestionsOpen(false)
     setMessages([
-      `${selectedSuggestions.length} AI-suggested ${
+      `${selectedSuggestions.length} AURA-suggested ${
         selectedSuggestions.length === 1 ? 'question' : 'questions'
       } added to the draft.`,
     ])
@@ -248,40 +263,116 @@ export default function ApplicationFormBuilder() {
 
   return (
     <PageContainer
-      title="Application form"
-      description={`Configure the application form for ${job.title}.`}
-      actions={<Link className="button button--secondary" to={`/apply/${job.id}`}><ExternalLink size={16} />Open public form</Link>}
+      eyebrow="Application setup"
+      title={`${job.title} application form`}
+      description={
+        activeForm
+          ? `Version ${activeForm.version} · ${activeForm.status} · ${activeForm.fields.length} fields`
+          : `Configure the application form for ${job.title}.`
+      }
+      actions={
+        <Link className={secondaryLinkClass} to={`/apply/${job.id}`}>
+          <ExternalLink size={16} />
+          Open public form
+        </Link>
+      }
     >
-      <div className="version-strip" aria-label="Application form versions">
+      <div
+        className="mb-4 flex gap-2 overflow-x-auto"
+        aria-label="Application form versions"
+      >
         {forms.map((form) => (
-          <span key={form.id} className={form.id === activeForm?.id ? 'version-chip version-chip--active' : 'version-chip'}>
+          <span
+            className={`flex-none rounded-aura-sm border px-3 py-1.5 font-utility text-[11px] font-semibold ${
+              form.id === activeForm?.id
+                ? 'border-marine/40 bg-glacier/15 text-harbor'
+                : 'border-harbor/15 bg-white/70 text-aura-text-muted'
+            }`}
+            key={form.id}
+          >
             v{form.version} · {form.status}
           </span>
         ))}
       </div>
 
       {!activeForm ? (
-        <Card className="empty-state"><h2>No application form</h2><p>This job has no configured application form.</p></Card>
+        <Card className="p-8 text-center">
+          <h2 className="m-0 text-lg font-semibold text-depth">
+            No application form
+          </h2>
+          <p className="mt-2 mb-0 text-sm text-aura-text-secondary">
+            This job has no configured application form.
+          </p>
+        </Card>
       ) : (
         <>
-          <Card className="builder-toolbar">
+          <Card className="flex flex-col gap-5 p-5 md:flex-row md:items-center md:justify-between md:p-6">
             <div>
-              <div className="builder-toolbar__title"><h2>{activeForm.name}</h2><Badge tone={activeForm.status === 'PUBLISHED' ? 'success' : 'warning'}>{activeForm.status}</Badge></div>
-              <p>Version {activeForm.version} · {activeForm.fields.length} fields</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="m-0 text-lg font-semibold text-depth">
+                  {activeForm.name}
+                </h2>
+                <Badge tone={formStatusTone(activeForm.status)}>
+                  {activeForm.status}
+                </Badge>
+              </div>
+              <p className="mt-2 mb-0 text-sm text-aura-text-secondary">
+                Version {activeForm.version} · {activeForm.fields.length} fields
+              </p>
             </div>
-            <div className="builder-toolbar__actions">
-              {editable ? <Button onClick={openAddDialog}><Plus size={16} />Add field</Button> : null}
-              {editable ? <Button variant="secondary" onClick={requestSuggestions}><Sparkles size={16} />Suggest Questions with AI</Button> : null}
-              <Button variant="secondary" onClick={() => setActiveTab('preview')}><Eye size={16} />Preview form</Button>
-              {editable ? <Button onClick={publishForm}><Send size={16} />Publish form</Button> : null}
-              {!draftForm && publishedForm ? <Button variant="secondary" onClick={createDraftVersion}><FilePlus2 size={16} />Create draft version</Button> : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {editable ? (
+                <Button variant="secondary" onClick={requestSuggestions}>
+                  <Lightbulb size={16} />
+                  Suggest questions
+                </Button>
+              ) : null}
+              {editable ? (
+                <Button variant="secondary" onClick={openAddDialog}>
+                  <Plus size={16} />
+                  Add field
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => setActiveTab('preview')}>
+                <Eye size={16} />
+                Preview
+              </Button>
+              {editable ? (
+                <Button onClick={publishForm}>
+                  <Send size={16} />
+                  Publish form
+                </Button>
+              ) : null}
+              {!draftForm && publishedForm ? (
+                <Button variant="secondary" onClick={createDraftVersion}>
+                  <FilePlus2 size={16} />
+                  Create draft version
+                </Button>
+              ) : null}
             </div>
           </Card>
 
-          {!editable ? <p className="info-banner">Published forms are read-only. Create a draft version to make changes.</p> : null}
+          {!editable ? (
+            <p className="mt-3 rounded-aura-sm border border-marine/20 bg-glacier/10 px-4 py-3 text-sm leading-6 text-harbor">
+              Published forms are read-only. Create a new draft version to make
+              changes.
+            </p>
+          ) : null}
           {messages.length > 0 ? (
-            <div className={messages[0].startsWith('Cannot') || messages[0].includes('already') ? 'message-list message-list--error' : 'message-list'} role="status">
-              {messages.map((message) => <p key={message}>{message}</p>)}
+            <div
+              className={
+                messages[0].startsWith('Cannot') ||
+                messages[0].includes('already')
+                  ? 'mt-3 rounded-aura-sm border border-aura-danger/30 bg-aura-danger-soft px-4 py-3 text-sm text-aura-danger'
+                  : 'mt-3 rounded-aura-sm border border-marine/20 bg-glacier/10 px-4 py-3 text-sm text-harbor'
+              }
+              role="status"
+            >
+              {messages.map((message) => (
+                <p className="m-0" key={message}>
+                  {message}
+                </p>
+              ))}
             </div>
           ) : null}
 
@@ -299,9 +390,19 @@ export default function ApplicationFormBuilder() {
             />
           ) : <FormPreview form={activeForm} />}
 
-          <Card className="public-link-card">
-            <div><p className="page-heading__eyebrow">Public apply link</p><code>/apply/{job.id}</code></div>
-            <Link className="button button--secondary" to={`/apply/${job.id}`}><ExternalLink size={16} />Open public form</Link>
+          <Card className="mt-5 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
+                Public apply link
+              </p>
+              <code className="rounded-aura-xs bg-frost px-2 py-1 font-utility text-xs text-harbor">
+                /apply/{job.id}
+              </code>
+            </div>
+            <Link className={secondaryLinkClass} to={`/apply/${job.id}`}>
+              <ExternalLink size={16} />
+              Open public form
+            </Link>
           </Card>
         </>
       )}

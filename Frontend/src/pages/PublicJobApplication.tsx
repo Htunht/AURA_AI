@@ -31,14 +31,39 @@ export default function PublicJobApplication() {
 
   if (submitted) {
     return (
-      <main className="public-page">
-        <section className="success-card">
-          <CheckCircle2 size={42} aria-hidden="true" />
-          <p className="page-heading__eyebrow">Application submitted</p>
-          <h1>Thank you, {submitted.candidate.fullName}.</h1>
-          <p>Your application for {job.title} has been received.</p>
-          <dl><dt>Application ID</dt><dd>{submitted.application.id}</dd></dl>
-          <Link className="button button--primary" to="/jobs">Back to job openings</Link>
+      <main className="min-h-screen bg-frost px-5 py-8">
+        <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[620px] place-items-center">
+          <Card className="w-full p-8 text-center shadow-aura-md md:p-10">
+            <CheckCircle2
+              className="mx-auto mb-4 text-aura-success"
+              size={42}
+              aria-hidden="true"
+            />
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
+              Application received
+            </p>
+            <h1 className="m-0 text-[26px] font-bold leading-tight text-depth md:text-[30px]">
+              Thank you, {submitted.candidate.fullName}.
+            </h1>
+            <p className="mt-3 mb-0 text-sm leading-6 text-aura-text-secondary">
+              Your application for {job.title} has been submitted. The hiring
+              team will review your information.
+            </p>
+            <dl className="my-6 rounded-aura-sm border border-harbor/10 bg-frost/70 px-4 py-3">
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-aura-text-muted">
+                Application reference
+              </dt>
+              <dd className="mt-1 m-0 font-utility text-xs font-semibold text-harbor">
+                {submitted.application.id}
+              </dd>
+            </dl>
+            <Link
+              className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-harbor bg-harbor px-4 text-sm font-semibold text-frost no-underline transition-colors duration-150 hover:bg-depth"
+              to="/jobs"
+            >
+              View open roles
+            </Link>
+          </Card>
         </section>
       </main>
     )
@@ -101,26 +126,51 @@ export default function PublicJobApplication() {
   }
 
   return (
-    <main className="public-page">
-      <header className="public-header">
-        <Link to="/jobs" className="public-brand"><span className="public-brand__mark">A</span><span>AURA AI</span></Link>
-        <span>Demo Application Portal</span>
+    <main className="min-h-screen bg-frost px-5 py-6 md:px-8">
+      <header className="mx-auto flex max-w-[880px] items-center justify-between py-2 pb-6 text-sm text-aura-text-muted">
+        <Link
+          to="/jobs"
+          className="flex items-center gap-3 font-semibold text-depth no-underline"
+        >
+          <span className="inline-grid size-8 place-items-center rounded-aura-sm bg-harbor text-sm font-bold text-frost">
+            A
+          </span>
+          <span>AURA Technology</span>
+        </Link>
+        <span>Careers</span>
       </header>
-      <section className="public-hero">
-        <p className="page-heading__eyebrow">AURA Technology</p>
-        <h1>{job.title}</h1>
-        <p>{job.department} · Apply for this position</p>
+      <section className="mx-auto max-w-[880px] pb-5">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
+          Careers at AURA Technology
+        </p>
+        <h1 className="m-0 text-[28px] font-bold leading-tight text-depth md:text-[32px]">
+          Apply for this role
+        </h1>
+        <p className="mt-2 mb-0 text-sm text-aura-text-secondary md:text-[15px]">
+          {job.title} · {job.department} · {job.positionsCount} position
+          {job.positionsCount === 1 ? '' : 's'}
+        </p>
       </section>
-      <Card className="public-form-card">
-        <header><h2>{form.name}</h2><p>Complete the fields below. Required fields are marked clearly.</p></header>
+      <Card className="mx-auto max-w-[880px] rounded-aura-lg p-5 shadow-aura-sm md:p-8">
+        <header className="border-b border-harbor/15 pb-5">
+          <h2 className="m-0 text-xl font-semibold text-depth">{form.name}</h2>
+          <p className="mt-2 mb-0 text-sm leading-6 text-aura-text-secondary">
+            Complete the fields below. Required fields are marked clearly.
+          </p>
+        </header>
         {errors.length > 0 ? (
-          <div className="message-list message-list--error" role="alert">
+          <div
+            className="mt-4 rounded-aura-sm border border-aura-danger/30 bg-aura-danger-soft px-4 py-3 text-sm text-aura-danger"
+            role="alert"
+          >
             <strong>Review your application</strong>
-            <ul>{errors.map((error) => <li key={error}>{error}</li>)}</ul>
+            <ul className="mt-2 mb-0 pl-5">
+              {errors.map((error) => <li key={error}>{error}</li>)}
+            </ul>
           </div>
         ) : null}
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="public-form-fields">
+        <form className="mt-6 grid gap-6" onSubmit={handleSubmit} noValidate>
+          <div className="grid gap-x-5 gap-y-6 md:grid-cols-2 [&>div:has(textarea)]:md:col-span-2 [&>div:has(input[type='file'])]:md:col-span-2 [&>div:has(div[aria-describedby])]:md:col-span-2">
             {form.fields.map((field) => (
               <DynamicFormField
                 key={field.id}
@@ -130,8 +180,14 @@ export default function PublicJobApplication() {
               />
             ))}
           </div>
-          <div className="public-form-actions">
-            <Link to="/jobs"><ArrowLeft size={16} />Back to job openings</Link>
+          <div className="flex flex-col gap-3 border-t border-harbor/15 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <Link
+              className="inline-flex items-center gap-2 text-sm font-semibold text-harbor no-underline transition-colors duration-150 hover:text-depth"
+              to="/jobs"
+            >
+              <ArrowLeft size={16} />
+              Back to job openings
+            </Link>
             <Button type="submit">Submit application</Button>
           </div>
         </form>
@@ -142,13 +198,26 @@ export default function PublicJobApplication() {
 
 function PublicUnavailable({ title, message }: { title: string; message: string }) {
   return (
-    <main className="public-page public-page--centered">
-      <section className="standalone-card">
-        <span className="public-brand__mark">A</span>
-        <p className="page-heading__eyebrow">Demo Application Portal</p>
-        <h1>{title}</h1>
-        <p>{message}</p>
-        <Link className="button button--secondary" to="/jobs">Back to job openings</Link>
+    <main className="grid min-h-screen place-items-center bg-frost px-5 py-8">
+      <section className="w-full max-w-[570px] rounded-aura-lg border border-harbor/15 bg-white p-8 text-center shadow-aura-md">
+        <span className="mx-auto mb-5 inline-grid size-9 place-items-center rounded-aura-sm bg-harbor text-sm font-bold text-frost">
+          A
+        </span>
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
+          Careers at AURA Technology
+        </p>
+        <h1 className="m-0 text-[26px] font-bold leading-tight text-depth">
+          {title}
+        </h1>
+        <p className="mt-3 mb-0 text-sm leading-6 text-aura-text-secondary">
+          {message}
+        </p>
+        <Link
+          className="mt-6 inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline transition-colors duration-150 hover:bg-glacier/15"
+          to="/jobs"
+        >
+          Back to job openings
+        </Link>
       </section>
     </main>
   )
