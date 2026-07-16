@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { AppShell } from '../app/AppShell'
 import { SkeletonPage } from '../components/ui/SkeletonPage'
 
-const ApplicationFormBuilder = lazy(() => import('../pages/ApplicationFormBuilder'))
 const CandidateDetail = lazy(() => import('../pages/CandidateDetail'))
 const Candidates = lazy(() => import('../pages/Candidates'))
 const Dashboard = lazy(() => import('../pages/Dashboard'))
