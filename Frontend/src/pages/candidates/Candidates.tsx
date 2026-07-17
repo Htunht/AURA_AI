@@ -1,4 +1,4 @@
-import { ExternalLink, FilePenLine, Search } from 'lucide-react'
+import { ExternalLink, FilePenLine, Search, SlidersHorizontal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CandidateCard } from '../../components/candidates/CandidateCard'
@@ -16,6 +16,7 @@ import {
 } from '../../store/demoSelectors'
 import type { ApplicationStage } from '../../types/application'
 import type { Recommendation } from '../../types/evaluation'
+import { formatCandidateResultCount } from '../../utils/candidateListPresentation'
 import { formatApplicationStage } from '../../utils/helpers'
 
 type RecommendationFilter = Recommendation | 'ALL' | 'NOT_SCREENED'
@@ -46,6 +47,7 @@ export default function Candidates() {
   const [stage, setStage] = useState<StageFilter>('ALL')
   const [selectedJobId, setSelectedJobId] = useState('ALL')
   const [screeningStatus, setScreeningStatus] = useState<ScreeningStatusFilter>('ALL')
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const stages = Array.from(new Set(allItems.map((item) => item.application.currentStage)))
 
   const filteredItems = allItems.filter((item) => {
@@ -71,33 +73,21 @@ export default function Candidates() {
       description={job ? 'Review applications and candidate progress for this role.' : 'Review submitted applications and track candidate progress across active hiring processes.'}
       actions={job ? <><Link className={actionLinkClass} to={`/apply/${job.id}`}><ExternalLink size={16} aria-hidden="true" />Open application form</Link><Link className={actionLinkClass} to={`/jobs/${job.id}/application-form`}><FilePenLine size={16} aria-hidden="true" />Manage application form</Link></> : undefined}
     >
-      <ScreeningAutomationStatus />
-      <Card className="mb-4 p-4">
-        <div className={`grid gap-3 ${job ? 'md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_190px_190px_190px]' : 'md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_180px_180px_200px]'}`}>
-          <label className="relative block">
+      <ScreeningAutomationStatus compact />
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <label className="relative min-w-60 flex-[1_1_280px]">
             <span className="sr-only">Search candidates</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-aura-text-muted" size={17} aria-hidden="true" />
             <Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, role, or skill" />
           </label>
-          <label className="grid gap-1.5">
+          <label className="w-full sm:w-48">
             <span className="sr-only">Recommendation</span>
             <select className={selectClass} value={recommendation} onChange={(event) => setRecommendation(event.target.value as RecommendationFilter)}>
               {recommendationOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label className="grid gap-1.5">
-            <span className="sr-only">Screening status</span>
-            <select className={selectClass} value={screeningStatus} onChange={(event) => setScreeningStatus(event.target.value as ScreeningStatusFilter)}>
-              <option value="ALL">All screening statuses</option>
-              <option value="SETUP_REQUIRED">Setup required</option>
-              <option value="NOT_SCREENED">Not screened</option>
-              <option value="QUEUED">Queued</option>
-              <option value="PROCESSING">Processing</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="FAILED">Failed</option>
-            </select>
-          </label>
-          <label className="grid gap-1.5">
+          <label className="w-full sm:w-44">
             <span className="sr-only">Application stage</span>
             <select className={selectClass} value={stage} onChange={(event) => setStage(event.target.value as StageFilter)}>
               <option value="ALL">All stages</option>
@@ -105,7 +95,7 @@ export default function Candidates() {
             </select>
           </label>
           {!job ? (
-            <label className="grid gap-1.5">
+            <label className="w-full sm:w-52">
               <span className="sr-only">Job opening</span>
               <select className={selectClass} value={selectedJobId} onChange={(event) => setSelectedJobId(event.target.value)}>
                 <option value="ALL">All job openings</option>
@@ -113,12 +103,39 @@ export default function Candidates() {
               </select>
             </label>
           ) : null}
+          <button
+            type="button"
+            className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-aura-sm border px-3 text-sm font-semibold transition-colors sm:w-auto ${moreFiltersOpen || screeningStatus !== 'ALL' ? 'border-marine/40 bg-glacier/10 text-depth' : 'border-harbor/20 bg-white text-harbor hover:bg-frost/65'}`}
+            onClick={() => setMoreFiltersOpen((open) => !open)}
+            aria-expanded={moreFiltersOpen}
+            aria-controls="candidate-more-filters"
+          >
+            <SlidersHorizontal size={15} aria-hidden="true" />
+            More filters
+            {screeningStatus !== 'ALL' ? <span className="h-1.5 w-1.5 rounded-full bg-marine" aria-label="Screening filter active" /> : null}
+          </button>
         </div>
-        <p className="mb-0 mt-3 text-xs font-medium text-aura-text-muted">Showing {filteredItems.length} of {allItems.length} application{allItems.length === 1 ? '' : 's'}</p>
+        {moreFiltersOpen ? (
+          <div id="candidate-more-filters" className="mt-3 border-t border-harbor/10 pt-3">
+            <label className="block w-full sm:w-56">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">Screening status</span>
+              <select className={selectClass} value={screeningStatus} onChange={(event) => setScreeningStatus(event.target.value as ScreeningStatusFilter)}>
+                <option value="ALL">All screening statuses</option>
+                <option value="SETUP_REQUIRED">Setup required</option>
+                <option value="NOT_SCREENED">Not screened</option>
+                <option value="QUEUED">Queued</option>
+                <option value="PROCESSING">Processing</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="FAILED">Failed</option>
+              </select>
+            </label>
+          </div>
+        ) : null}
+        <p className="mb-0 mt-2.5 text-xs font-medium text-aura-text-muted" aria-live="polite">{formatCandidateResultCount(filteredItems.length, allItems.length)}</p>
       </Card>
 
       {filteredItems.length > 0 ? (
-        <><div className="hidden lg:block"><CandidateTable items={filteredItems} onRetryFailed={(applicationId) => retryFailed([applicationId])} /></div><div className="grid gap-3 lg:hidden">{filteredItems.map((item) => <CandidateCard item={item} onRetryFailed={() => retryFailed([item.application.id])} key={item.application.id} />)}</div></>
+        <><div className="hidden md:block"><CandidateTable items={filteredItems} onRetryFailed={(applicationId) => retryFailed([applicationId])} /></div><div className="grid gap-3 md:hidden">{filteredItems.map((item) => <CandidateCard item={item} onRetryFailed={() => retryFailed([item.application.id])} key={item.application.id} />)}</div></>
       ) : (
         <Card className="p-8 text-center md:p-12">
           <h2 className="m-0 text-lg font-semibold text-depth">{noApplicationsForRole ? 'No applications have been submitted for this role.' : 'No candidates match the selected filters.'}</h2>

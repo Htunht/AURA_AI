@@ -1,8 +1,11 @@
 import type { DemoState } from '../store/demoStateTypes'
 import type { EmploymentType, Job, JobStatus, SkillRequirement, WorkArrangement } from '../types/job'
 import type { JobDraftInput } from '../types/jobDraft'
+import { z } from 'zod'
 
-export type JobValidationResult = { valid: boolean; errors: Record<string, string> }
+export type JobValidationResult = { valid: boolean; errors: Record<string, string>; data?: JobDraftInput }
+export type JobDraftField = keyof JobDraftInput
+export const jobDraftFieldOrder: JobDraftField[] = ['title', 'department', 'description', 'positionsCount', 'employmentType', 'workArrangement', 'location', 'minimumExperienceYears', 'requiredSkills', 'preferredSkills', 'applicationDeadline']
 export type JobReadinessStatus = 'JOB_DETAILS_INCOMPLETE' | 'APPLICATION_FORM_REQUIRED' | 'SCREENING_SETUP_REQUIRED' | 'READY' | 'OPEN'
 export type JobReadinessResult = { status: JobReadinessStatus; ready: boolean; issues: string[] }
 export type JobRelatedRecordCounts = {
@@ -18,11 +21,130 @@ export type JobRelatedRecordCounts = {
 }
 export type JobDeletionCheck = { allowed: boolean; reasons: string[] }
 
-export const employmentTypes: EmploymentType[] = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY']
-export const workArrangements: WorkArrangement[] = ['ONSITE', 'HYBRID', 'REMOTE']
+export const employmentTypes = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'TEMPORARY'] as const satisfies readonly EmploymentType[]
+export const workArrangements = ['ONSITE', 'HYBRID', 'REMOTE'] as const satisfies readonly WorkArrangement[]
 
 function normalizedSkill(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+}
+
+function normalizeSkills(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const unique = new Map<string, string>()
+  for (const item of value) {
+    if (typeof item !== 'string') continue
+    const displayValue = item.trim().replace(/\s+/g, ' ')
+    const key = normalizedSkill(displayValue)
+    if (displayValue && !unique.has(key)) unique.set(key, displayValue)
+  }
+  return [...unique.values()]
+}
+
+const skillListSchema = z.preprocess(normalizeSkills, z.array(z.string()))
+
+function parseDateOnly(value: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return undefined
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(year, month - 1, day)
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : undefined
+}
+
+export function createJobDraftSchema(now = new Date()) {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+
+  return z.object({
+    title: z.string().trim().min(1, 'Enter a job title.').min(2, 'Job title must be at least 2 characters.'),
+    department: z.string().trim().min(1, 'Enter a department.'),
+    description: z.string().trim().min(1, 'Enter a job description.').min(30, 'Description must be at least 30 characters.'),
+    positionsCount: z.number().int('Positions must be a whole number of at least 1.').min(1, 'Positions must be a whole number of at least 1.'),
+    employmentType: z.enum(employmentTypes),
+    workArrangement: z.enum(workArrangements),
+    location: z.string().trim(),
+    minimumExperienceYears: z.number().finite().min(0, 'Minimum experience must be zero or greater.'),
+    requiredSkills: skillListSchema.pipe(z.array(z.string()).min(1, 'Add at least one required skill.').max(20, 'Use no more than 20 required skills.')),
+    preferredSkills: skillListSchema.pipe(z.array(z.string()).max(20, 'Use no more than 20 preferred skills.')),
+    applicationDeadline: z.string().trim().refine((value) => !value || Boolean(parseDateOnly(value)), 'Enter a valid application deadline.').refine((value) => !value || (parseDateOnly(value)?.getTime() ?? Number.NEGATIVE_INFINITY) > today.getTime(), 'Choose a future application deadline.'),
+  }).superRefine((input, context) => {
+    if (input.workArrangement !== 'REMOTE' && !input.location) {
+      context.addIssue({ code: 'custom', path: ['location'], message: 'Location is required for on-site and hybrid roles.' })
+    }
+    const required = new Set(input.requiredSkills.map(normalizedSkill))
+    if (input.preferredSkills.some((skill) => required.has(normalizedSkill(skill)))) {
+      context.addIssue({ code: 'custom', path: ['preferredSkills'], message: 'Required and preferred skills cannot overlap.' })
+    }
+  })
+}
+
+export const jobDraftSchema = createJobDraftSchema()
+
+const fallbackFieldMessages: Partial<Record<keyof JobDraftInput, string>> = {
+  title: 'Enter a valid job title.',
+  department: 'Enter a department.',
+  description: 'Enter a valid job description.',
+  positionsCount: 'Enter a valid number of positions.',
+  employmentType: 'Select an employment type.',
+  workArrangement: 'Select a work arrangement.',
+  location: 'Enter a valid location.',
+  minimumExperienceYears: 'Enter valid minimum experience.',
+  requiredSkills: 'Add at least one required skill.',
+  preferredSkills: 'Review the preferred skills.',
+  applicationDeadline: 'Enter a valid application deadline.',
+}
+
+export function jobDraftIssuesToFieldErrors(issues: z.core.$ZodIssue[]): Record<string, string> {
+  const errors: Record<string, string> = {}
+  for (const issue of issues) {
+    const field = issue.path[0]
+    if (typeof field !== 'string' || errors[field]) continue
+    const friendly = fallbackFieldMessages[field as keyof JobDraftInput]
+    errors[field] = issue.code === 'invalid_type' || issue.code === 'invalid_value'
+      ? friendly ?? 'Review this field.'
+      : issue.message
+  }
+  return errors
+}
+
+export function getOrderedJobDraftIssues(errors: Record<string, string>): Array<{ field: JobDraftField; message: string }> {
+  const seen = new Set<string>()
+  return jobDraftFieldOrder.flatMap((field) => {
+    const message = errors[field]
+    if (!message || seen.has(message)) return []
+    seen.add(message)
+    return [{ field, message }]
+  })
+}
+
+export function validateJobDraftSubmission(input: JobDraftInput, now = new Date()) {
+  const result = createJobDraftSchema(now).safeParse(input)
+  if (result.success) return { valid: true as const, data: result.data, errors: {}, orderedIssues: [], shouldOpenDialog: false }
+  const errors = jobDraftIssuesToFieldErrors(result.error.issues)
+  return { valid: false as const, errors, orderedIssues: getOrderedJobDraftIssues(errors), shouldOpenDialog: true }
+}
+
+export function reconcileJobDraftFieldErrors(current: Record<string, string>, input: JobDraftInput, now = new Date()) {
+  const next = validateJobDraft(input, now).errors
+  return Object.fromEntries(Object.entries(current).map(([field, message]) => [field, message && next[field] ? next[field] : '']))
+}
+
+export type JobDraftFocusableControl = {
+  scrollIntoView: (options: ScrollIntoViewOptions) => void
+  focus: (options?: FocusOptions) => void
+}
+
+export function focusJobDraftControl(
+  field: JobDraftField,
+  controls: Record<JobDraftField, { current: JobDraftFocusableControl | null }>,
+  schedule: (callback: () => void) => unknown = (callback) => window.requestAnimationFrame(callback),
+) {
+  const element = controls[field].current
+  if (!element) return false
+  element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  schedule(() => element.focus({ preventScroll: true }))
+  return true
 }
 
 export function jobToDraftInput(job: Job): JobDraftInput {
@@ -49,34 +171,9 @@ export function draftSkillsToRequirements(input: JobDraftInput, existing: SkillR
   ]
 }
 
-export function validateJobDraft(input: JobDraftInput): JobValidationResult {
-  const errors: Record<string, string> = {}
-  const title = input.title.trim()
-  const description = input.description.trim()
-  if (!title) errors.title = 'Enter a job title.'
-  else if (title.length < 3) errors.title = 'Job title must be at least 3 characters.'
-  if (!input.department.trim()) errors.department = 'Enter a department.'
-  if (!description) errors.description = 'Enter a job description.'
-  else if (description.length < 30) errors.description = 'Description must be at least 30 characters.'
-  if (!Number.isInteger(input.positionsCount) || input.positionsCount < 1) errors.positionsCount = 'Positions must be a whole number of at least 1.'
-  if (!employmentTypes.includes(input.employmentType)) errors.employmentType = 'Select a valid employment type.'
-  if (!workArrangements.includes(input.workArrangement)) errors.workArrangement = 'Select a valid work arrangement.'
-  if (input.workArrangement !== 'REMOTE' && !input.location.trim()) errors.location = 'Location is required for on-site and hybrid roles.'
-  if (!Number.isFinite(input.minimumExperienceYears) || input.minimumExperienceYears < 0) errors.minimumExperienceYears = 'Minimum experience must be zero or greater.'
-
-  const requiredNormalized = input.requiredSkills.map(normalizedSkill)
-  const preferredNormalized = input.preferredSkills.map(normalizedSkill)
-  if (input.requiredSkills.length === 0) errors.requiredSkills = 'Add at least one required skill.'
-  else if (input.requiredSkills.length > 20) errors.requiredSkills = 'Use no more than 20 required skills.'
-  else if (requiredNormalized.some((skill) => !skill)) errors.requiredSkills = 'Required skills cannot be empty.'
-  else if (new Set(requiredNormalized).size !== requiredNormalized.length) errors.requiredSkills = 'Required skills must be unique.'
-  if (input.preferredSkills.length > 20) errors.preferredSkills = 'Use no more than 20 preferred skills.'
-  else if (preferredNormalized.some((skill) => !skill)) errors.preferredSkills = 'Preferred skills cannot be empty.'
-  else if (new Set(preferredNormalized).size !== preferredNormalized.length) errors.preferredSkills = 'Preferred skills must be unique.'
-  if (preferredNormalized.some((skill) => requiredNormalized.includes(skill))) errors.preferredSkills = 'Required and preferred skills cannot overlap.'
-
-  if (input.applicationDeadline && Number.isNaN(Date.parse(`${input.applicationDeadline}T23:59:59`))) errors.applicationDeadline = 'Enter a valid application deadline.'
-  return { valid: Object.keys(errors).length === 0, errors }
+export function validateJobDraft(input: JobDraftInput, now = new Date()): JobValidationResult {
+  const result = validateJobDraftSubmission(input, now)
+  return result.valid ? { valid: true, errors: {}, data: result.data } : { valid: false, errors: result.errors }
 }
 
 export function validateJob(job: Job): JobValidationResult {

@@ -29,9 +29,11 @@ function recommendationTone(recommendation?: Recommendation) {
 export function HumanReviewTable({
   items,
   onReview,
+  showCategory = true,
 }: {
   items: HumanReviewQueueItem[]
   onReview: (applicationId: string) => void
+  showCategory?: boolean
 }) {
   return (
     <div className="overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-xs">
@@ -40,25 +42,23 @@ export function HumanReviewTable({
           <tr>
             <th className="px-4 py-3">Candidate</th>
             <th className="px-4 py-3">Applied role</th>
-            <th className="px-4 py-3">AI recommendation</th>
-            <th className="px-4 py-3">Score</th>
-            <th className="px-4 py-3">Confidence</th>
-            <th className="px-4 py-3">Review reason</th>
-            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Recommendation</th>
+            <th className="px-4 py-3">Result</th>
+            <th className="px-4 py-3">Reason</th>
+            {showCategory ? <th className="px-4 py-3">Status</th> : null}
             <th className="px-4 py-3"><span className="sr-only">Action</span></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-harbor/10">
           {items.map((item) => (
             <tr className="transition-colors hover:bg-glacier/[0.07]" key={item.application.id}>
-              <td className="px-4 py-4 align-top"><strong className="font-semibold text-depth">{item.candidate.fullName}</strong><span className="mt-1 block text-xs text-aura-text-secondary">{item.candidate.currentPosition}</span><span className="mt-1 block text-xs text-aura-text-muted">{item.candidate.email}</span></td>
+              <td className="px-4 py-4 align-top"><strong className="font-semibold text-depth">{item.candidate.fullName}</strong><span className="mt-1 block text-xs text-aura-text-muted">{item.candidate.email}</span></td>
               <td className="max-w-44 px-4 py-4 align-top font-medium text-depth">{item.job.title}</td>
               <td className="px-4 py-4 align-top">{item.evaluation ? <Badge tone={recommendationTone(item.evaluation.recommendation)}>{getScreeningRecommendationLabel(item.evaluation.recommendation)}</Badge> : <span className="text-aura-text-muted">Unavailable</span>}</td>
-              <td className="px-4 py-4 align-top font-semibold text-depth">{item.evaluation ? Math.round(item.evaluation.overallScore) : '—'}</td>
-              <td className="px-4 py-4 align-top font-semibold text-depth">{item.evaluation ? `${item.evaluation.confidence}%` : '—'}</td>
+              <td className="whitespace-nowrap px-4 py-4 align-top font-semibold text-depth">{item.evaluation ? <>{Math.round(item.evaluation.overallScore)} <span className="font-normal text-aura-text-muted">· {item.evaluation.confidence}%</span></> : '—'}</td>
               <td className="max-w-52 px-4 py-4 align-top text-xs leading-5 text-aura-text-secondary">{item.reviewReasons[0] ?? 'Recruiter review required'}</td>
-              <td className="px-4 py-4 align-top"><Badge tone={categoryTone(item.category)}>{categoryLabels[item.category]}</Badge></td>
-              <td className="px-4 py-4 align-top"><Button className="h-9 whitespace-nowrap" variant={item.category === 'NEEDS_REVIEW' ? 'primary' : 'secondary'} onClick={() => onReview(item.application.id)} aria-label={`Review ${item.candidate.fullName}`}>Review candidate</Button></td>
+              {showCategory ? <td className="px-4 py-4 align-top"><Badge tone={categoryTone(item.category)}>{categoryLabels[item.category]}</Badge></td> : null}
+              <td className="px-4 py-3 align-top"><Button className="h-8 whitespace-nowrap px-2 shadow-none" variant="ghost" onClick={() => onReview(item.application.id)} aria-label={`Review ${item.candidate.fullName}`}>Review</Button></td>
             </tr>
           ))}
         </tbody>

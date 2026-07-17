@@ -2,8 +2,12 @@ import { ArrowLeft, FileText } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CandidateProfile } from '../../components/candidates/CandidateProfile'
+import { CandidateApplicationSelector } from '../../components/candidates/CandidateApplicationSelector'
+import { CandidateCurrentAction } from '../../components/candidates/CandidateCurrentAction'
+import { CandidateRecruitmentProgress } from '../../components/candidates/CandidateRecruitmentProgress'
 import { CandidateTimeline } from '../../components/candidates/CandidateTimeline'
 import { CandidateInterviewPanel } from '../../components/interviews/CandidateInterviewPanel'
+import { CandidateInterviewWorkflow } from '../../components/interviews/CandidateInterviewWorkflow'
 import { CandidateScreeningPanel } from '../../components/screening/CandidateScreeningPanel'
 import { PostDecisionNextStep } from '../../components/evaluation/PostDecisionNextStep'
 import { PageContainer } from '../../components/layout/PageContainer'
@@ -22,24 +26,14 @@ import {
   selectInterviewQuestionPreparationStatus,
   selectInterviewSessionOperationalStatus,
   selectInterviewSessionByInterviewId,
-  selectInterviewSessionProgressSummary,
   selectInterviewTranscriptByInterviewId,
   selectLatestInterviewAnalysis,
   selectLatestFinalEvaluation,
   selectEvaluationChallengesByEvaluationId,
 } from '../../store/demoSelectors'
 import type { ApplicationAnswer } from '../../types/application'
-import type { Interview } from '../../types/interview'
-import { formatApplicationStage, formatApplicationStatus, formatDateTime, formatInterviewDate, formatInterviewStatus, formatInterviewTime } from '../../utils/helpers'
-import { getInterviewDetailPath } from '../../utils/interviewRoutes'
-
-const tabs: TabItem[] = [
-  { id: 'application', label: 'Application' },
-  { id: 'screening', label: 'AI Screening' },
-  { id: 'interview', label: 'Interview' },
-  { id: 'final', label: 'Final Evaluation' },
-  { id: 'timeline', label: 'Timeline' },
-]
+import { candidateTabAvailability } from '../../utils/candidateDetailPresentation'
+import { formatApplicationStage, formatApplicationStatus, formatDateTime } from '../../utils/helpers'
 
 const backLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-transparent px-4 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf]'
 
@@ -58,10 +52,6 @@ function SectionHeading({ title, description }: { title: string; description?: s
 
 function Placeholder({ title, description }: { title: string; description: string }) {
   return <Card className="p-8 text-center md:p-12"><span className="mx-auto mb-4 inline-grid size-11 place-items-center rounded-full bg-glacier/15 text-lg font-bold text-marine">A</span><h2 className="m-0 text-lg font-semibold text-depth">{title}</h2><p className="mx-auto mb-0 mt-2 max-w-xl text-sm leading-6 text-aura-text-secondary">{description}</p></Card>
-}
-
-function InterviewRecordSummary({ interview, questionPlan, session, transcript, analysis, finalEvaluation }: { interview: Interview; questionPlan: string; session: string; transcript: string; analysis: string; finalEvaluation: string }) {
-  return <Card className="p-5 md:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="m-0 text-lg font-semibold text-depth">Interview record</h2><p className="mb-0 mt-1 text-sm text-aura-text-secondary">Recruitment stage and interview operations are tracked separately.</p></div><Badge tone={interview.status === 'COMPLETED' ? 'success' : interview.status === 'CANCELLED' ? 'neutral' : 'accent'}>{formatInterviewStatus(interview.status)}</Badge></div><dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs text-aura-text-muted">Schedule</dt><dd className="mb-0 mt-1 font-semibold text-depth">{formatInterviewDate(interview.scheduledStart)}</dd><dd className="m-0 text-xs text-aura-text-secondary">{formatInterviewTime(interview.scheduledStart)}–{formatInterviewTime(interview.scheduledEnd)}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-aura-text-muted">Interview team</dt><dd className="mb-0 mt-1 font-semibold leading-6 text-depth">{interview.interviewers.map((person) => person.name).join(', ')}</dd></div><div><dt className="text-xs text-aura-text-muted">Question plan</dt><dd className="mb-0 mt-1 font-semibold capitalize text-depth">{questionPlan}</dd></div>{[['Session', session], ['Transcript', transcript], ['Analysis', analysis], ['Final evaluation', finalEvaluation]].map(([label, value]) => <div key={label}><dt className="text-xs text-aura-text-muted">{label}</dt><dd className="mb-0 mt-1 font-semibold capitalize text-depth">{value}</dd></div>)}</dl><Link className={`${backLinkClass} mt-5`} to={getInterviewDetailPath(interview.id)}>Open interview detail</Link></Card>
 }
 
 export default function CandidateDetail() {
@@ -89,7 +79,6 @@ export default function CandidateDetail() {
   const interview = selectInterviewByApplicationId(state, application.id)
   const sessionStatus = interview ? selectInterviewSessionOperationalStatus(state, interview.id) : 'UNAVAILABLE'
   const session = interview ? selectInterviewSessionByInterviewId(state, interview.id) : undefined
-  const sessionProgress = session ? selectInterviewSessionProgressSummary(session) : undefined
   const questionPlanStatus = interview ? selectInterviewQuestionPreparationStatus(state, interview.id) : undefined
   const transcript = interview ? selectInterviewTranscriptByInterviewId(state, interview.id) : undefined
   const analysis = interview ? selectLatestInterviewAnalysis(state, interview.id) : undefined
@@ -104,59 +93,92 @@ export default function CandidateDetail() {
     ['Location', candidate.location],
     ['Years of experience', `${candidate.yearsExperience} years`],
   ]
+  const tabAvailability = candidateTabAvailability({
+    stage: application.currentStage,
+    hasInterview: Boolean(interview),
+    hasFinalEvaluation: Boolean(finalEvaluation),
+  })
+  const candidateTabs: TabItem[] = [
+    { id: 'application', label: 'Application' },
+    { id: 'screening', label: 'AI Screening' },
+    {
+      id: 'interview',
+      label: 'Interview',
+      disabled: !tabAvailability.interviewAvailable,
+      availabilityText: 'After screening review',
+    },
+    {
+      id: 'final',
+      label: 'Final Evaluation',
+      disabled: !tabAvailability.finalEvaluationAvailable,
+      availabilityText: 'After interview evidence',
+    },
+    { id: 'timeline', label: 'Timeline' },
+  ]
 
   return (
     <PageContainer
       eyebrow="Candidate profile"
       title={candidate.fullName}
-      description={`${candidate.currentPosition} · ${candidate.location} · ${candidate.yearsExperience} years experience`}
-      actions={<Link className={backLinkClass} to="/candidates"><ArrowLeft size={16} aria-hidden="true" />Back to candidates</Link>}
+      hideHeader
     >
-      {applications.length > 1 ? (
-        <Card className="mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div><p className="m-0 text-sm font-semibold text-depth">Application context</p><p className="mb-0 mt-1 text-xs text-aura-text-muted">This candidate has applied to {applications.length} roles.</p></div>
-          <label className="grid gap-1.5 sm:min-w-72"><span className="sr-only">Select an application</span><select className="h-10 rounded-aura-sm border border-harbor/20 bg-white px-3 text-sm text-depth focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35" value={application.id} onChange={(event) => setSelectedApplicationId(event.target.value)}>{applications.map((item) => <option key={item.application.id} value={item.application.id}>{item.job.title} · {formatDateTime(item.application.submittedAt)}</option>)}</select></label>
-        </Card>
-      ) : null}
-
-      <CandidateProfile candidate={candidate} application={application} job={job} />
+      <div className="mx-auto max-w-[1240px]">
+      <CandidateProfile
+        candidate={candidate}
+        application={application}
+        job={job}
+        operationalLabel={interview?.status === 'CANCELLED' ? 'Interview cancelled · rescheduling required' : undefined}
+        applicationSelector={applications.length > 1 ? <CandidateApplicationSelector applications={applications} selectedApplicationId={application.id} onChange={(applicationId) => { setSelectedApplicationId(applicationId); setActiveTab('application') }} /> : undefined}
+        progress={<CandidateRecruitmentProgress stage={application.currentStage} embedded />}
+      />
+      <CandidateCurrentAction
+        application={application}
+        candidateId={candidate.id}
+        interview={interview}
+        sessionStatus={sessionStatus}
+        reviewStatus={reviewStatus}
+        finalEvaluation={finalEvaluation}
+        onSelectTab={setActiveTab}
+      />
       <Tabs
-        items={tabs}
+        items={candidateTabs}
         activeId={activeTab}
         onChange={setActiveTab}
         ariaLabel="Candidate detail views"
+        compact
       />
 
       {activeTab === 'application' ? (
-        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="grid gap-4">
-            <Card className="p-5 md:p-6">
+        <section className="overflow-hidden rounded-aura-md bg-white shadow-aura-xs">
+          <div className="grid xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="divide-y divide-harbor/10">
+            <section className="p-5 md:p-6">
               <SectionHeading title="Candidate details" description="Contact and professional information supplied with this profile." />
               <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
                 {detailItems.map(([label, value]) => <div className="border-b border-harbor/10 pb-3" key={label}><dt className="text-[10px] font-bold uppercase tracking-[0.11em] text-aura-text-muted">{label}</dt><dd className="mb-0 mt-1.5 text-sm font-medium text-depth">{value}</dd></div>)}
               </dl>
-            </Card>
+            </section>
 
-            <Card className="p-5 md:p-6">
+            <section className="p-5 md:p-6">
               <SectionHeading title="Application answers" description="Responses submitted for this specific role." />
               <dl className="grid gap-5">
                 {application.answers.map((answer) => <div className="border-b border-harbor/10 pb-5 last:border-0 last:pb-0" key={answer.id}><dt className="text-sm font-semibold text-depth">{answer.label}</dt><dd className="mb-0 mt-2 whitespace-pre-wrap text-sm leading-6 text-aura-text-secondary">{renderAnswerValue(answer)}</dd></div>)}
               </dl>
-            </Card>
+            </section>
           </div>
 
-          <div className="grid content-start gap-4">
-            <Card className="p-5 md:p-6">
+          <aside className="divide-y divide-harbor/10 bg-frost/30 xl:border-l xl:border-harbor/10">
+            <section className="p-5 md:p-6">
               <SectionHeading title="Skills" />
               <div className="flex flex-wrap gap-2">{candidate.skills.map((skill) => <span className="rounded-full border border-marine/15 bg-glacier/15 px-2.5 py-1 text-xs font-semibold text-harbor" key={skill}>{skill}</span>)}</div>
-            </Card>
+            </section>
 
-            <Card className="p-5 md:p-6">
+            <section className="p-5 md:p-6">
               <SectionHeading title="Documents" />
               {application.documents.length ? <div className="grid gap-3">{application.documents.map((document) => <div className="rounded-aura-sm border border-harbor/10 bg-frost/55 p-3" key={document.id}><div className="flex items-start gap-3"><span className="inline-grid size-9 flex-none place-items-center rounded-aura-sm bg-white text-marine shadow-aura-xs"><FileText size={17} aria-hidden="true" /></span><div className="min-w-0"><p className="m-0 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{document.documentType}</p><p className="mb-0 mt-1 truncate text-sm font-semibold text-depth">{document.fileName}</p></div></div><Button className="mt-3 h-9 w-full" variant="secondary" onClick={() => setPreviewMessageFor(document.id)}>View document</Button>{previewMessageFor === document.id ? <p className="mb-0 mt-2 text-xs leading-5 text-aura-text-muted" role="status">Document preview is not available in this workspace.</p> : null}</div>)}</div> : <p className="m-0 text-sm text-aura-text-secondary">No documents were submitted.</p>}
-            </Card>
+            </section>
 
-            <Card className="p-5 md:p-6">
+            <section className="p-5 md:p-6">
               <SectionHeading title="Application metadata" />
               <dl className="grid gap-3 text-sm">
                 <div><dt className="text-xs text-aura-text-muted">Application ID</dt><dd className="mb-0 mt-1 break-all font-mono text-xs text-aura-text-secondary">{application.id}</dd></div>
@@ -165,17 +187,30 @@ export default function CandidateDetail() {
                 <div><dt className="text-xs text-aura-text-muted">Job title</dt><dd className="mb-0 mt-1 font-medium text-depth">{job.title}</dd></div>
                 <div><dt className="text-xs text-aura-text-muted">Application form version</dt><dd className="mb-0 mt-1 font-medium text-depth">{formVersion ? `Version ${formVersion}` : 'Not available'}</dd></div>
               </dl>
-            </Card>
+            </section>
+          </aside>
           </div>
-        </div>
+        </section>
       ) : null}
 
       {activeTab === 'timeline' ? <Card className="p-5 md:p-6"><SectionHeading title="Activity timeline" description="Recorded milestones for this application, shown in chronological order." /><CandidateTimeline events={timeline} /></Card> : null}
       {activeTab === 'screening' ? <CandidateScreeningPanel applicationId={application.id} /> : null}
-      {activeTab === 'interview' ? <div className="grid gap-4"><CandidateInterviewPanel applicationId={application.id} />{interview && ['READY', 'IN_PROGRESS', 'PAUSED', 'COMPLETED'].includes(sessionStatus) ? <Card className="p-5"><h2 className="m-0 text-lg font-semibold text-depth">Live interview session</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{sessionStatus === 'READY' ? 'Ready for session' : sessionStatus === 'IN_PROGRESS' ? 'Interview in progress' : sessionStatus === 'PAUSED' ? 'Interview paused' : session?.completionSummary ?? 'Interview completed'}</p>{sessionProgress ? <p className="mb-0 mt-1 text-xs text-aura-text-muted">{sessionProgress.asked} asked · {sessionProgress.skipped} skipped · {sessionProgress.notReached} not reached</p> : null}<Link className={`${backLinkClass} mt-4`} to={`/interviews/${interview.id}/session`}>{sessionStatus === 'READY' ? 'Open session' : sessionStatus === 'COMPLETED' ? 'View session summary' : 'Return to session'}</Link></Card> : null}{interview && sessionStatus === 'COMPLETED' && reviewStatus ? <Card className="p-5"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="m-0 text-lg font-semibold text-depth">Post-interview review</h2><Badge tone={reviewStatus === 'APPROVED' ? 'success' : reviewStatus === 'FAILED' ? 'warning' : 'accent'}>{reviewStatus === 'TRANSCRIPT_REQUIRED' ? 'Transcript needed' : reviewStatus === 'TRANSCRIPT_DRAFT' ? 'Transcript in review' : reviewStatus === 'PREPARING' ? 'Analysis preparing' : reviewStatus === 'DRAFT_READY' ? 'Analysis ready' : reviewStatus === 'APPROVED' ? 'Analysis approved' : 'Preparation failed'}</Badge></div><p className="mb-0 mt-2 text-sm text-aura-text-secondary">Transcript and analysis are interviewer preparation records; they do not make a hiring decision.</p><Link className={`${backLinkClass} mt-4`} to={reviewStatus === 'TRANSCRIPT_REQUIRED' || reviewStatus === 'TRANSCRIPT_DRAFT' ? `/interviews/${interview.id}/transcript` : `/interviews/${interview.id}/analysis`}>{reviewStatus === 'TRANSCRIPT_REQUIRED' ? 'Add transcript' : reviewStatus === 'TRANSCRIPT_DRAFT' ? 'Review transcript' : reviewStatus === 'DRAFT_READY' ? 'Review analysis' : reviewStatus === 'APPROVED' ? 'View analysis' : 'View preparation'}</Link></Card> : null}</div> : null}
+      {activeTab === 'interview' ? interview ? (
+        <CandidateInterviewWorkflow
+          candidateId={candidate.id}
+          interview={interview}
+          questionPlanStatus={questionPlanStatus ?? 'NOT_PREPARED'}
+          sessionStatus={sessionStatus}
+          session={session}
+          transcript={transcript}
+          analysis={analysis}
+          reviewStatus={reviewStatus ?? 'TRANSCRIPT_REQUIRED'}
+          finalEvaluation={finalEvaluation}
+        />
+      ) : <CandidateInterviewPanel applicationId={application.id} /> : null}
       {activeTab === 'final' ? finalEvaluation ? <Card className="p-5 md:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="m-0 text-lg font-semibold text-depth">Final evaluation</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">Standardized evidence scoring from the approved interview record.</p></div><Badge tone={finalEvaluation.status === 'DECIDED' ? 'success' : finalEvaluation.status === 'DRAFT' ? 'warning' : 'accent'}>{finalEvaluation.status.replaceAll('_', ' ').toLocaleLowerCase()}</Badge></div><dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs text-aura-text-muted">System evidence score</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.weightedEvidenceScore === undefined ? 'Unavailable' : `${finalEvaluation.weightedEvidenceScore} / 100`}</dd></div><div><dt className="text-xs text-aura-text-muted">Assessed coverage</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.assessedWeightPercent}% · {finalEvaluation.overallConfidence.toLocaleLowerCase()} confidence</dd></div><div><dt className="text-xs text-aura-text-muted">Must-have gates</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.mustHavePassed} of {finalEvaluation.mustHaveTotal} passed</dd></div><div><dt className="text-xs text-aura-text-muted">System recommendation</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.systemRecommendation.replaceAll('_', ' ').toLocaleLowerCase()}</dd></div><div><dt className="text-xs text-aura-text-muted">Human final decision</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.humanDecision?.toLocaleLowerCase() ?? 'Not recorded'}</dd></div><div><dt className="text-xs text-aura-text-muted">Decision authority</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.decidedByRole?.replaceAll('_', ' ').toLocaleLowerCase() ?? 'Hiring manager'}</dd></div><div><dt className="text-xs text-aura-text-muted">Open challenges</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalChallenges.filter((item) => item.status === 'OPEN').length}</dd></div></dl><Link className={`${backLinkClass} mt-5`} to={`/candidates/${candidate.id}/final-evaluation`}>{finalEvaluation.status === 'DECIDED' ? 'View final decision' : finalEvaluation.status === 'READY_FOR_DECISION' ? 'Record final decision' : 'Review final evaluation'}</Link></Card> : <Placeholder title="Final evaluation" description="Approve the interview analysis to prepare standardized evidence scoring." /> : null}
-      {activeTab === 'interview' && interview ? <InterviewRecordSummary interview={interview} questionPlan={questionPlanStatus === 'APPROVED' ? 'Approved' : questionPlanStatus === 'DRAFT_READY' ? 'Review required' : questionPlanStatus === 'FAILED' ? 'Needs attention' : 'Preparing'} session={sessionStatus === 'PLAN_REQUIRED' ? 'Plan required' : sessionStatus === 'UNAVAILABLE' ? 'Not started' : sessionStatus.replaceAll('_', ' ').toLocaleLowerCase()} transcript={transcript?.status.toLocaleLowerCase() ?? 'Not started'} analysis={analysis?.status.replaceAll('_', ' ').toLocaleLowerCase() ?? 'Not started'} finalEvaluation={finalEvaluation?.status.replaceAll('_', ' ').toLocaleLowerCase() ?? 'Not started'} /> : null}
       {activeTab === 'final' && finalEvaluation?.status === 'DECIDED' ? <div className="mt-4"><PostDecisionNextStep candidateId={candidate.id} /></div> : null}
+      </div>
     </PageContainer>
   )
 }

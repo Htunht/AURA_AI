@@ -5,6 +5,7 @@ type PageContainerProps = {
   eyebrow?: string
   description?: string
   actions?: ReactNode
+  hideHeader?: boolean
   children: ReactNode
 }
 
@@ -13,11 +14,12 @@ export function PageContainer({
   eyebrow = 'Recruitment operations',
   description,
   actions,
+  hideHeader = false,
   children,
 }: PageContainerProps) {
   return (
     <section className="mx-auto w-full">
-      <header className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+      {!hideHeader ? <header className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
         <div>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
             {eyebrow}
@@ -36,7 +38,7 @@ export function PageContainer({
             {actions}
           </div>
         ) : null}
-      </header>
+      </header> : null}
       {children}
     </section>
   )

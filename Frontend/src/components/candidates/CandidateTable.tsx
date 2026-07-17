@@ -1,71 +1,62 @@
-import { ArrowRight, LoaderCircle } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { CandidateListItem } from '../../store/demoSelectors'
-import { formatApplicationStage, formatDate } from '../../utils/helpers'
-import { getScreeningRecommendationLabel } from '../../utils/recommendation'
-import { Badge } from '../ui/Badge'
+import {
+  formatCandidateSubmittedDate,
+  formatCandidateSubmittedDateLabel,
+} from '../../utils/candidateListPresentation'
+import { formatApplicationStage } from '../../utils/helpers'
+import { CandidateRecommendation } from './CandidateRecommendation'
 
 type CandidateTableProps = {
   items: CandidateListItem[]
   onRetryFailed: (applicationId: string) => void
 }
 
-function recommendationTone(recommendation?: string) {
-  if (recommendation === 'STRONG_YES' || recommendation === 'YES') return 'success'
-  if (recommendation === 'REVIEW') return 'warning'
-  if (recommendation === 'NO' || recommendation === 'STRONG_NO') return 'danger'
-  return 'neutral'
-}
-
 export function CandidateTable({ items, onRetryFailed }: CandidateTableProps) {
   return (
     <div className="overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-xs">
-      <table className="w-full border-collapse text-left text-sm">
+      <table className="w-full table-fixed border-collapse text-left text-sm">
         <thead className="bg-frost/80 text-[10px] font-bold uppercase tracking-[0.1em] text-aura-text-muted">
           <tr>
-            <th className="px-4 py-3 font-bold">Candidate</th>
-            <th className="px-4 py-3 font-bold">Applied role</th>
-            <th className="px-4 py-3 font-bold">Experience</th>
-            <th className="px-4 py-3 font-bold">Screening status</th>
-            <th className="px-4 py-3 font-bold">AI result</th>
-            <th className="px-4 py-3 font-bold">Current stage</th>
-            <th className="px-4 py-3 font-bold">Submitted</th>
-            <th className="px-4 py-3"><span className="sr-only">Action</span></th>
+            <th scope="col" className="w-[22%] px-4 py-2.5 font-bold xl:w-[19%]">Candidate</th>
+            <th scope="col" className="w-[22%] px-4 py-2.5 font-bold xl:w-[18%]">Role</th>
+            <th scope="col" className="w-[21%] px-4 py-2.5 font-bold xl:w-[18%]">Recommendation</th>
+            <th scope="col" className="w-[19%] px-4 py-2.5 font-bold xl:w-[17%]">Stage</th>
+            <th scope="col" className="hidden w-[11%] px-4 py-2.5 font-bold xl:table-cell">Submitted</th>
+            <th scope="col" className="w-[16%] px-4 py-2.5 text-right font-bold xl:w-[17%]">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-harbor/10">
-          {items.map(({ candidate, application, job, screeningEvaluation, decision, screeningStatus, operationalStatus }) => {
-            const recommendation = decision?.humanRecommendation ?? screeningEvaluation?.recommendation
+          {items.map((item) => {
+            const { candidate, application, job, operationalStatus } = item
+            const operationalIsUrgent = operationalStatus?.label.toLowerCase().includes('overdue')
             return (
-              <tr key={application.id} className="transition-colors hover:bg-glacier/[0.07]">
-                <td className="px-4 py-4 align-top">
-                  <Link className="font-semibold text-depth no-underline hover:text-marine focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/candidates/${candidate.id}`}>
+              <tr key={application.id} className="group transition-colors hover:bg-glacier/[0.07] focus-within:bg-glacier/[0.07]">
+                <td className="px-4 py-3 align-middle">
+                  <Link className="block truncate font-semibold text-depth no-underline hover:text-marine focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/candidates/${candidate.id}`}>
                     {candidate.fullName}
                   </Link>
-                  <span className="mt-1 block text-xs text-aura-text-muted">{candidate.email}</span>
-                  <span className="mt-1 block text-xs text-aura-text-secondary">{candidate.currentPosition}</span>
+                  <span className="mt-0.5 block max-w-56 truncate text-xs text-aura-text-muted">{candidate.email}</span>
                 </td>
-                <td className="max-w-44 px-4 py-4 align-top font-medium text-depth">{job.title}</td>
-                <td className="whitespace-nowrap px-4 py-4 align-top text-aura-text-secondary">{candidate.yearsExperience} years</td>
-                <td className="px-4 py-4 align-top">
-                  {screeningStatus === 'COMPLETED' ? <Badge tone="success">Screening completed</Badge> : null}
-                  {screeningStatus === 'NOT_SCREENED' ? <Badge>Not screened</Badge> : null}
-                  {screeningStatus === 'SETUP_REQUIRED' ? <div><Badge tone="warning">Workflow incomplete</Badge><Link className="mt-1.5 block text-xs font-semibold text-harbor no-underline hover:text-depth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/jobs/${job.id}/setup`}>Continue setup</Link></div> : null}
-                  {screeningStatus === 'QUEUED' ? <><Badge tone="accent">Queued for screening</Badge><span className="mt-1.5 block text-[10px] text-aura-text-muted">Waiting for AURA analysis</span></> : null}
-                  {screeningStatus === 'PROCESSING' ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-marine"><LoaderCircle size={14} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />Screening in progress</span> : null}
-                  {screeningStatus === 'FAILED' ? <div><Badge tone="danger">Screening failed</Badge><button type="button" className="mt-1.5 block text-xs font-semibold text-harbor hover:text-depth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" onClick={() => onRetryFailed(application.id)} aria-label={`Retry screening for ${candidate.fullName}`}>Retry screening</button></div> : null}
+                <td className="max-w-56 px-4 py-3 align-middle">
+                  <span className="block truncate font-medium text-depth" title={job.title}>{job.title}</span>
+                  <span className="mt-0.5 block text-xs text-aura-text-muted">{candidate.yearsExperience} years</span>
                 </td>
-                <td className="px-4 py-4 align-top">
-                  {screeningStatus === 'COMPLETED' && recommendation && screeningEvaluation ? <><Badge tone={recommendationTone(recommendation)}>{getScreeningRecommendationLabel(recommendation)}</Badge><span className="mt-1.5 block text-xs font-semibold text-depth">{Math.round(screeningEvaluation.overallScore)}/100 · {screeningEvaluation.confidence}% confidence</span><span className="mt-1 block text-[10px] text-aura-text-muted">{decision ? decision.reviewAction === 'CONFIRM' ? 'Recruiter confirmed' : `Overrode AURA: ${getScreeningRecommendationLabel(decision.aiRecommendation)}` : 'Recruiter review pending'}</span></> : <span className="text-aura-text-muted">—</span>}
+                <td className="px-4 py-3 align-middle">
+                  <CandidateRecommendation item={item} onRetryFailed={() => onRetryFailed(application.id)} />
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 align-top">
-                  <span className="block font-semibold text-depth">{formatApplicationStage(application.currentStage)}</span>
-                  {operationalStatus ? <span className="mt-1 block text-xs text-aura-text-muted">{operationalStatus.label}{operationalStatus.occurredAt ? ` · ${formatDate(operationalStatus.occurredAt)}` : ''}</span> : null}
+                <td className="px-4 py-3 align-middle">
+                  <span className="block text-xs font-bold uppercase tracking-[0.06em] text-depth">{formatApplicationStage(application.currentStage)}</span>
+                  {operationalStatus ? <span className={`mt-0.5 block truncate text-xs ${operationalIsUrgent ? 'font-semibold text-aura-danger' : 'text-aura-text-muted'}`} title={operationalStatus.label}>{operationalStatus.label}{operationalStatus.occurredAt ? ` · ${formatCandidateSubmittedDate(operationalStatus.occurredAt)}` : ''}</span> : null}
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 align-top text-aura-text-secondary">{formatDate(application.submittedAt)}</td>
-                <td className="px-4 py-4 align-top">
-                  <Link className="inline-flex text-harbor hover:text-depth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={screeningStatus === 'COMPLETED' ? `/reviews?applicationId=${application.id}` : `/candidates/${candidate.id}`} aria-label={screeningStatus === 'COMPLETED' ? `Review ${candidate.fullName}` : `View ${candidate.fullName}`}>
-                    <ArrowRight size={17} aria-hidden="true" />
+                <td className="hidden whitespace-nowrap px-4 py-3 align-middle text-aura-text-secondary xl:table-cell">
+                  <time dateTime={application.submittedAt} title={formatCandidateSubmittedDateLabel(application.submittedAt)} aria-label={formatCandidateSubmittedDateLabel(application.submittedAt)}>{formatCandidateSubmittedDate(application.submittedAt)}</time>
+                </td>
+                <td className="px-4 py-3 text-right align-middle">
+                  <Link className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-aura-sm px-2 text-xs font-semibold text-harbor no-underline hover:bg-glacier/10 hover:text-depth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/candidates/${candidate.id}`} aria-label={`View candidate ${candidate.fullName}`}>
+                    <span>View candidate</span>
+                    <ArrowRight size={15} aria-hidden="true" />
                   </Link>
                 </td>
               </tr>

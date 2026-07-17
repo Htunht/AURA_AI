@@ -5,7 +5,6 @@ import { HumanReviewCard } from '../../components/reviews/HumanReviewCard'
 import { HumanReviewTable } from '../../components/reviews/HumanReviewTable'
 import { HumanReviewWorkspace } from '../../components/reviews/HumanReviewWorkspace'
 import { PageContainer } from '../../components/layout/PageContainer'
-import { Card } from '../../components/ui/Card'
 import { Dialog } from '../../components/ui/Dialog'
 import { Input } from '../../components/ui/Input'
 import { useDemoStore } from '../../hooks/useDemoStore'
@@ -89,7 +88,7 @@ export default function HumanReviewQueue() {
     FAILED: summary.failed,
     REVIEWED: summary.reviewed,
   }
-  const [emptyTitle, emptyDescription] = emptyState(category)
+  const [emptyTitle] = emptyState(category)
 
   function openReview(applicationId: string) {
     setSelectedApplicationId(applicationId)
@@ -107,46 +106,46 @@ export default function HumanReviewQueue() {
 
   return (
     <PageContainer
-      eyebrow="Selection review"
-      title="Human review queue"
-      description="Review AI-assisted screening recommendations, resolve uncertain cases, and prepare candidates for the next hiring stage."
+      title="Review queue"
+      hideHeader
     >
-      <Card className="mb-4 overflow-hidden p-2">
-        <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-6" role="group" aria-label="Review categories">
+      <div className="mx-auto max-w-[1240px]">
+        <h1 className="mb-5 mt-0 text-[28px] font-bold tracking-[-0.025em] text-depth md:text-[32px]">Review queue</h1>
+
+        <div className="mb-5 overflow-x-auto border-b border-harbor/15" role="tablist" aria-label="Review status">
+          <div className="flex min-w-max gap-5">
           {categoryOptions.map((option) => (
             <button
               type="button"
               key={option.value}
               onClick={() => setCategory(option.value)}
-              className={`rounded-aura-sm px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier ${category === option.value ? option.value === 'NEEDS_REVIEW' ? 'bg-aura-warning-soft text-depth' : 'bg-harbor text-white' : 'bg-transparent text-aura-text-secondary hover:bg-frost'}`}
-              aria-pressed={category === option.value}
+              className={`relative flex h-11 items-center gap-2 border-0 bg-transparent px-0 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-glacier ${category === option.value ? 'text-depth after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-marine' : 'text-aura-text-muted hover:text-harbor'}`}
+              role="tab"
+              aria-selected={category === option.value}
             >
-              <span className="block text-[10px] font-bold uppercase tracking-wide opacity-70">{option.label}</span>
-              <span className="mt-1 block text-xl font-bold">{countByCategory[option.value]}</span>
+              {option.label}
+              <span className="text-xs font-medium tabular-nums text-aura-text-muted">{countByCategory[option.value]}</span>
             </button>
           ))}
+          </div>
         </div>
-      </Card>
 
-      <Card className="mb-4 p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_220px_210px_210px]">
+        <div className="mb-5 grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_220px_210px]">
           <label className="relative block"><span className="sr-only">Search review queue</span><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-aura-text-muted" size={17} aria-hidden="true" /><Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search candidates or roles" /></label>
-          <label><span className="sr-only">Category</span><select className={selectClass} value={category} onChange={(event) => setCategory(event.target.value as CategoryFilter)}>{categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.value === 'ALL' ? 'All categories' : option.label}</option>)}</select></label>
           <label><span className="sr-only">Job opening</span><select className={selectClass} value={jobId} onChange={(event) => setJobId(event.target.value)}><option value="ALL">All job openings</option>{state.jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select></label>
           <label><span className="sr-only">Confidence level</span><select className={selectClass} value={confidence} onChange={(event) => setConfidence(event.target.value as ConfidenceFilter)}><option value="ALL">All confidence levels</option><option value="BELOW_60">Below 60%</option><option value="60_74">60%–74%</option><option value="75_89">75%–89%</option><option value="90_PLUS">90% and above</option></select></label>
         </div>
-        <p className="mb-0 mt-3 text-xs font-medium text-aura-text-muted">Showing {filteredItems.length} of {items.length} review item{items.length === 1 ? '' : 's'}</p>
-      </Card>
 
-      {invalidTarget ? <div role="status"><Card className="mb-4 border-aura-warning/25 p-4 text-sm text-aura-text-secondary">The requested application is not available in the human review queue.</Card></div> : null}
+        {invalidTarget ? <div className="mb-4 border-l-2 border-aura-warning bg-white px-4 py-3 text-sm text-depth shadow-aura-xs" role="status">This application is no longer in the review queue.</div> : null}
 
-      {filteredItems.length > 0 ? (
-        <><div className="hidden xl:block"><HumanReviewTable items={filteredItems} onReview={openReview} /></div><div className="grid gap-3 xl:hidden">{filteredItems.map((item) => <HumanReviewCard key={item.application.id} item={item} onReview={() => openReview(item.application.id)} />)}</div></>
-      ) : (
-        <Card className="p-8 text-center md:p-12"><h2 className="m-0 text-lg font-semibold text-depth">{emptyTitle}</h2><p className="mx-auto mb-0 mt-2 max-w-xl text-sm leading-6 text-aura-text-secondary">{emptyDescription}</p></Card>
-      )}
+        {filteredItems.length > 0 ? (
+          <><div className="hidden xl:block"><HumanReviewTable items={filteredItems} showCategory={category === 'ALL'} onReview={openReview} /></div><div className="grid gap-2 xl:hidden">{filteredItems.map((item) => <HumanReviewCard key={item.application.id} item={item} showCategory={category === 'ALL'} onReview={() => openReview(item.application.id)} />)}</div></>
+        ) : (
+          <p className="m-0 border-b border-harbor/10 py-5 text-sm text-aura-text-muted">{emptyTitle}.</p>
+        )}
+      </div>
 
-      <Dialog open={Boolean(selectedItem)} title="Human review workspace" size="wide" onClose={closeReview}>
+      <Dialog open={Boolean(selectedItem)} title="Review candidate" size="wide" onClose={closeReview}>
         {selectedItem ? <HumanReviewWorkspace item={selectedItem} /> : null}
       </Dialog>
     </PageContainer>

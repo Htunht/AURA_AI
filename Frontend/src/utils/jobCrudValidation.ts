@@ -3,7 +3,7 @@ import { selectDashboardMetrics, selectJobReadiness, selectJobsByStatus } from '
 import type { Application } from '../types/application'
 import type { Job } from '../types/job'
 import type { JobDraftInput } from '../types/jobDraft'
-import { canAcceptPublicApplications, canDeleteJob, createNextJobId, draftSkillsToRequirements, validateJobDraft } from './jobValidation'
+import { canAcceptPublicApplications, canDeleteJob, createNextJobId, draftSkillsToRequirements, focusJobDraftControl, getOrderedJobDraftIssues, jobDraftFieldOrder, reconcileJobDraftFieldErrors, validateJobDraft, validateJobDraftSubmission, type JobDraftField, type JobDraftFocusableControl } from './jobValidation'
 
 export type JobCrudValidationResult = { valid: boolean; errors: string[] }
 const check = (errors: string[], condition: boolean, message: string) => { if (!condition) errors.push(message) }
@@ -22,18 +22,44 @@ function createFixture(id: string, status: Job['status'] = 'DRAFT'): Job {
 
 export function validateJobCrudDomain(): JobCrudValidationResult {
   const errors: string[] = []
+  const validationNow = new Date('2026-07-17T10:00:00.000Z')
   const initialSnapshot = JSON.stringify(initialDemoState)
   check(errors, createNextJobId(initialDemoState.jobs) === 'job-004', 'Next job ID is not deterministic')
   check(errors, createNextJobId([...initialDemoState.jobs, createFixture('job-009')]) === 'job-010', 'Next job ID used array length instead of the largest suffix')
-  check(errors, validateJobDraft(validInput).valid, 'Valid job draft failed validation')
-  check(errors, !validateJobDraft({ ...validInput, title: 'A' }).valid, 'Invalid short title was accepted')
-  check(errors, !validateJobDraft({ ...validInput, description: 'Too short' }).valid, 'Short description was accepted')
-  check(errors, !validateJobDraft({ ...validInput, positionsCount: 0 }).valid, 'Invalid position count was accepted')
-  check(errors, !validateJobDraft({ ...validInput, requiredSkills: [] }).valid, 'Job without a required skill was accepted')
-  check(errors, !validateJobDraft({ ...validInput, requiredSkills: ['React', ' react '] }).valid, 'Duplicate required skills were accepted')
-  check(errors, !validateJobDraft({ ...validInput, requiredSkills: ['React'], preferredSkills: ['REACT'] }).valid, 'Required/preferred overlap was accepted')
-  check(errors, !validateJobDraft({ ...validInput, workArrangement: 'ONSITE', location: '' }).valid, 'On-site job without location was accepted')
-  check(errors, validateJobDraft({ ...validInput, workArrangement: 'REMOTE', location: '' }).valid, 'Remote job with no location was rejected')
+  check(errors, validateJobDraft(validInput, validationNow).valid, 'Valid job draft failed Zod validation')
+  check(errors, !validateJobDraft({ ...validInput, title: 'A' }, validationNow).valid, 'Invalid short title was accepted')
+  check(errors, !validateJobDraft({ ...validInput, title: '' }, validationNow).valid, 'Missing title was accepted')
+  check(errors, !validateJobDraft({ ...validInput, department: '' }, validationNow).valid, 'Missing department was accepted')
+  check(errors, !validateJobDraft({ ...validInput, description: 'Too short' }, validationNow).valid, 'Short description was accepted')
+  check(errors, !validateJobDraft({ ...validInput, positionsCount: 0 }, validationNow).valid, 'Invalid position count was accepted')
+  check(errors, !validateJobDraft({ ...validInput, requiredSkills: [] }, validationNow).valid, 'Job without a required skill was accepted')
+  const normalizedSkills = validateJobDraft({ ...validInput, requiredSkills: ['React', ' react ', ''] }, validationNow)
+  check(errors, normalizedSkills.valid && normalizedSkills.data?.requiredSkills.length === 1 && normalizedSkills.data.requiredSkills[0] === 'React', 'Duplicate required skills were not normalized deterministically')
+  check(errors, !validateJobDraft({ ...validInput, requiredSkills: ['React'], preferredSkills: ['REACT'] }, validationNow).valid, 'Required/preferred overlap was accepted')
+  check(errors, !validateJobDraft({ ...validInput, workArrangement: 'ONSITE', location: '' }, validationNow).valid, 'On-site job without location was accepted')
+  check(errors, validateJobDraft({ ...validInput, workArrangement: 'REMOTE', location: '' }, validationNow).valid, 'Remote job with no location was rejected')
+  check(errors, validateJobDraft({ ...validInput, applicationDeadline: '' }, validationNow).valid, 'Optional empty deadline was rejected')
+  check(errors, !validateJobDraft({ ...validInput, applicationDeadline: '2026-07-16' }, validationNow).valid, 'Past deadline was accepted')
+  const ordered = getOrderedJobDraftIssues(validateJobDraft({ ...validInput, title: '', department: '', requiredSkills: [] }, validationNow).errors)
+  check(errors, ordered[0]?.field === 'title' && ordered[1]?.field === 'department' && ordered.some((item) => item.field === 'requiredSkills'), 'Validation summary did not respect explicit form order')
+  check(errors, new Set(ordered.map((item) => item.message)).size === ordered.length, 'Validation summary issues were not deduplicated')
+  const invalidSubmissionInput = { ...validInput, title: '', department: '', requiredSkills: [] }
+  const invalidSubmissionSnapshot = JSON.stringify(invalidSubmissionInput)
+  const invalidSubmission = validateJobDraftSubmission(invalidSubmissionInput, validationNow)
+  check(errors, invalidSubmission.shouldOpenDialog && !invalidSubmission.valid && JSON.stringify(invalidSubmissionInput) === invalidSubmissionSnapshot, 'Failed submit did not open the summary or preserve values')
+  check(errors, !validateJobDraftSubmission(validInput, validationNow).shouldOpenDialog, 'Valid submit opened the validation dialog')
+  const correctedErrors = reconcileJobDraftFieldErrors(invalidSubmission.errors, { ...invalidSubmissionInput, title: validInput.title }, validationNow)
+  check(errors, !correctedErrors.title && Boolean(correctedErrors.department), 'Corrected field did not clear its inline error independently')
+  const focusCalls: string[] = []
+  const control = (name: string): JobDraftFocusableControl => ({ scrollIntoView: (options) => focusCalls.push(`${name}:scroll:${options.behavior}:${options.block}`), focus: (options) => focusCalls.push(`${name}:focus:${options?.preventScroll}`) })
+  const controls = Object.fromEntries(jobDraftFieldOrder.map((field) => [field, { current: control(field) }])) as Record<JobDraftField, { current: JobDraftFocusableControl | null }>
+  check(errors, focusJobDraftControl(ordered[0]!.field, controls, (callback) => callback()) && focusCalls[0] === 'title:scroll:smooth:center' && focusCalls[1] === 'title:focus:true', 'Review fields did not focus the first invalid control')
+  focusCalls.length = 0
+  focusJobDraftControl('employmentType', controls, (callback) => callback())
+  check(errors, focusCalls[1] === 'employmentType:focus:true', 'Select control did not receive focus')
+  focusCalls.length = 0
+  focusJobDraftControl('requiredSkills', controls, (callback) => callback())
+  check(errors, focusCalls[1] === 'requiredSkills:focus:true', 'Required-skill input did not receive focus')
 
   const job = createFixture('job-004')
   let state = demoReducer(initialDemoState, { type: 'ADD_JOB', payload: { job } })

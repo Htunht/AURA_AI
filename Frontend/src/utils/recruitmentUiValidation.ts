@@ -1,3 +1,8 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
+import { CandidateCard } from '../components/candidates/CandidateCard'
+import { CandidateTable } from '../components/candidates/CandidateTable'
 import { initialDemoState } from '../store/demoReducer'
 import {
   selectActiveJobs,
@@ -6,10 +11,16 @@ import {
   selectCandidateTimeline,
   selectDashboardMetrics,
   selectRecentApplications,
+  selectScreeningQueueSummary,
   selectUpcomingInterviews,
 } from '../store/demoSelectors'
 import type { Application } from '../types/application'
 import type { Candidate } from '../types/candidate'
+import {
+  formatCandidateResultCount,
+  formatCandidateSubmittedDate,
+  formatScreeningAutomationSummary,
+} from './candidateListPresentation'
 
 export type RecruitmentUiValidationResult = {
   valid: boolean
@@ -102,6 +113,141 @@ export function validateRecruitmentUiDomain(): RecruitmentUiValidationResult {
         ),
     ),
     'Candidate search source data is incomplete',
+  )
+
+  const sampleItem = candidateList.find(
+    (item) => item.candidate.currentPosition !== item.job.title,
+  ) ?? candidateList[0]
+  if (sampleItem) {
+    const renderInRouter = (element: ReturnType<typeof createElement>) =>
+      renderToStaticMarkup(
+        createElement(MemoryRouter, null, element),
+      )
+    const tableMarkup = renderInRouter(
+      createElement(CandidateTable, {
+        items: [sampleItem],
+        onRetryFailed: () => undefined,
+      }),
+    )
+    const cardMarkup = renderInRouter(
+      createElement(CandidateCard, {
+        item: sampleItem,
+        onRetryFailed: () => undefined,
+      }),
+    )
+    const queuedMarkup = renderInRouter(
+      createElement(CandidateTable, {
+        items: [{
+          ...sampleItem,
+          screeningStatus: 'QUEUED',
+          screeningEvaluation: undefined,
+          decision: undefined,
+        }],
+        onRetryFailed: () => undefined,
+      }),
+    )
+    const failedMarkup = renderInRouter(
+      createElement(CandidateTable, {
+        items: [{
+          ...sampleItem,
+          screeningStatus: 'FAILED',
+          screeningEvaluation: undefined,
+          decision: undefined,
+        }],
+        onRetryFailed: () => undefined,
+      }),
+    )
+
+    recordCheck(
+      errors,
+      tableMarkup.includes(sampleItem.candidate.fullName) &&
+        tableMarkup.includes(sampleItem.candidate.email),
+      'Candidate row does not show name and email',
+    )
+    recordCheck(
+      errors,
+      sampleItem.candidate.currentPosition === sampleItem.job.title ||
+        !tableMarkup.includes(sampleItem.candidate.currentPosition),
+      'Candidate row repeats profile role text outside the Role column',
+    )
+    recordCheck(
+      errors,
+      tableMarkup.includes(sampleItem.job.title) &&
+        tableMarkup.includes(`${sampleItem.candidate.yearsExperience} years`),
+      'Candidate row does not show experience beneath the applied role',
+    )
+    recordCheck(
+      errors,
+      Boolean(
+        sampleItem.screeningEvaluation &&
+          tableMarkup.includes(`${Math.round(sampleItem.screeningEvaluation.overallScore)} / 100`),
+      ),
+      'Completed screening does not show recommendation score',
+    )
+    recordCheck(
+      errors,
+      !tableMarkup.includes('confidence') &&
+        !tableMarkup.includes('Recruiter confirmed') &&
+        !tableMarkup.includes('Overrode AURA'),
+      'Candidate row renders confidence or recruiter override notes as normal text',
+    )
+    recordCheck(
+      errors,
+      queuedMarkup.includes('Queued') && !queuedMarkup.includes(' / 100'),
+      'Queued screening does not show a score-free queued state',
+    )
+    recordCheck(
+      errors,
+      failedMarkup.includes('Failed') && failedMarkup.includes('Retry screening'),
+      'Failed screening state or retry action is missing',
+    )
+    recordCheck(
+      errors,
+      tableMarkup.includes('Stage') &&
+        tableMarkup.includes(sampleItem.operationalStatus?.label ?? ''),
+      'Candidate row does not show broad stage and operational detail',
+    )
+    recordCheck(
+      errors,
+      tableMarkup.includes(`aria-label="View candidate ${sampleItem.candidate.fullName}"`),
+      'Candidate row action does not have an accessible name',
+    )
+    recordCheck(
+      errors,
+      cardMarkup.includes(sampleItem.candidate.fullName) &&
+        cardMarkup.includes(sampleItem.job.title) &&
+        Boolean(
+          sampleItem.screeningEvaluation &&
+            cardMarkup.includes(`${Math.round(sampleItem.screeningEvaluation.overallScore)} / 100`),
+        ) &&
+        cardMarkup.includes('Recommendation') &&
+        cardMarkup.includes('Stage') &&
+        cardMarkup.includes('View candidate'),
+      'Mobile candidate card does not contain the required candidate workflow information',
+    )
+  }
+
+  recordCheck(
+    errors,
+    formatCandidateSubmittedDate('2026-07-16T09:00:00Z', 2026) === 'Jul 16' &&
+      formatCandidateSubmittedDate('2025-07-16T09:00:00Z', 2026) === 'Jul 16, 2025',
+    'Candidate submitted date is not compact for the current year',
+  )
+  recordCheck(
+    errors,
+    formatCandidateResultCount(5, 12) === '5 of 12 candidates' &&
+      formatCandidateResultCount(12, 12) === '12 candidates',
+    'Candidate result count does not distinguish filtered and unfiltered results',
+  )
+  const queueSummary = selectScreeningQueueSummary(initialDemoState)
+  const automationSummary = formatScreeningAutomationSummary(queueSummary)
+  recordCheck(
+    errors,
+    automationSummary.includes(`${queueSummary.completed} completed`) &&
+      automationSummary.includes(`${queueSummary.processing} processing`) &&
+      automationSummary.includes(`${queueSummary.failed} failed`) &&
+      (queueSummary.queued === 0 || automationSummary.includes(`${queueSummary.queued} queued`)),
+    'Compact screening automation summary is incomplete',
   )
   recordCheck(errors, johnApplications.length > 0, 'John has no application')
   recordCheck(

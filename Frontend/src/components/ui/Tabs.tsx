@@ -1,6 +1,8 @@
 export type TabItem = {
   id: string
   label: string
+  disabled?: boolean
+  availabilityText?: string
 }
 
 type TabsProps = {
@@ -8,6 +10,7 @@ type TabsProps = {
   activeId: string
   onChange: (id: string) => void
   ariaLabel?: string
+  compact?: boolean
 }
 
 export function Tabs({
@@ -15,10 +18,11 @@ export function Tabs({
   activeId,
   onChange,
   ariaLabel = 'Application form views',
+  compact = false,
 }: TabsProps) {
   return (
     <div
-      className="tabs mt-6 mb-4 flex gap-1 overflow-x-auto border-b border-harbor/15"
+      className={`tabs mb-3 flex gap-1 overflow-x-auto border-b border-harbor/15 ${compact ? 'mt-1' : 'mt-6'}`}
       role="tablist"
       aria-label={ariaLabel}
     >
@@ -28,14 +32,19 @@ export function Tabs({
           type="button"
           role="tab"
           aria-selected={activeId === item.id}
-          className={`tabs__button whitespace-nowrap border-0 border-b-2 border-solid bg-transparent px-3 py-2 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier focus-visible:ring-offset-2 ${
+          aria-disabled={item.disabled || undefined}
+          title={item.disabled ? item.availabilityText : undefined}
+          className={`tabs__button min-h-10 whitespace-nowrap border-0 border-b-2 border-solid px-3 py-2 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier focus-visible:ring-offset-2 ${
             activeId === item.id
-              ? 'border-marine text-depth'
-              : 'border-transparent text-harbor/60 hover:text-harbor'
+              ? 'border-marine bg-white text-depth'
+              : item.disabled
+                ? 'cursor-not-allowed border-transparent bg-transparent text-harbor/35'
+                : 'border-transparent bg-transparent text-harbor/65 hover:bg-white/55 hover:text-harbor'
           }`}
-          onClick={() => onChange(item.id)}
+          onClick={() => { if (!item.disabled) onChange(item.id) }}
         >
-          {item.label}
+          <span>{item.label}</span>
+          {item.disabled && item.availabilityText ? <span className="sr-only">. {item.availabilityText}</span> : null}
         </button>
       ))}
     </div>

@@ -3,13 +3,16 @@ import { Link } from 'react-router-dom'
 import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import { useDemoStore } from '../../hooks/useDemoStore'
 import { selectHiringWorkflowSetupProgress, selectScreeningQueueSummary } from '../../store/demoSelectors'
+import { formatScreeningAutomationSummary } from '../../utils/candidateListPresentation'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
 export function ScreeningAutomationStatus({
   pendingRecruiterReviews,
+  compact = false,
 }: {
   pendingRecruiterReviews?: number
+  compact?: boolean
 }) {
   const { state } = useDemoStore()
   const { retryFailed } = useScreeningAutomation()
@@ -26,6 +29,45 @@ export function ScreeningAutomationStatus({
     const application = state.applications.find((entry) => entry.id === item.applicationId)
     return application && selectHiringWorkflowSetupProgress(state, application.jobId).status === 'PUBLISHED'
   }).map((item) => item.applicationId)
+
+  if (compact) {
+    return (
+      <Card className="mb-3 px-4 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={`flex h-8 w-8 flex-none items-center justify-center rounded-full ${summary.failed > 0 || hasSetupRequired ? 'bg-aura-danger-soft text-aura-danger' : isProcessing ? 'bg-glacier/15 text-marine' : 'bg-aura-success-soft text-aura-success'}`}>
+              {isProcessing ? (
+                <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              ) : summary.failed > 0 || hasSetupRequired ? (
+                <AlertCircle size={16} aria-hidden="true" />
+              ) : (
+                <CheckCircle2 size={16} aria-hidden="true" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <h2 className="m-0 text-sm font-semibold text-depth">Screening automation</h2>
+              <p className="mb-0 mt-0.5 text-xs text-aura-text-secondary" aria-live="polite">
+                {formatScreeningAutomationSummary(summary)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pl-11 sm:pl-0">
+            {retryableApplicationIds.length > 0 ? (
+              <Button className="h-9" variant="secondary" onClick={() => retryFailed(retryableApplicationIds)}>
+                <RotateCcw size={14} aria-hidden="true" />
+                Retry failed
+              </Button>
+            ) : null}
+            {setupRequiredJobIds.length === 1 ? (
+              <Link className="inline-flex h-9 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-xs font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={`/jobs/${setupRequiredJobIds[0]}/setup`}>Continue setup</Link>
+            ) : setupRequiredJobIds.length > 1 ? (
+              <Link className="inline-flex h-9 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-3 text-xs font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to="/jobs">Review workflows</Link>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <Card className="mb-4 p-4 md:px-5">
