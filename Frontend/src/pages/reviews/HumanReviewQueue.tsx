@@ -28,7 +28,7 @@ const categoryOptions: Array<{ value: CategoryFilter; label: string }> = [
   { value: 'REVIEWED', label: 'Reviewed' },
 ]
 
-const selectClass = 'h-10 w-full rounded-aura-sm border border-harbor/20 bg-white px-3 text-sm text-depth shadow-aura-xs focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35'
+const selectClass = 'h-10 w-full rounded-aura-sm border border-slate-200 bg-white px-3 text-sm text-[#171717] shadow-aura-xs focus:border-[#C7FF38] focus:outline-none focus:ring-2 focus:ring-[#85ab22]/35'
 
 function confidenceMatches(confidence: number | undefined, filter: ConfidenceFilter) {
   if (filter === 'ALL') return true
@@ -57,11 +57,13 @@ export default function HumanReviewQueue() {
   const [jobId, setJobId] = useState('ALL')
   const [search, setSearch] = useState('')
   const [confidence, setConfidence] = useState<ConfidenceFilter>('ALL')
+  
   const items = useMemo(
     () => selectHumanReviewQueueItems(state, jobId === 'ALL' ? undefined : jobId),
     [jobId, state],
   )
   const summary = selectHumanReviewQueueSummary(state, jobId === 'ALL' ? undefined : jobId)
+  
   const selectedItem = selectedApplicationId
     ? selectHumanReviewQueueItem(state, selectedApplicationId)
     : undefined
@@ -81,6 +83,7 @@ export default function HumanReviewQueue() {
       confidenceMatches(item.evaluation?.confidence, confidence)
     )
   })
+  
   const countByCategory: Record<CategoryFilter, number> = {
     ALL: summary.total,
     NEEDS_REVIEW: summary.needsReview,
@@ -113,37 +116,84 @@ export default function HumanReviewQueue() {
     >
       <Card className="mb-4 overflow-hidden p-2">
         <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-6" role="group" aria-label="Review categories">
-          {categoryOptions.map((option) => (
-            <button
-              type="button"
-              key={option.value}
-              onClick={() => setCategory(option.value)}
-              className={`rounded-aura-sm px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier ${category === option.value ? option.value === 'NEEDS_REVIEW' ? 'bg-aura-warning-soft text-depth' : 'bg-harbor text-white' : 'bg-transparent text-aura-text-secondary hover:bg-frost'}`}
-              aria-pressed={category === option.value}
-            >
-              <span className="block text-[10px] font-bold uppercase tracking-wide opacity-70">{option.label}</span>
-              <span className="mt-1 block text-xl font-bold">{countByCategory[option.value]}</span>
-            </button>
-          ))}
+          {categoryOptions.map((option) => {
+            const isActive = category === option.value
+            return (
+              <button
+                type="button"
+                key={option.value}
+                onClick={() => setCategory(option.value)}
+                className={`rounded-aura-sm px-3 py-3 text-left transition-all border-l-2 cursor-pointer focus:outline-none ${
+                  isActive 
+                    ? 'bg-[#171717] text-white border-l-[#C7FF38] shadow-[0_0_10px_rgba(199,255,56,0.15)]' 
+                    : 'bg-transparent text-slate-500 border-l-transparent hover:bg-[#85ab22]/10 hover:text-[#85ab22]'
+                }`}
+                aria-pressed={isActive}
+              >
+                <span className="block text-[10px] font-bold uppercase tracking-wide opacity-70">{option.label}</span>
+                <span className="mt-1 block text-xl font-bold">{countByCategory[option.value]}</span>
+              </button>
+            )
+          })}
         </div>
       </Card>
 
       <Card className="mb-4 p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_220px_210px_210px]">
-          <label className="relative block"><span className="sr-only">Search review queue</span><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-aura-text-muted" size={17} aria-hidden="true" /><Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search candidates or roles" /></label>
-          <label><span className="sr-only">Category</span><select className={selectClass} value={category} onChange={(event) => setCategory(event.target.value as CategoryFilter)}>{categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.value === 'ALL' ? 'All categories' : option.label}</option>)}</select></label>
-          <label><span className="sr-only">Job opening</span><select className={selectClass} value={jobId} onChange={(event) => setJobId(event.target.value)}><option value="ALL">All job openings</option>{state.jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select></label>
-          <label><span className="sr-only">Confidence level</span><select className={selectClass} value={confidence} onChange={(event) => setConfidence(event.target.value as ConfidenceFilter)}><option value="ALL">All confidence levels</option><option value="BELOW_60">Below 60%</option><option value="60_74">60%–74%</option><option value="75_89">75%–89%</option><option value="90_PLUS">90% and above</option></select></label>
+          <label className="relative block">
+            <span className="sr-only">Search review queue</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
+            <Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search candidates or roles" />
+          </label>
+          <label>
+            <span className="sr-only">Category</span>
+            <select className={selectClass} value={category} onChange={(event) => setCategory(event.target.value as CategoryFilter)}>
+              {categoryOptions.map((option) => <option key={option.value} value={option.value}>{option.value === 'ALL' ? 'All categories' : option.label}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Job opening</span>
+            <select className={selectClass} value={jobId} onChange={(event) => setJobId(event.target.value)}>
+              <option value="ALL">All job openings</option>
+              {state.jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Confidence level</span>
+            <select className={selectClass} value={confidence} onChange={(event) => setConfidence(event.target.value as ConfidenceFilter)}>
+              <option value="ALL">All confidence levels</option>
+              <option value="BELOW_60">Below 60%</option>
+              <option value="60_74">60%–74%</option>
+              <option value="75_89">75%–89%</option>
+              <option value="90_PLUS">90% and above</option>
+            </select>
+          </label>
         </div>
-        <p className="mb-0 mt-3 text-xs font-medium text-aura-text-muted">Showing {filteredItems.length} of {items.length} review item{items.length === 1 ? '' : 's'}</p>
+        <p className="mb-0 mt-3 text-xs font-medium text-slate-400">Showing {filteredItems.length} of {items.length} review item{items.length === 1 ? '' : 's'}</p>
       </Card>
 
-      {invalidTarget ? <div role="status"><Card className="mb-4 border-aura-warning/25 p-4 text-sm text-aura-text-secondary">The requested application is not available in the human review queue.</Card></div> : null}
+      {invalidTarget ? (
+        <div role="status">
+          <Card className="mb-4 border-amber-200 bg-amber-50 p-4 text-sm text-slate-600">
+            The requested application is not available in the human review queue.
+          </Card>
+        </div>
+      ) : null}
 
       {filteredItems.length > 0 ? (
-        <><div className="hidden xl:block"><HumanReviewTable items={filteredItems} onReview={openReview} /></div><div className="grid gap-3 xl:hidden">{filteredItems.map((item) => <HumanReviewCard key={item.application.id} item={item} onReview={() => openReview(item.application.id)} />)}</div></>
+        <>
+          <div className="hidden xl:block">
+            <HumanReviewTable items={filteredItems} onReview={openReview} />
+          </div>
+          <div className="grid gap-3 xl:hidden">
+            {filteredItems.map((item) => <HumanReviewCard key={item.application.id} item={item} onReview={() => openReview(item.application.id)} />)}
+          </div>
+        </>
       ) : (
-        <Card className="p-8 text-center md:p-12"><h2 className="m-0 text-lg font-semibold text-depth">{emptyTitle}</h2><p className="mx-auto mb-0 mt-2 max-w-xl text-sm leading-6 text-aura-text-secondary">{emptyDescription}</p></Card>
+        <Card className="p-8 text-center md:p-12">
+          <h2 className="m-0 text-lg font-semibold text-[#171717]">{emptyTitle}</h2>
+          <p className="mx-auto mb-0 mt-2 max-w-xl text-sm leading-6 text-slate-500">{emptyDescription}</p>
+        </Card>
       )}
 
       <Dialog open={Boolean(selectedItem)} title="Human review workspace" size="wide" onClose={closeReview}>

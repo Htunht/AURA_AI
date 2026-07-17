@@ -32,8 +32,8 @@ const recommendationOptions: Array<{ value: RecommendationFilter; label: string 
   { value: 'NOT_SCREENED', label: 'Not screened' },
 ]
 
-const selectClass = 'h-10 w-full rounded-aura-sm border border-harbor/20 bg-white px-3 text-sm text-depth shadow-aura-xs focus:border-marine focus:outline-none focus:ring-2 focus:ring-glacier/35'
-const actionLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-transparent px-4 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf]'
+const selectClass = 'h-10 w-full rounded-aura-sm border border-slate-200 bg-white px-3 text-sm text-[#171717] shadow-aura-xs focus:border-[#C7FF38] focus:outline-none focus:ring-2 focus:ring-[#85ab22]/35'
+const actionLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-transparent bg-[#C7FF38] px-4 text-sm font-semibold text-[#171717] hover:text-white hover:bg-[#85ab22] hover:shadow-[0_0_12px_rgba(133,171,34,0.6)] no-underline transition-all duration-200'
 
 export default function Candidates() {
   const { jobId } = useParams()
@@ -60,7 +60,7 @@ export default function Candidates() {
   })
 
   if (jobId && !job) {
-    return <PageContainer title="Job not found"><Card className="p-8 text-center text-sm text-aura-text-secondary">The requested job opening does not exist.</Card></PageContainer>
+    return <PageContainer title="Job not found"><Card className="p-8 text-center text-sm text-slate-500">The requested job opening does not exist.</Card></PageContainer>
   }
 
   const noApplicationsForRole = Boolean(jobId && allItems.length === 0)
@@ -76,7 +76,7 @@ export default function Candidates() {
         <div className={`grid gap-3 ${job ? 'md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_190px_190px_190px]' : 'md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_180px_180px_200px]'}`}>
           <label className="relative block">
             <span className="sr-only">Search candidates</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-aura-text-muted" size={17} aria-hidden="true" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} aria-hidden="true" />
             <Input className="h-10 pl-10" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, role, or skill" />
           </label>
           <label className="grid gap-1.5">
@@ -114,15 +114,22 @@ export default function Candidates() {
             </label>
           ) : null}
         </div>
-        <p className="mb-0 mt-3 text-xs font-medium text-aura-text-muted">Showing {filteredItems.length} of {allItems.length} application{allItems.length === 1 ? '' : 's'}</p>
+        <p className="mb-0 mt-3 text-xs font-medium text-slate-400">Showing {filteredItems.length} of {allItems.length} application{allItems.length === 1 ? '' : 's'}</p>
       </Card>
 
       {filteredItems.length > 0 ? (
-        <><div className="hidden lg:block"><CandidateTable items={filteredItems} onRetryFailed={(applicationId) => retryFailed([applicationId])} /></div><div className="grid gap-3 lg:hidden">{filteredItems.map((item) => <CandidateCard item={item} onRetryFailed={() => retryFailed([item.application.id])} key={item.application.id} />)}</div></>
+        <>
+          <div className="hidden lg:block">
+            <CandidateTable items={filteredItems} onRetryFailed={(applicationId) => retryFailed([applicationId])} />
+          </div>
+          <div className="grid gap-3 lg:hidden">
+            {filteredItems.map((item) => <CandidateCard item={item} onRetryFailed={() => retryFailed([item.application.id])} key={item.application.id} />)}
+          </div>
+        </>
       ) : (
         <Card className="p-8 text-center md:p-12">
-          <h2 className="m-0 text-lg font-semibold text-depth">{noApplicationsForRole ? 'No applications have been submitted for this role.' : 'No candidates match the selected filters.'}</h2>
-          {noApplicationsForRole && job ? <Link className="mt-4 inline-flex text-sm font-semibold text-harbor hover:text-depth" to={`/apply/${job.id}`}>Open public application</Link> : null}
+          <h2 className="m-0 text-lg font-semibold text-[#171717]">{noApplicationsForRole ? 'No applications have been submitted for this role.' : 'No candidates match the selected filters.'}</h2>
+          {noApplicationsForRole && job ? <Link className="mt-4 inline-flex text-sm font-semibold text-[#171717] hover:text-[#85ab22] hover:underline transition-colors" to={`/apply/${job.id}`}>Open public application</Link> : null}
         </Card>
       )}
     </PageContainer>

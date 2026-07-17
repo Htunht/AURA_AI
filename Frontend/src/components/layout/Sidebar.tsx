@@ -2,10 +2,11 @@ import { BriefcaseBusiness, CalendarClock, ClipboardCheck, LayoutDashboard, User
 import { NavLink } from 'react-router-dom'
 import logo from '../../assets/logo.png'
 
-// Inactive: hover fades in a subtle background + brightens text
-// Active: solid left border animates in via border-l-2 → border-l-[3px] scale
+// Sidebar Link Styling: Inactive links are warm Beige (text-frost) at 70% opacity.
+// Active links get a transparent white highlight and an Acid Lime left border.
+// Hover links get an Acid Lime text color and left border accent.
 const navLinkClass =
-  'flex min-h-10 items-center gap-2.5 border-l-2 border-transparent px-3 py-2 text-sm font-semibold text-frost/70 no-underline transition-all duration-200 ease-in-out hover:bg-[#2a4555]/50 hover:text-white hover:border-l-glacier/40 max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
+  'flex min-h-10 items-center gap-2.5 border-l-2 border-transparent px-3 py-2 text-sm font-semibold text-frost/70 no-underline transition-all duration-200 ease-in-out hover:bg-white/5 hover:text-[#C7FF38] hover:border-l-glacier max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
 
 export function Sidebar() {
   return (
@@ -32,7 +33,7 @@ export function Sidebar() {
           <NavLink
             to="/dashboard"
             className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+              `${navLinkClass}${isActive ? ' border-glacier bg-white/10 text-white' : ''}`
             }
           >
             <LayoutDashboard size={18} aria-hidden="true" />
@@ -46,7 +47,7 @@ export function Sidebar() {
           <NavLink
             to="/jobs"
             className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+              `${navLinkClass}${isActive ? ' border-glacier bg-white/10 text-white' : ''}`
             }
           >
             <BriefcaseBusiness size={18} aria-hidden="true" />
@@ -55,7 +56,7 @@ export function Sidebar() {
           <NavLink
             to="/candidates"
             className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+              `${navLinkClass}${isActive ? ' border-glacier bg-white/10 text-white' : ''}`
             }
           >
             <Users size={18} aria-hidden="true" />
@@ -64,7 +65,7 @@ export function Sidebar() {
           <NavLink
             to="/reviews"
             className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+              `${navLinkClass}${isActive ? ' border-glacier bg-white/10 text-white' : ''}`
             }
           >
             <ClipboardCheck size={18} aria-hidden="true" />
@@ -73,7 +74,7 @@ export function Sidebar() {
           <NavLink
             to="/interviews"
             className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
+              `${navLinkClass}${isActive ? ' border-glacier bg-white/10 text-white' : ''}`
             }
           >
             <CalendarClock size={18} aria-hidden="true" />
