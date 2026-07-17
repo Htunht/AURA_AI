@@ -15,6 +15,9 @@ import type { Interview, InterviewQuestion, InterviewStatus } from '../types/int
 import type { InterviewQuestion as PreparedInterviewQuestion, InterviewQuestionCategory, InterviewQuestionPriority } from '../types/interviewQuestion'
 import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
 import type { InterviewSession } from '../types/interviewSession'
+import type { InterviewTranscript, InterviewTranscriptSegment } from '../types/interviewTranscript'
+import type { InterviewAnalysis } from '../types/interviewAnalysis'
+import type { InterviewEvidence } from '../types/interviewEvidence'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { EmailDeliveryErrorCode } from '../types/emailDelivery'
@@ -30,6 +33,8 @@ import { createInitialDemoState } from './demoInitialState'
 import { cloneQuestion } from '../utils/interviewQuestionMigration'
 import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestionSetReadiness'
 import { deriveJobRequirements } from '../utils/jobRequirements'
+import { evaluateInterviewTranscriptReadiness } from '../utils/interviewTranscriptReadiness'
+import { evaluateInterviewAnalysisReadiness } from '../utils/interviewAnalysisReadiness'
 import type { DemoState } from './demoStateTypes'
 
 export { initialDemoState } from './demoInitialState'
@@ -182,6 +187,22 @@ export type DemoAction =
   | { type: 'SET_CURRENT_SESSION_QUESTION'; payload: { sessionId: string; questionId: string; changedAt: string } }
   | { type: 'UPDATE_INTERVIEW_SESSION_GENERAL_NOTES'; payload: { sessionId: string; notes: string; updatedAt: string } }
   | { type: 'COMPLETE_INTERVIEW_SESSION'; payload: { sessionId: string; completedAt: string; activeSecondsSinceResume: number } }
+  | { type: 'ADD_INTERVIEW_TRANSCRIPT'; payload: { transcript: InterviewTranscript } }
+  | { type: 'UPDATE_INTERVIEW_TRANSCRIPT_RAW_TEXT'; payload: { transcriptId: string; rawText: string; updatedAt: string } }
+  | { type: 'REPLACE_INTERVIEW_TRANSCRIPT_SEGMENTS'; payload: { transcriptId: string; segments: InterviewTranscriptSegment[]; updatedAt: string } }
+  | { type: 'UPDATE_INTERVIEW_TRANSCRIPT_SEGMENT'; payload: { transcriptId: string; segmentId: string; changes: Partial<Pick<InterviewTranscriptSegment, 'speaker' | 'speakerLabel' | 'text' | 'questionId'>>; updatedAt: string } }
+  | { type: 'ADD_INTERVIEW_TRANSCRIPT_SEGMENT'; payload: { transcriptId: string; segment: InterviewTranscriptSegment; updatedAt: string } }
+  | { type: 'REMOVE_INTERVIEW_TRANSCRIPT_SEGMENT'; payload: { transcriptId: string; segmentId: string; updatedAt: string } }
+  | { type: 'MOVE_INTERVIEW_TRANSCRIPT_SEGMENT'; payload: { transcriptId: string; segmentId: string; direction: 'UP' | 'DOWN'; updatedAt: string } }
+  | { type: 'APPROVE_INTERVIEW_TRANSCRIPT'; payload: { transcriptId: string; approvedAt: string; approvedBy: string } }
+  | { type: 'ADD_INTERVIEW_ANALYSIS'; payload: { analysis: InterviewAnalysis } }
+  | { type: 'UPDATE_INTERVIEW_EVIDENCE'; payload: { analysisId: string; evidenceId: string; changes: Partial<Pick<InterviewEvidence, 'type' | 'strength' | 'title' | 'summary' | 'interviewerNote' | 'transcriptSegmentIds' | 'questionIds' | 'requirementIds'>>; updatedAt: string } }
+  | { type: 'ADD_INTERVIEW_EVIDENCE'; payload: { analysisId: string; evidence: InterviewEvidence; updatedAt: string } }
+  | { type: 'REMOVE_INTERVIEW_EVIDENCE'; payload: { analysisId: string; evidenceId: string; updatedAt: string } }
+  | { type: 'UPDATE_INTERVIEW_ANALYSIS_CONTENT'; payload: { analysisId: string; interviewerSummary?: string; strengths?: string[]; concerns?: string[]; missingEvidence?: string[]; updatedAt: string } }
+  | { type: 'APPROVE_INTERVIEW_ANALYSIS'; payload: { analysisId: string; approvedAt: string; approvedBy: string } }
+  | { type: 'MARK_INTERVIEW_ANALYSIS_GENERATION_FAILED'; payload: { analysis: InterviewAnalysis } }
+  | { type: 'RETRY_INTERVIEW_ANALYSIS_GENERATION'; payload: { analysisId: string } }
   | {
       type: 'UPDATE_INTERVIEW_STATUS'
       payload: { interviewId: string; status: InterviewStatus; updatedAt?: string }
@@ -1521,6 +1542,53 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
             : interview,
         ),
       }
+
+    case 'ADD_INTERVIEW_TRANSCRIPT': {
+      const transcript = action.payload.transcript; const interview = state.interviews.find((item) => item.id === transcript.interviewId); const session = state.interviewSessions.find((item) => item.id === transcript.sessionId); const ids = transcript.segments.map((item) => item.id)
+      if (!interview || interview.status !== 'COMPLETED' || !session || session.status !== 'COMPLETED' || session.interviewId !== interview.id || state.interviewTranscripts.some((item) => item.id === transcript.id || item.interviewId === transcript.interviewId) || new Set(ids).size !== ids.length) return state
+      return { ...state, interviewTranscripts: [...state.interviewTranscripts, { ...transcript, segments: transcript.segments.map((item, index) => ({ ...item, order: index + 1 })) }] }
+    }
+    case 'UPDATE_INTERVIEW_TRANSCRIPT_RAW_TEXT':
+      if (action.payload.rawText.length > 100000 || !state.interviewTranscripts.some((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT')) return state
+      return { ...state, interviewTranscripts: state.interviewTranscripts.map((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT' ? { ...item, rawText: action.payload.rawText, updatedAt: action.payload.updatedAt } : item) }
+    case 'REPLACE_INTERVIEW_TRANSCRIPT_SEGMENTS':
+      if (!state.interviewTranscripts.some((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT')) return state
+      return { ...state, interviewTranscripts: state.interviewTranscripts.map((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT' && new Set(action.payload.segments.map((segment) => segment.id)).size === action.payload.segments.length ? { ...item, segments: action.payload.segments.map((segment, index) => ({ ...segment, order: index + 1 })), updatedAt: action.payload.updatedAt } : item) }
+    case 'UPDATE_INTERVIEW_TRANSCRIPT_SEGMENT':
+      if (!state.interviewTranscripts.some((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT')) return state
+      return { ...state, interviewTranscripts: state.interviewTranscripts.map((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT' ? { ...item, updatedAt: action.payload.updatedAt, segments: item.segments.map((segment) => segment.id === action.payload.segmentId && (action.payload.changes.text === undefined || action.payload.changes.text.trim()) ? { ...segment, ...action.payload.changes, text: action.payload.changes.text?.trim() ?? segment.text, updatedAt: action.payload.updatedAt } : segment) } : item) }
+    case 'ADD_INTERVIEW_TRANSCRIPT_SEGMENT':
+      if (!state.interviewTranscripts.some((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT')) return state
+      return { ...state, interviewTranscripts: state.interviewTranscripts.map((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT' && !item.segments.some((segment) => segment.id === action.payload.segment.id) && action.payload.segment.text.trim() ? { ...item, updatedAt: action.payload.updatedAt, segments: [...item.segments, { ...action.payload.segment, order: item.segments.length + 1 }] } : item) }
+    case 'REMOVE_INTERVIEW_TRANSCRIPT_SEGMENT':
+      if (!state.interviewTranscripts.some((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT')) return state
+      return { ...state, interviewTranscripts: state.interviewTranscripts.map((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT' && (item.segments.length > 1 || !item.rawText.trim()) ? { ...item, updatedAt: action.payload.updatedAt, segments: item.segments.filter((segment) => segment.id !== action.payload.segmentId).map((segment, index) => ({ ...segment, order: index + 1 })) } : item) }
+    case 'MOVE_INTERVIEW_TRANSCRIPT_SEGMENT': {
+      const transcript = state.interviewTranscripts.find((item) => item.id === action.payload.transcriptId); if (!transcript || transcript.status !== 'DRAFT') return state; const from = transcript.segments.findIndex((item) => item.id === action.payload.segmentId); const to = action.payload.direction === 'UP' ? from - 1 : from + 1; if (from < 0 || to < 0 || to >= transcript.segments.length) return state; const segments = [...transcript.segments]; const [moved] = segments.splice(from, 1); segments.splice(to, 0, moved); return { ...state, interviewTranscripts: state.interviewTranscripts.map((item) => item.id === transcript.id ? { ...item, updatedAt: action.payload.updatedAt, segments: segments.map((segment, index) => ({ ...segment, order: index + 1 })) } : item) }
+    }
+    case 'APPROVE_INTERVIEW_TRANSCRIPT': {
+      const transcript = state.interviewTranscripts.find((item) => item.id === action.payload.transcriptId); const set = transcript ? state.interviewQuestionSets.find((item) => item.interviewId === transcript.interviewId && item.status === 'APPROVED') : undefined; if (!transcript || transcript.status !== 'DRAFT' || !set || !evaluateInterviewTranscriptReadiness({ transcript, questionSet: set }).ready) return state; return { ...state, interviewTranscripts: state.interviewTranscripts.map((item) => item.id === transcript.id ? { ...item, status: 'APPROVED', approvedAt: action.payload.approvedAt, approvedBy: action.payload.approvedBy, updatedAt: action.payload.approvedAt } : item) }
+    }
+    case 'ADD_INTERVIEW_ANALYSIS':
+    case 'MARK_INTERVIEW_ANALYSIS_GENERATION_FAILED': {
+      const analysis = action.payload.analysis; const transcript = state.interviewTranscripts.find((item) => item.id === analysis.transcriptId); if (!transcript || transcript.status !== 'APPROVED' || transcript.interviewId !== analysis.interviewId || state.interviewAnalyses.some((item) => item.id === analysis.id || item.interviewId === analysis.interviewId)) return state; return { ...state, interviewAnalyses: [...state.interviewAnalyses, { ...analysis, evidence: analysis.evidence.map((item) => ({ ...item, analysisId: analysis.id })) }] }
+    }
+    case 'RETRY_INTERVIEW_ANALYSIS_GENERATION': {
+      const failed = state.interviewAnalyses.find((item) => item.id === action.payload.analysisId && item.status === 'GENERATION_FAILED')
+      if (!failed) return state
+      return { ...state, interviewAnalyses: state.interviewAnalyses.filter((item) => item.id !== failed.id) }
+    }
+    case 'UPDATE_INTERVIEW_EVIDENCE':
+      return { ...state, interviewAnalyses: state.interviewAnalyses.map((analysis) => analysis.id === action.payload.analysisId && analysis.status === 'DRAFT' ? { ...analysis, updatedAt: action.payload.updatedAt, evidence: analysis.evidence.map((item) => item.id === action.payload.evidenceId ? { ...item, ...action.payload.changes, updatedAt: action.payload.updatedAt } : item) } : analysis) }
+    case 'ADD_INTERVIEW_EVIDENCE':
+      return { ...state, interviewAnalyses: state.interviewAnalyses.map((analysis) => analysis.id === action.payload.analysisId && analysis.status === 'DRAFT' && !analysis.evidence.some((item) => item.id === action.payload.evidence.id) ? { ...analysis, updatedAt: action.payload.updatedAt, evidence: [...analysis.evidence, { ...action.payload.evidence, analysisId: analysis.id }] } : analysis) }
+    case 'REMOVE_INTERVIEW_EVIDENCE':
+      return { ...state, interviewAnalyses: state.interviewAnalyses.map((analysis) => analysis.id === action.payload.analysisId && analysis.status === 'DRAFT' ? { ...analysis, updatedAt: action.payload.updatedAt, evidence: analysis.evidence.filter((item) => item.id !== action.payload.evidenceId) } : analysis) }
+    case 'UPDATE_INTERVIEW_ANALYSIS_CONTENT':
+      return { ...state, interviewAnalyses: state.interviewAnalyses.map((analysis) => analysis.id === action.payload.analysisId && analysis.status === 'DRAFT' ? { ...analysis, ...(action.payload.interviewerSummary !== undefined ? { interviewerSummary: action.payload.interviewerSummary.slice(0, 800) } : {}), ...(action.payload.strengths ? { strengths: action.payload.strengths.slice(0, 10) } : {}), ...(action.payload.concerns ? { concerns: action.payload.concerns.slice(0, 10) } : {}), ...(action.payload.missingEvidence ? { missingEvidence: action.payload.missingEvidence.slice(0, 10) } : {}), updatedAt: action.payload.updatedAt } : analysis) }
+    case 'APPROVE_INTERVIEW_ANALYSIS': {
+      const analysis = state.interviewAnalyses.find((item) => item.id === action.payload.analysisId); const transcript = analysis ? state.interviewTranscripts.find((item) => item.id === analysis.transcriptId) : undefined; const application = analysis ? state.interviews.find((item) => item.id === analysis.interviewId) : undefined; const app = application ? state.applications.find((item) => item.id === application.applicationId) : undefined; const job = app ? state.jobs.find((item) => item.id === app.jobId) : undefined; if (!analysis || analysis.status !== 'DRAFT' || !transcript || !job || !evaluateInterviewAnalysisReadiness({ analysis, transcript, requirements: deriveJobRequirements(job) }).ready) return state; return { ...state, interviewAnalyses: state.interviewAnalyses.map((item) => item.id === analysis.id ? { ...item, status: 'APPROVED', approvedAt: action.payload.approvedAt, approvedBy: action.payload.approvedBy, updatedAt: action.payload.approvedAt } : item) }
+    }
 
     case 'ADD_TRANSCRIPT': {
       const transcriptExists = state.transcripts.some(

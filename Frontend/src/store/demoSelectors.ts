@@ -7,6 +7,8 @@ import type { Evaluation } from '../types/evaluation'
 import type { Interview } from '../types/interview'
 import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
 import type { InterviewSession } from '../types/interviewSession'
+import type { InterviewTranscript } from '../types/interviewTranscript'
+import type { InterviewAnalysis } from '../types/interviewAnalysis'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { SchedulingExceptionReason } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
@@ -30,6 +32,7 @@ import type { ResolvedInterviewSchedulingPolicy } from '../types/resolvedIntervi
 import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyResolution'
 import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestionSetReadiness'
 import { deriveJobRequirements } from '../utils/jobRequirements'
+import { evaluateInterviewTranscriptReadiness } from '../utils/interviewTranscriptReadiness'
 
 const schedulingInterviewers = interviewersData as Interviewer[]
 
@@ -38,6 +41,15 @@ export function selectInterviewQuestionSetsByInterviewId(state: DemoState, inter
 }
 
 export function selectInterviewSessionByInterviewId(state: DemoState, interviewId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.interviewId === interviewId) }
+export function selectInterviewTranscriptByInterviewId(state: DemoState, interviewId: string): InterviewTranscript | undefined { return state.interviewTranscripts.find((item) => item.interviewId === interviewId) }
+export function selectInterviewTranscriptById(state: DemoState, transcriptId: string): InterviewTranscript | undefined { return state.interviewTranscripts.find((item) => item.id === transcriptId) }
+export function selectInterviewTranscriptReadiness(state: DemoState, interviewId: string) { const transcript = selectInterviewTranscriptByInterviewId(state, interviewId); const set = selectApprovedInterviewQuestionSet(state, interviewId); return transcript && set ? evaluateInterviewTranscriptReadiness({ transcript, questionSet: set }) : undefined }
+export function selectInterviewAnalysesByInterviewId(state: DemoState, interviewId: string): InterviewAnalysis[] { return state.interviewAnalyses.filter((item) => item.interviewId === interviewId).sort((a, b) => b.version - a.version) }
+export function selectLatestInterviewAnalysis(state: DemoState, interviewId: string) { return selectInterviewAnalysesByInterviewId(state, interviewId)[0] }
+export function selectApprovedInterviewAnalysis(state: DemoState, interviewId: string) { return selectInterviewAnalysesByInterviewId(state, interviewId).find((item) => item.status === 'APPROVED') }
+export type InterviewAnalysisPreparationStatus = 'TRANSCRIPT_REQUIRED' | 'TRANSCRIPT_DRAFT' | 'PREPARING' | 'DRAFT_READY' | 'APPROVED' | 'FAILED'
+export function selectInterviewAnalysisPreparationStatus(state: DemoState, interviewId: string): InterviewAnalysisPreparationStatus { const transcript = selectInterviewTranscriptByInterviewId(state, interviewId); if (!transcript) return 'TRANSCRIPT_REQUIRED'; if (transcript.status === 'DRAFT') return 'TRANSCRIPT_DRAFT'; const analysis = selectLatestInterviewAnalysis(state, interviewId); if (!analysis || analysis.status === 'GENERATING') return 'PREPARING'; if (analysis.status === 'DRAFT') return 'DRAFT_READY'; if (analysis.status === 'APPROVED') return 'APPROVED'; return 'FAILED' }
+export function selectPostInterviewReviewSummary(state: DemoState) { const completed = state.interviews.filter((item) => item.status === 'COMPLETED'); const items = completed.map((interview) => ({ interview, status: selectInterviewAnalysisPreparationStatus(state, interview.id) })); return { transcriptsNeedReview: items.filter((item) => item.status === 'TRANSCRIPT_REQUIRED' || item.status === 'TRANSCRIPT_DRAFT').length, preparing: items.filter((item) => item.status === 'PREPARING').length, analysesNeedApproval: items.filter((item) => item.status === 'DRAFT_READY' || item.status === 'FAILED').length, approved: items.filter((item) => item.status === 'APPROVED').length, attention: items.filter((item) => ['TRANSCRIPT_REQUIRED', 'TRANSCRIPT_DRAFT', 'DRAFT_READY', 'FAILED'].includes(item.status)).sort((a, b) => a.interview.scheduledEnd.localeCompare(b.interview.scheduledEnd)) } }
 export function selectInterviewSessionById(state: DemoState, sessionId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.id === sessionId) }
 export type InterviewSessionViewModel = { session: InterviewSession; interview: Interview; questionSet: InterviewQuestionSet; candidate: Candidate; application: Application; job: Job }
 export function selectInterviewSessionViewModel(state: DemoState, interviewId: string): InterviewSessionViewModel | undefined {
@@ -1420,6 +1432,10 @@ export type CandidateTimelineEvent = {
     | 'INTERVIEW_PLAN_APPROVED'
     | 'INTERVIEW_STARTED'
     | 'INTERVIEW_PAUSED'
+    | 'INTERVIEW_TRANSCRIPT_ADDED'
+    | 'INTERVIEW_TRANSCRIPT_APPROVED'
+    | 'INTERVIEW_ANALYSIS_PREPARED'
+    | 'INTERVIEW_ANALYSIS_APPROVED'
     | 'FINAL_EVALUATION_COMPLETED'
     | 'DECISION_RECORDED'
     | 'COMMUNICATION_SENT'
@@ -1515,6 +1531,8 @@ export function selectCandidateTimeline(
     if (session.status === 'PAUSED' && session.pausedAt) events.push({ id: `interview-paused-${session.id}`, type: 'INTERVIEW_PAUSED', title: 'Interview paused', occurredAt: session.pausedAt })
     if (session.status === 'COMPLETED' && session.completedAt) events.push({ id: `interview-session-completed-${session.id}`, type: 'INTERVIEW_COMPLETED', title: 'Interview completed', description: `The interview ended after ${Math.round(session.accumulatedActiveSeconds / 60)} minutes. ${summary.asked} questions were asked.`, occurredAt: session.completedAt })
   })
+  state.interviewTranscripts.filter((item) => applicationInterviewIds.has(item.interviewId)).forEach((item) => { events.push({ id: `interview-transcript-added-${item.id}`, type: 'INTERVIEW_TRANSCRIPT_ADDED', title: 'Interview transcript added', occurredAt: item.createdAt }); if (item.approvedAt) events.push({ id: `interview-transcript-approved-${item.id}`, type: 'INTERVIEW_TRANSCRIPT_APPROVED', title: 'Interview transcript approved', occurredAt: item.approvedAt }) })
+  state.interviewAnalyses.filter((item) => applicationInterviewIds.has(item.interviewId)).forEach((item) => { events.push({ id: `interview-analysis-prepared-${item.id}`, type: 'INTERVIEW_ANALYSIS_PREPARED', title: 'Interview analysis prepared', occurredAt: item.createdAt }); if (item.approvedAt) events.push({ id: `interview-analysis-approved-${item.id}`, type: 'INTERVIEW_ANALYSIS_APPROVED', title: 'Interview analysis approved', occurredAt: item.approvedAt }) })
 
   state.interviewSchedulingInvitations
     .filter((invitation) => invitation.applicationId === applicationId)

@@ -99,6 +99,8 @@ export function validatePersistedDemoState(
     'interviewSchedulingInvitations',
     'interviewQuestionSets',
     'interviewSessions',
+    'interviewTranscripts',
+    'interviewAnalyses',
   ] as const) {
     if (value[collectionName] !== undefined && !Array.isArray(value[collectionName])) {
       errors.push(`Persisted demo state ${collectionName} must be an array.`)
@@ -130,6 +132,8 @@ export function validatePersistedDemoState(
     : []
   const questionSets = Array.isArray(value.interviewQuestionSets) ? value.interviewQuestionSets : []
   const sessions = Array.isArray(value.interviewSessions) ? value.interviewSessions : []
+  const interviewTranscripts = Array.isArray(value.interviewTranscripts) ? value.interviewTranscripts : []
+  const interviewAnalyses = Array.isArray(value.interviewAnalyses) ? value.interviewAnalyses : []
 
   validateRecords(
     jobs,
@@ -201,6 +205,8 @@ export function validatePersistedDemoState(
   )
   validateRecords(questionSets, 'interviewQuestionSets', (record) => hasStringProperties(record, ['id', 'interviewId', 'status', 'createdAt', 'updatedAt']) && Number.isInteger(record.version) && Array.isArray(record.questions), errors)
   validateRecords(sessions, 'interviewSessions', (record) => hasStringProperties(record, ['id', 'interviewId', 'questionSetId', 'status', 'createdAt', 'updatedAt']) && Array.isArray(record.questionProgress) && typeof record.accumulatedActiveSeconds === 'number' && typeof record.generalNotes === 'string', errors)
+  validateRecords(interviewTranscripts, 'interviewTranscripts', (record) => hasStringProperties(record, ['id', 'interviewId', 'sessionId', 'source', 'status', 'rawText', 'createdAt', 'updatedAt']) && Array.isArray(record.segments), errors)
+  validateRecords(interviewAnalyses, 'interviewAnalyses', (record) => hasStringProperties(record, ['id', 'interviewId', 'transcriptId', 'status', 'interviewerSummary', 'createdAt', 'updatedAt']) && Number.isInteger(record.version) && Array.isArray(record.evidence), errors)
   validateRecords(
     transcripts,
     'transcripts',

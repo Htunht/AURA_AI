@@ -17,6 +17,7 @@ import {
   selectCandidateById,
   selectCandidateTimeline,
   selectInterviewByApplicationId,
+  selectInterviewAnalysisPreparationStatus,
   selectInterviewSessionOperationalStatus,
   selectInterviewSessionByInterviewId,
   selectInterviewSessionProgressSummary,
@@ -77,6 +78,7 @@ export default function CandidateDetail() {
   const sessionStatus = interview ? selectInterviewSessionOperationalStatus(state, interview.id) : 'UNAVAILABLE'
   const session = interview ? selectInterviewSessionByInterviewId(state, interview.id) : undefined
   const sessionProgress = session ? selectInterviewSessionProgressSummary(session) : undefined
+  const reviewStatus = interview ? selectInterviewAnalysisPreparationStatus(state, interview.id) : undefined
   const detailItems = [
     ['Full name', candidate.fullName],
     ['Email', candidate.email],
@@ -153,7 +155,7 @@ export default function CandidateDetail() {
 
       {activeTab === 'timeline' ? <Card className="p-5 md:p-6"><SectionHeading title="Activity timeline" description="Recorded milestones for this application, shown in chronological order." /><CandidateTimeline events={timeline} /></Card> : null}
       {activeTab === 'screening' ? <CandidateScreeningPanel applicationId={application.id} /> : null}
-      {activeTab === 'interview' ? <div className="grid gap-4"><CandidateInterviewPanel applicationId={application.id} />{interview && ['READY', 'IN_PROGRESS', 'PAUSED', 'COMPLETED'].includes(sessionStatus) ? <Card className="p-5"><h2 className="m-0 text-lg font-semibold text-depth">Live interview session</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{sessionStatus === 'READY' ? 'Ready for session' : sessionStatus === 'IN_PROGRESS' ? 'Interview in progress' : sessionStatus === 'PAUSED' ? 'Interview paused' : session?.completionSummary ?? 'Interview completed'}</p>{sessionProgress ? <p className="mb-0 mt-1 text-xs text-aura-text-muted">{sessionProgress.asked} asked · {sessionProgress.skipped} skipped · {sessionProgress.notReached} not reached</p> : null}<Link className={`${backLinkClass} mt-4`} to={`/interviews/${interview.id}/session`}>{sessionStatus === 'READY' ? 'Open session' : sessionStatus === 'COMPLETED' ? 'View session summary' : 'Return to session'}</Link></Card> : null}</div> : null}
+      {activeTab === 'interview' ? <div className="grid gap-4"><CandidateInterviewPanel applicationId={application.id} />{interview && ['READY', 'IN_PROGRESS', 'PAUSED', 'COMPLETED'].includes(sessionStatus) ? <Card className="p-5"><h2 className="m-0 text-lg font-semibold text-depth">Live interview session</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{sessionStatus === 'READY' ? 'Ready for session' : sessionStatus === 'IN_PROGRESS' ? 'Interview in progress' : sessionStatus === 'PAUSED' ? 'Interview paused' : session?.completionSummary ?? 'Interview completed'}</p>{sessionProgress ? <p className="mb-0 mt-1 text-xs text-aura-text-muted">{sessionProgress.asked} asked · {sessionProgress.skipped} skipped · {sessionProgress.notReached} not reached</p> : null}<Link className={`${backLinkClass} mt-4`} to={`/interviews/${interview.id}/session`}>{sessionStatus === 'READY' ? 'Open session' : sessionStatus === 'COMPLETED' ? 'View session summary' : 'Return to session'}</Link></Card> : null}{interview && sessionStatus === 'COMPLETED' && reviewStatus ? <Card className="p-5"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="m-0 text-lg font-semibold text-depth">Post-interview review</h2><Badge tone={reviewStatus === 'APPROVED' ? 'success' : reviewStatus === 'FAILED' ? 'warning' : 'accent'}>{reviewStatus === 'TRANSCRIPT_REQUIRED' ? 'Transcript needed' : reviewStatus === 'TRANSCRIPT_DRAFT' ? 'Transcript in review' : reviewStatus === 'PREPARING' ? 'Analysis preparing' : reviewStatus === 'DRAFT_READY' ? 'Analysis ready' : reviewStatus === 'APPROVED' ? 'Analysis approved' : 'Preparation failed'}</Badge></div><p className="mb-0 mt-2 text-sm text-aura-text-secondary">Transcript and analysis are interviewer preparation records; they do not make a hiring decision.</p><Link className={`${backLinkClass} mt-4`} to={reviewStatus === 'TRANSCRIPT_REQUIRED' || reviewStatus === 'TRANSCRIPT_DRAFT' ? `/interviews/${interview.id}/transcript` : `/interviews/${interview.id}/analysis`}>{reviewStatus === 'TRANSCRIPT_REQUIRED' ? 'Add transcript' : reviewStatus === 'TRANSCRIPT_DRAFT' ? 'Review transcript' : reviewStatus === 'DRAFT_READY' ? 'Review analysis' : reviewStatus === 'APPROVED' ? 'View analysis' : 'View preparation'}</Link></Card> : null}</div> : null}
       {activeTab === 'final' ? <Placeholder title="Final evaluation" description="Final candidate evaluation will appear after interview review." /> : null}
     </PageContainer>
   )

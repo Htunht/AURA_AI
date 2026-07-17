@@ -1,0 +1,6 @@
+import type { InterviewAnalysis } from '../types/interviewAnalysis'; import type { InterviewEvidence } from '../types/interviewEvidence'; import type { InterviewTranscriptSegment } from '../types/interviewTranscript'
+export const createInterviewTranscriptId = (interviewId: string) => `transcript-${interviewId}`
+function next(ids: string[], prefix: string) { return Math.max(0, ...ids.map((id) => id.startsWith(prefix) ? Number(id.slice(prefix.length)) : 0).filter(Number.isFinite)) + 1 }
+export function createNextTranscriptSegmentId(segments: InterviewTranscriptSegment[], interviewId: string) { const prefix = `transcript-${interviewId}-segment-`; return `${prefix}${String(next(segments.map((item) => item.id), prefix)).padStart(3, '0')}` }
+export function createNextInterviewAnalysisId(analyses: InterviewAnalysis[], interviewId: string) { const prefix = `analysis-${interviewId}-v`; return `${prefix}${String(next(analyses.map((item) => item.id), prefix)).padStart(3, '0')}` }
+export function createNextInterviewEvidenceId(evidence: InterviewEvidence[], interviewId: string) { const prefix = `evidence-${interviewId}-`; return `${prefix}${String(next(evidence.map((item) => item.id), prefix)).padStart(3, '0')}` }

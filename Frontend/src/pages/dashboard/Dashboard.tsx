@@ -18,6 +18,7 @@ import {
   selectDashboardMetrics,
   selectDraftApplicationFormByJobId,
   selectPublishedApplicationFormByJobId,
+  selectPostInterviewReviewSummary,
   selectRecentApplications,
   selectUpcomingInterviews,
 } from '../../store/demoSelectors'
@@ -87,6 +88,7 @@ export default function Dashboard() {
   const activeJobs = selectActiveJobs(state).slice(0, 3)
   const recentApplications = selectRecentApplications(state)
   const upcomingInterviews = selectUpcomingInterviews(state, DASHBOARD_NOW)
+  const postInterview = selectPostInterviewReviewSummary(state)
   const metricCards = [
     { label: 'Active job openings', value: metrics.activeJobs, description: 'Roles currently accepting applications', icon: BriefcaseBusiness },
     { label: 'Total candidates', value: metrics.totalCandidates, description: 'Candidate profiles in the workspace', icon: Users },
@@ -130,6 +132,17 @@ export default function Dashboard() {
       <div className="mt-4 opacity-0 [animation:fade-in-up_0.5s_ease-out_350ms_forwards]">
         <ScreeningAutomationStatus pendingRecruiterReviews={metrics.pendingRecruiterReviews} />
       </div>
+
+      <Card className="mt-4 p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Post-interview review</p><h2 className="mb-0 mt-2 text-lg font-semibold text-depth">Transcript and analysis preparation</h2><p className="mb-0 mt-1 text-sm text-aura-text-secondary">Preparation records support human evaluation and never make a final hiring decision.</p></div>
+          <Link className={buttonLinkClass} to="/interviews">Open interview history</Link>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[["Transcripts", postInterview.transcriptsNeedReview], ["Preparing", postInterview.preparing], ["Analysis review", postInterview.analysesNeedApproval], ["Approved", postInterview.approved]].map(([label, value]) => <div className="rounded-aura-sm bg-frost/70 p-3" key={label}><p className="m-0 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p><p className="mb-0 mt-1 text-xl font-bold text-depth">{value}</p></div>)}
+        </div>
+        {postInterview.attention[0] ? <Link className="mt-4 inline-flex text-sm font-semibold text-harbor" to={postInterview.attention[0].status === 'TRANSCRIPT_REQUIRED' || postInterview.attention[0].status === 'TRANSCRIPT_DRAFT' ? `/interviews/${postInterview.attention[0].interview.id}/transcript` : `/interviews/${postInterview.attention[0].interview.id}/analysis`}>Review next completed interview</Link> : null}
+      </Card>
 
       {/* Active job openings — delayed entry, interactive rows */}
       <div className="mt-4 overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm opacity-0 [animation:fade-in-up_0.5s_ease-out_450ms_forwards]">

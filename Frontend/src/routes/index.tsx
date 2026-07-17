@@ -27,6 +27,8 @@ const ScreeningRubricEditor = lazy(() => import('../pages/jobs/ScreeningRubricEd
 const HiringWorkflowSetup = lazy(() => import('../pages/jobs/HiringWorkflowSetup'))
 const InterviewQuestionReview = lazy(() => import('../pages/interviews/InterviewQuestionReview'))
 const InterviewSession = lazy(() => import('../pages/interviews/InterviewSession'))
+const InterviewTranscript = lazy(() => import('../pages/InterviewTranscript'))
+const InterviewAnalysis = lazy(() => import('../pages/InterviewAnalysis'))
 
 export function AppRoutes() {
   return (
@@ -50,6 +52,8 @@ export function AppRoutes() {
           <Route path="/interviews/exceptions" element={<InterviewSchedulingExceptions />} />
           <Route path="/interviews/:interviewId/questions" element={<InterviewQuestionReview />} />
           <Route path="/interviews/:interviewId/session" element={<InterviewSession />} />
+          <Route path="/interviews/:interviewId/transcript" element={<InterviewTranscript />} />
+          <Route path="/interviews/:interviewId/analysis" element={<InterviewAnalysis />} />
           <Route path="/interviews/:interviewId" element={<InterviewDetail />} />
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/jobs/new" element={<JobCreate />} />
@@ -76,4 +80,3 @@ function LegacyApplicationFormRedirect() {
   const { jobId = '' } = useParams()
   return <Navigate to={`/jobs/${jobId}/setup?step=form`} replace />
 }
-

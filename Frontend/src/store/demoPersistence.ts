@@ -49,12 +49,14 @@ export function hydratePersistedDemoStateValue(value: string | null, recoverActi
   const validation = validatePersistedDemoState(parsed)
   if (!validation.valid) return undefined
   return normalizePersistedDemoState(
-    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions'> & {
+    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses'> & {
       screeningQueue?: PersistedDemoState['screeningQueue']
       interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
       interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
       interviewQuestionSets?: PersistedDemoState['interviewQuestionSets']
       interviewSessions?: PersistedDemoState['interviewSessions']
+      interviewTranscripts?: PersistedDemoState['interviewTranscripts']
+      interviewAnalyses?: PersistedDemoState['interviewAnalyses']
     },
     recoverActiveSessions,
   )
@@ -123,12 +125,14 @@ export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
 }
 
 export function normalizePersistedDemoState(
-  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions'> & {
+  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses'> & {
     screeningQueue?: DemoState['screeningQueue']
     interviewSchedulingPolicies?: DemoState['interviewSchedulingPolicies']
     interviewSchedulingInvitations?: DemoState['interviewSchedulingInvitations']
     interviewQuestionSets?: DemoState['interviewQuestionSets']
     interviewSessions?: DemoState['interviewSessions']
+    interviewTranscripts?: DemoState['interviewTranscripts']
+    interviewAnalyses?: DemoState['interviewAnalyses']
   },
   recoverActiveSessions = true,
 ): DemoState {
@@ -230,6 +234,8 @@ export function normalizePersistedDemoState(
       : [],
     interviewQuestionSets: migrateLegacyInterviewQuestions(state.interviews, Array.isArray(state.interviewQuestionSets) ? state.interviewQuestionSets : []),
     interviewSessions: Array.isArray(state.interviewSessions) ? state.interviewSessions.map((session) => ({ ...session, questionProgress: session.questionProgress.map((progress) => ({ ...progress, followUpNotes: [...progress.followUpNotes] })) })) : [],
+    interviewTranscripts: Array.isArray(state.interviewTranscripts) ? state.interviewTranscripts.map((transcript) => ({ ...transcript, segments: transcript.segments.map((segment) => ({ ...segment })) })) : [],
+    interviewAnalyses: Array.isArray(state.interviewAnalyses) ? state.interviewAnalyses.map((analysis) => ({ ...analysis, evidence: analysis.evidence.map((item) => ({ ...item, transcriptSegmentIds: [...item.transcriptSegmentIds], questionIds: [...item.questionIds], requirementIds: [...item.requirementIds], criterionKeys: [...item.criterionKeys] })), strengths: [...analysis.strengths], concerns: [...analysis.concerns], missingEvidence: [...analysis.missingEvidence] })) : [],
   })
   return recoverActiveSessions ? recoverInterruptedInterviewSessions(normalized) : normalized
 }
@@ -295,12 +301,14 @@ export function loadPersistedDemoState(): DemoStateHydrationResult {
 
   return {
     state: normalizePersistedDemoState(
-      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions'> & {
+      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses'> & {
         screeningQueue?: PersistedDemoState['screeningQueue']
         interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
         interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
         interviewQuestionSets?: PersistedDemoState['interviewQuestionSets']
         interviewSessions?: PersistedDemoState['interviewSessions']
+        interviewTranscripts?: PersistedDemoState['interviewTranscripts']
+        interviewAnalyses?: PersistedDemoState['interviewAnalyses']
       },
     ),
     source: 'PERSISTED',
