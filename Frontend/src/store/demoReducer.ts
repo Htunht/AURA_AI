@@ -18,6 +18,9 @@ import type { InterviewSession } from '../types/interviewSession'
 import type { InterviewTranscript, InterviewTranscriptSegment } from '../types/interviewTranscript'
 import type { InterviewAnalysis } from '../types/interviewAnalysis'
 import type { InterviewEvidence } from '../types/interviewEvidence'
+import type { FinalEvaluation, DecisionDisagreementReason, HumanFinalDecision } from '../types/finalEvaluation'
+import type { EvaluationChallenge } from '../types/evaluationChallenge'
+import type { UserRole } from '../types/role'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { EmailDeliveryErrorCode } from '../types/emailDelivery'
@@ -35,7 +38,9 @@ import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestio
 import { deriveJobRequirements } from '../utils/jobRequirements'
 import { evaluateInterviewTranscriptReadiness } from '../utils/interviewTranscriptReadiness'
 import { evaluateInterviewAnalysisReadiness } from '../utils/interviewAnalysisReadiness'
+import { canRecordFinalDecision, doesHumanDecisionDifferFromSystem } from '../utils/finalDecisionPermissions'
 import type { DemoState } from './demoStateTypes'
+import type { DemoPostInterviewFastForwardResult } from '../services/demoPostInterviewFastForward'
 
 export { initialDemoState } from './demoInitialState'
 export type { DemoState } from './demoStateTypes'
@@ -201,8 +206,16 @@ export type DemoAction =
   | { type: 'REMOVE_INTERVIEW_EVIDENCE'; payload: { analysisId: string; evidenceId: string; updatedAt: string } }
   | { type: 'UPDATE_INTERVIEW_ANALYSIS_CONTENT'; payload: { analysisId: string; interviewerSummary?: string; strengths?: string[]; concerns?: string[]; missingEvidence?: string[]; updatedAt: string } }
   | { type: 'APPROVE_INTERVIEW_ANALYSIS'; payload: { analysisId: string; approvedAt: string; approvedBy: string } }
+  | { type: 'APPLY_DEMO_POST_INTERVIEW_FAST_FORWARD'; payload: { result: DemoPostInterviewFastForwardResult } }
   | { type: 'MARK_INTERVIEW_ANALYSIS_GENERATION_FAILED'; payload: { analysis: InterviewAnalysis } }
   | { type: 'RETRY_INTERVIEW_ANALYSIS_GENERATION'; payload: { analysisId: string } }
+  | { type: 'ADD_FINAL_EVALUATION'; payload: { evaluation: FinalEvaluation } }
+  | { type: 'MARK_FINAL_EVALUATION_GENERATION_FAILED'; payload: { evaluation: FinalEvaluation } }
+  | { type: 'ADD_EVALUATION_CHALLENGE'; payload: { challenge: EvaluationChallenge; actorRole: UserRole } }
+  | { type: 'RESOLVE_EVALUATION_CHALLENGE'; payload: { challengeId: string; resolutionNote: string; resolvedAt: string; actorRole: UserRole } }
+  | { type: 'DISMISS_EVALUATION_CHALLENGE'; payload: { challengeId: string; resolutionNote: string; resolvedAt: string; actorRole: UserRole } }
+  | { type: 'ADD_RECALCULATED_FINAL_EVALUATION'; payload: { previousEvaluationId: string; evaluation: FinalEvaluation } }
+  | { type: 'RECORD_HUMAN_FINAL_DECISION'; payload: { finalEvaluationId: string; decision: HumanFinalDecision; decisionReason: string; candidateFacingReasonDraft?: string; disagreementReason?: DecisionDisagreementReason; disagreementExplanation?: string; holdReviewDate?: string; decidedBy: string; decidedByRole: UserRole; decidedAt: string } }
   | {
       type: 'UPDATE_INTERVIEW_STATUS'
       payload: { interviewId: string; status: InterviewStatus; updatedAt?: string }
@@ -301,6 +314,16 @@ function cloneInvitation(invitation: InterviewSchedulingInvitation): InterviewSc
       interviewerIds: [...slot.interviewerIds],
     })),
   }
+}
+
+function finalEvaluationProvenanceIsValid(state: DemoState, evaluation: FinalEvaluation) {
+  const application = state.applications.find((item) => item.id === evaluation.applicationId && item.candidateId === evaluation.candidateId && item.jobId === evaluation.jobId)
+  const interview = state.interviews.find((item) => item.id === evaluation.interviewId && item.applicationId === evaluation.applicationId && item.status === 'COMPLETED')
+  const analysis = state.interviewAnalyses.find((item) => item.id === evaluation.interviewAnalysisId && item.interviewId === evaluation.interviewId && item.status === 'APPROVED')
+  const rubric = state.rubrics.find((item) => `interview-scoring-${item.id}` === evaluation.rubricId && item.jobId === evaluation.jobId && item.version === evaluation.rubricVersion && item.status === 'PUBLISHED')
+  const assessedQuestionsValid = evaluation.questionAssessments.every((item) => item.finalEvaluationId === evaluation.id && (item.assessmentState === 'NOT_ASSESSED' ? item.systemRating === undefined : item.systemRating !== undefined && item.matchedAnchorRating === item.systemRating && (item.transcriptSegmentIds.length > 0 || item.evidenceIds.length > 0)))
+  const competenciesValid = evaluation.competencyAssessments.every((item) => item.finalEvaluationId === evaluation.id && (item.assessmentState === 'NOT_ASSESSED' ? item.systemRating === undefined : item.systemRating !== undefined))
+  return Boolean(application && interview && analysis && rubric && evaluation.systemScoreLocked && evaluation.systemRecommendationLocked && assessedQuestionsValid && competenciesValid)
 }
 
 export function demoReducer(state: DemoState, action: DemoAction): DemoState {
@@ -1588,6 +1611,70 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       return { ...state, interviewAnalyses: state.interviewAnalyses.map((analysis) => analysis.id === action.payload.analysisId && analysis.status === 'DRAFT' ? { ...analysis, ...(action.payload.interviewerSummary !== undefined ? { interviewerSummary: action.payload.interviewerSummary.slice(0, 800) } : {}), ...(action.payload.strengths ? { strengths: action.payload.strengths.slice(0, 10) } : {}), ...(action.payload.concerns ? { concerns: action.payload.concerns.slice(0, 10) } : {}), ...(action.payload.missingEvidence ? { missingEvidence: action.payload.missingEvidence.slice(0, 10) } : {}), updatedAt: action.payload.updatedAt } : analysis) }
     case 'APPROVE_INTERVIEW_ANALYSIS': {
       const analysis = state.interviewAnalyses.find((item) => item.id === action.payload.analysisId); const transcript = analysis ? state.interviewTranscripts.find((item) => item.id === analysis.transcriptId) : undefined; const application = analysis ? state.interviews.find((item) => item.id === analysis.interviewId) : undefined; const app = application ? state.applications.find((item) => item.id === application.applicationId) : undefined; const job = app ? state.jobs.find((item) => item.id === app.jobId) : undefined; if (!analysis || analysis.status !== 'DRAFT' || !transcript || !job || !evaluateInterviewAnalysisReadiness({ analysis, transcript, requirements: deriveJobRequirements(job) }).ready) return state; return { ...state, interviewAnalyses: state.interviewAnalyses.map((item) => item.id === analysis.id ? { ...item, status: 'APPROVED', approvedAt: action.payload.approvedAt, approvedBy: action.payload.approvedBy, updatedAt: action.payload.approvedAt } : item) }
+    }
+    case 'APPLY_DEMO_POST_INTERVIEW_FAST_FORWARD': {
+      const result = action.payload.result
+      const interview = state.interviews.find((item) => item.id === result.interviewId && item.status === 'COMPLETED')
+      const session = state.interviewSessions.find((item) => item.interviewId === result.interviewId && item.status === 'COMPLETED')
+      const questionSet = state.interviewQuestionSets.find((item) => item.interviewId === result.interviewId && item.status === 'APPROVED')
+      const application = interview ? state.applications.find((item) => item.id === interview.applicationId && item.candidateId === result.candidateId) : undefined
+      const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+      const transcript = result.transcript
+      if (!interview || !session || !questionSet || !application || !job || transcript.interviewId !== interview.id || transcript.sessionId !== session.id || transcript.source !== 'SIMULATED' || state.interviewTranscripts.some((item) => item.interviewId === interview.id) || state.interviewAnalyses.some((item) => item.interviewId === interview.id) || state.finalEvaluations.some((item) => item.interviewId === interview.id)) return state
+      const transcriptReady = evaluateInterviewTranscriptReadiness({ transcript, questionSet }).ready
+      if (transcript.status === 'APPROVED' && (!transcriptReady || transcript.approvedBy !== 'AURA Demo Automation' || !transcript.approvedAt)) return state
+      if (transcript.status === 'DRAFT' && (result.stage !== 'TRANSCRIPT_REVIEW' || result.analysis || result.finalEvaluation)) return state
+
+      let next: DemoState = { ...state, interviewTranscripts: [...state.interviewTranscripts, transcript] }
+      if (result.analysis) {
+        const analysis = result.analysis
+        if (transcript.status !== 'APPROVED' || analysis.interviewId !== interview.id || analysis.transcriptId !== transcript.id || !['DRAFT', 'APPROVED'].includes(analysis.status)) return state
+        if (analysis.status === 'APPROVED' && (!evaluateInterviewAnalysisReadiness({ analysis, transcript, requirements: deriveJobRequirements(job) }).ready || analysis.approvedBy !== 'AURA Demo Automation' || !analysis.approvedAt)) return state
+        if (analysis.status === 'DRAFT' && (result.stage !== 'ANALYSIS_REVIEW' || result.finalEvaluation)) return state
+        next = { ...next, interviewAnalyses: [...next.interviewAnalyses, { ...analysis, evidence: analysis.evidence.map((item) => ({ ...item, analysisId: analysis.id })) }] }
+      }
+      if (result.finalEvaluation) {
+        if (!result.analysis || result.analysis.status !== 'APPROVED' || !finalEvaluationProvenanceIsValid(next, result.finalEvaluation)) return state
+        next = { ...next, finalEvaluations: [...next.finalEvaluations, result.finalEvaluation] }
+      }
+      if (result.stage === 'FINAL_EVALUATION' && !result.finalEvaluation) return state
+      return next
+    }
+
+    case 'ADD_FINAL_EVALUATION':
+    case 'MARK_FINAL_EVALUATION_GENERATION_FAILED': {
+      const evaluation = action.payload.evaluation
+      if (!finalEvaluationProvenanceIsValid(state, evaluation) || state.finalEvaluations.some((item) => item.id === evaluation.id || (item.applicationId === evaluation.applicationId && !item.supersededByEvaluationId))) return state
+      return { ...state, finalEvaluations: [...state.finalEvaluations, evaluation] }
+    }
+    case 'ADD_EVALUATION_CHALLENGE': {
+      const challenge = action.payload.challenge
+      const evaluation = state.finalEvaluations.find((item) => item.id === challenge.finalEvaluationId)
+      if (!evaluation || evaluation.status === 'DECIDED' || !['INTERVIEWER', 'RECRUITER', 'HIRING_MANAGER'].includes(action.payload.actorRole) || challenge.explanation.trim().length < 20 || state.evaluationChallenges.some((item) => item.id === challenge.id)) return state
+      return { ...state, evaluationChallenges: [...state.evaluationChallenges, { ...challenge, explanation: challenge.explanation.trim() }] }
+    }
+    case 'RESOLVE_EVALUATION_CHALLENGE':
+    case 'DISMISS_EVALUATION_CHALLENGE': {
+      if (!['RECRUITER', 'HIRING_MANAGER'].includes(action.payload.actorRole) || action.payload.resolutionNote.trim().length < 10) return state
+      const challenge = state.evaluationChallenges.find((item) => item.id === action.payload.challengeId)
+      if (!challenge || challenge.status !== 'OPEN') return state
+      return { ...state, evaluationChallenges: state.evaluationChallenges.map((item) => item.id === challenge.id ? { ...item, status: action.type === 'RESOLVE_EVALUATION_CHALLENGE' ? 'RESOLVED' : 'DISMISSED', resolvedAt: action.payload.resolvedAt, resolutionNote: action.payload.resolutionNote.trim() } : item) }
+    }
+    case 'ADD_RECALCULATED_FINAL_EVALUATION': {
+      const previous = state.finalEvaluations.find((item) => item.id === action.payload.previousEvaluationId)
+      const evaluation = action.payload.evaluation
+      const challenges = previous ? state.evaluationChallenges.filter((item) => item.finalEvaluationId === previous.id) : []
+      if (!previous || previous.status === 'DECIDED' || previous.supersededByEvaluationId || !challenges.some((item) => item.status === 'RESOLVED') || challenges.some((item) => item.status === 'OPEN') || evaluation.version !== previous.version + 1 || evaluation.applicationId !== previous.applicationId || !finalEvaluationProvenanceIsValid(state, evaluation) || state.finalEvaluations.some((item) => item.id === evaluation.id)) return state
+      return { ...state, finalEvaluations: [...state.finalEvaluations.map((item) => item.id === previous.id ? { ...item, supersededByEvaluationId: evaluation.id, updatedAt: evaluation.createdAt } : item), evaluation] }
+    }
+    case 'RECORD_HUMAN_FINAL_DECISION': {
+      const evaluation = state.finalEvaluations.find((item) => item.id === action.payload.finalEvaluationId)
+      const reason = action.payload.decisionReason.trim()
+      if (!evaluation || evaluation.status !== 'READY_FOR_DECISION' || !canRecordFinalDecision(action.payload.decidedByRole) || reason.length < 20 || reason.length > 2000 || state.evaluationChallenges.some((item) => item.finalEvaluationId === evaluation.id && item.status === 'OPEN')) return state
+      const differs = doesHumanDecisionDifferFromSystem(evaluation.systemRecommendation, action.payload.decision)
+      const explanation = action.payload.disagreementExplanation?.trim()
+      if (differs && (!action.payload.disagreementReason || !explanation || explanation.length < 20 || explanation.length > 2000)) return state
+      return { ...state, finalEvaluations: state.finalEvaluations.map((item) => item.id !== evaluation.id ? item : { ...item, status: 'DECIDED', humanDecision: action.payload.decision, humanDecisionReason: reason, candidateFacingReasonDraft: action.payload.candidateFacingReasonDraft?.trim() || undefined, differsFromSystem: differs, disagreementReason: differs ? action.payload.disagreementReason : undefined, disagreementExplanation: differs ? explanation : undefined, holdReviewDate: action.payload.decision === 'HOLD' ? action.payload.holdReviewDate : undefined, decidedBy: action.payload.decidedBy, decidedByRole: action.payload.decidedByRole, decidedAt: action.payload.decidedAt, updatedAt: action.payload.decidedAt }) }
     }
 
     case 'ADD_TRANSCRIPT': {

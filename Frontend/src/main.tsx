@@ -9,6 +9,7 @@ import { InterviewSchedulingAutomationProvider } from './providers/InterviewSche
 import { SchedulingEmailAutomationProvider } from './providers/SchedulingEmailAutomationProvider'
 import { InterviewQuestionAutomationProvider } from './providers/InterviewQuestionAutomationProvider'
 import { InterviewAnalysisAutomationProvider } from './providers/InterviewAnalysisAutomationProvider'
+import { FinalEvaluationAutomationProvider } from './providers/FinalEvaluationAutomationProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -18,9 +19,11 @@ createRoot(document.getElementById('root')!).render(
           <SchedulingEmailAutomationProvider>
             <InterviewQuestionAutomationProvider>
               <InterviewAnalysisAutomationProvider>
-                <BrowserRouter>
-                  <App />
-                </BrowserRouter>
+                <FinalEvaluationAutomationProvider>
+                  <BrowserRouter>
+                    <App />
+                  </BrowserRouter>
+                </FinalEvaluationAutomationProvider>
               </InterviewAnalysisAutomationProvider>
             </InterviewQuestionAutomationProvider>
           </SchedulingEmailAutomationProvider>

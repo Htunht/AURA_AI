@@ -29,6 +29,7 @@ const InterviewQuestionReview = lazy(() => import('../pages/interviews/Interview
 const InterviewSession = lazy(() => import('../pages/interviews/InterviewSession'))
 const InterviewTranscript = lazy(() => import('../pages/InterviewTranscript'))
 const InterviewAnalysis = lazy(() => import('../pages/InterviewAnalysis'))
+const FinalEvaluation = lazy(() => import('../pages/FinalEvaluation'))
 
 export function AppRoutes() {
   return (
@@ -67,6 +68,7 @@ export function AppRoutes() {
           />
           <Route path="/jobs/:jobId/screening-rubric" element={<ScreeningRubricEditor />} />
           <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
+          <Route path="/candidates/:candidateId/final-evaluation" element={<FinalEvaluation />} />
         </Route>
 
         <Route path="/apply/:jobId" element={<PublicJobApplication />} />

@@ -9,6 +9,9 @@ import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
 import type { InterviewSession } from '../types/interviewSession'
 import type { InterviewTranscript } from '../types/interviewTranscript'
 import type { InterviewAnalysis } from '../types/interviewAnalysis'
+import type { FinalEvaluation } from '../types/finalEvaluation'
+import type { EvaluationChallenge } from '../types/evaluationChallenge'
+import type { PublishedInterviewScoringRubric } from '../types/interviewScoringRubric'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { SchedulingExceptionReason } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
@@ -33,6 +36,7 @@ import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPo
 import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestionSetReadiness'
 import { deriveJobRequirements } from '../utils/jobRequirements'
 import { evaluateInterviewTranscriptReadiness } from '../utils/interviewTranscriptReadiness'
+import { derivePublishedInterviewScoringRubric } from '../utils/interviewScoringRubric'
 
 const schedulingInterviewers = interviewersData as Interviewer[]
 
@@ -50,6 +54,15 @@ export function selectApprovedInterviewAnalysis(state: DemoState, interviewId: s
 export type InterviewAnalysisPreparationStatus = 'TRANSCRIPT_REQUIRED' | 'TRANSCRIPT_DRAFT' | 'PREPARING' | 'DRAFT_READY' | 'APPROVED' | 'FAILED'
 export function selectInterviewAnalysisPreparationStatus(state: DemoState, interviewId: string): InterviewAnalysisPreparationStatus { const transcript = selectInterviewTranscriptByInterviewId(state, interviewId); if (!transcript) return 'TRANSCRIPT_REQUIRED'; if (transcript.status === 'DRAFT') return 'TRANSCRIPT_DRAFT'; const analysis = selectLatestInterviewAnalysis(state, interviewId); if (!analysis || analysis.status === 'GENERATING') return 'PREPARING'; if (analysis.status === 'DRAFT') return 'DRAFT_READY'; if (analysis.status === 'APPROVED') return 'APPROVED'; return 'FAILED' }
 export function selectPostInterviewReviewSummary(state: DemoState) { const completed = state.interviews.filter((item) => item.status === 'COMPLETED'); const items = completed.map((interview) => ({ interview, status: selectInterviewAnalysisPreparationStatus(state, interview.id) })); return { transcriptsNeedReview: items.filter((item) => item.status === 'TRANSCRIPT_REQUIRED' || item.status === 'TRANSCRIPT_DRAFT').length, preparing: items.filter((item) => item.status === 'PREPARING').length, analysesNeedApproval: items.filter((item) => item.status === 'DRAFT_READY' || item.status === 'FAILED').length, approved: items.filter((item) => item.status === 'APPROVED').length, attention: items.filter((item) => ['TRANSCRIPT_REQUIRED', 'TRANSCRIPT_DRAFT', 'DRAFT_READY', 'FAILED'].includes(item.status)).sort((a, b) => a.interview.scheduledEnd.localeCompare(b.interview.scheduledEnd)) } }
+export function selectFinalEvaluationsByCandidateId(state: DemoState, candidateId: string): FinalEvaluation[] { return state.finalEvaluations.filter((item) => item.candidateId === candidateId).sort((a, b) => b.version - a.version) }
+export function selectLatestFinalEvaluation(state: DemoState, candidateId: string, applicationId?: string): FinalEvaluation | undefined { return selectFinalEvaluationsByCandidateId(state, candidateId).find((item) => (!applicationId || item.applicationId === applicationId) && !item.supersededByEvaluationId) }
+export function selectDecidedFinalEvaluation(state: DemoState, candidateId: string): FinalEvaluation | undefined { return selectFinalEvaluationsByCandidateId(state, candidateId).find((item) => item.status === 'DECIDED') }
+export function selectEvaluationChallengesByEvaluationId(state: DemoState, evaluationId: string): EvaluationChallenge[] { return state.evaluationChallenges.filter((item) => item.finalEvaluationId === evaluationId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }
+export type FinalEvaluationPreparationStatus = 'ANALYSIS_REQUIRED' | 'GENERATING' | 'READY_FOR_REVIEW' | 'NEEDS_DATA_REVIEW' | 'READY_FOR_DECISION' | 'DECIDED' | 'FAILED'
+export function selectFinalEvaluationPreparationStatus(state: DemoState, candidateId: string, applicationId?: string): FinalEvaluationPreparationStatus { const evaluation = selectLatestFinalEvaluation(state, candidateId, applicationId); if (!evaluation) return 'ANALYSIS_REQUIRED'; if (evaluation.status === 'GENERATION_FAILED') return 'FAILED'; if (evaluation.status === 'GENERATING') return 'GENERATING'; if (evaluation.status === 'DECIDED') return 'DECIDED'; const open = selectEvaluationChallengesByEvaluationId(state, evaluation.id).some((item) => item.status === 'OPEN'); if (open || evaluation.status === 'DRAFT' || evaluation.dataQualityIssues.length) return 'NEEDS_DATA_REVIEW'; return evaluation.status === 'READY_FOR_DECISION' ? 'READY_FOR_DECISION' : 'READY_FOR_REVIEW' }
+export type FinalEvaluationViewModel = { evaluation: FinalEvaluation; candidate: Candidate; application: Application; job: Job; interview: Interview; analysis: InterviewAnalysis; rubric: PublishedInterviewScoringRubric }
+export function selectFinalEvaluationViewModel(state: DemoState, candidateId: string, applicationId?: string): FinalEvaluationViewModel | undefined { const evaluation = selectLatestFinalEvaluation(state, candidateId, applicationId); const candidate = state.candidates.find((item) => item.id === candidateId); const application = evaluation ? state.applications.find((item) => item.id === evaluation.applicationId) : undefined; const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined; const interview = evaluation ? state.interviews.find((item) => item.id === evaluation.interviewId) : undefined; const analysis = evaluation ? state.interviewAnalyses.find((item) => item.id === evaluation.interviewAnalysisId) : undefined; const sourceRubric = evaluation ? state.rubrics.find((item) => `interview-scoring-${item.id}` === evaluation.rubricId && item.version === evaluation.rubricVersion) : undefined; const set = interview ? state.interviewQuestionSets.find((item) => item.interviewId === interview.id && item.status === 'APPROVED') : undefined; const rubric = sourceRubric && job && set ? derivePublishedInterviewScoringRubric(sourceRubric, deriveJobRequirements(job), set.questions) : undefined; return evaluation && candidate && application && job && interview && analysis && rubric ? { evaluation, candidate, application, job, interview, analysis, rubric } : undefined }
+export function selectFinalDecisionDashboardSummary(state: DemoState) { const active = state.finalEvaluations.filter((item) => !item.supersededByEvaluationId); const challenges = state.evaluationChallenges; const attention = active.filter((item) => item.status === 'GENERATION_FAILED' || item.status === 'READY_FOR_DECISION' || item.systemRecommendation === 'INSUFFICIENT_EVIDENCE' || item.humanDecision === 'HOLD' || challenges.some((challenge) => challenge.finalEvaluationId === item.id && challenge.status === 'OPEN')); return { readyForDecision: active.filter((item) => item.status === 'READY_FOR_DECISION').length, needsDataReview: active.filter((item) => item.status === 'DRAFT' || item.status === 'GENERATION_FAILED' || challenges.some((challenge) => challenge.finalEvaluationId === item.id && challenge.status === 'OPEN')).length, onHold: active.filter((item) => item.humanDecision === 'HOLD').length, decisionsRecorded: active.filter((item) => item.status === 'DECIDED').length, attention } }
 export function selectInterviewSessionById(state: DemoState, sessionId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.id === sessionId) }
 export type InterviewSessionViewModel = { session: InterviewSession; interview: Interview; questionSet: InterviewQuestionSet; candidate: Candidate; application: Application; job: Job }
 export function selectInterviewSessionViewModel(state: DemoState, interviewId: string): InterviewSessionViewModel | undefined {
@@ -262,7 +275,7 @@ export function selectLatestScreeningEvaluation(
   return selectScreeningEvaluationsByApplicationId(state, applicationId)[0]
 }
 
-export function selectLatestFinalEvaluation(
+export function selectLatestLegacyFinalEvaluation(
   state: DemoState,
   applicationId: string,
 ): Evaluation | undefined {
@@ -1043,7 +1056,7 @@ export function selectCandidateApplications(
               state,
               application.id,
             ),
-            finalEvaluation: selectLatestFinalEvaluation(state, application.id),
+            finalEvaluation: selectLatestLegacyFinalEvaluation(state, application.id),
             interview: selectInterviewByApplicationId(state, application.id),
             decision: selectDecisionByApplicationId(state, application.id),
           }
@@ -1436,6 +1449,10 @@ export type CandidateTimelineEvent = {
     | 'INTERVIEW_TRANSCRIPT_APPROVED'
     | 'INTERVIEW_ANALYSIS_PREPARED'
     | 'INTERVIEW_ANALYSIS_APPROVED'
+    | 'SYSTEM_FINAL_EVALUATION_PREPARED'
+    | 'EVALUATION_CHALLENGE_OPENED'
+    | 'SYSTEM_EVALUATION_RECALCULATED'
+    | 'FINAL_DECISION_RECORDED'
     | 'FINAL_EVALUATION_COMPLETED'
     | 'DECISION_RECORDED'
     | 'COMMUNICATION_SENT'
@@ -1533,6 +1550,11 @@ export function selectCandidateTimeline(
   })
   state.interviewTranscripts.filter((item) => applicationInterviewIds.has(item.interviewId)).forEach((item) => { events.push({ id: `interview-transcript-added-${item.id}`, type: 'INTERVIEW_TRANSCRIPT_ADDED', title: 'Interview transcript added', occurredAt: item.createdAt }); if (item.approvedAt) events.push({ id: `interview-transcript-approved-${item.id}`, type: 'INTERVIEW_TRANSCRIPT_APPROVED', title: 'Interview transcript approved', occurredAt: item.approvedAt }) })
   state.interviewAnalyses.filter((item) => applicationInterviewIds.has(item.interviewId)).forEach((item) => { events.push({ id: `interview-analysis-prepared-${item.id}`, type: 'INTERVIEW_ANALYSIS_PREPARED', title: 'Interview analysis prepared', occurredAt: item.createdAt }); if (item.approvedAt) events.push({ id: `interview-analysis-approved-${item.id}`, type: 'INTERVIEW_ANALYSIS_APPROVED', title: 'Interview analysis approved', occurredAt: item.approvedAt }) })
+  state.finalEvaluations.filter((item) => item.applicationId === applicationId).forEach((item) => {
+    events.push({ id: `system-final-evaluation-prepared-${item.id}`, type: item.version > 1 ? 'SYSTEM_EVALUATION_RECALCULATED' : 'SYSTEM_FINAL_EVALUATION_PREPARED', title: item.version > 1 ? 'System evaluation recalculated' : 'System final evaluation prepared', description: 'A standardized evidence score and recommendation were prepared from the approved interview evidence.', occurredAt: item.generatedAt ?? item.createdAt })
+    if (item.status === 'DECIDED' && item.decidedAt) events.push({ id: `final-decision-recorded-${item.id}`, type: 'FINAL_DECISION_RECORDED', title: 'Final candidate decision recorded', description: `${item.humanDecision?.toLocaleLowerCase()} was recorded by ${item.decidedByRole?.replaceAll('_', ' ').toLocaleLowerCase()}.`, occurredAt: item.decidedAt })
+  })
+  state.evaluationChallenges.filter((challenge) => state.finalEvaluations.some((evaluation) => evaluation.id === challenge.finalEvaluationId && evaluation.applicationId === applicationId)).forEach((challenge) => events.push({ id: `evaluation-challenge-opened-${challenge.id}`, type: 'EVALUATION_CHALLENGE_OPENED', title: 'Evaluation challenge opened', description: 'A job-related evidence or data-quality issue was flagged for review.', occurredAt: challenge.createdAt }))
 
   state.interviewSchedulingInvitations
     .filter((invitation) => invitation.applicationId === applicationId)

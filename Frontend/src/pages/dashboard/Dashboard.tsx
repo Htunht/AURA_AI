@@ -19,6 +19,7 @@ import {
   selectDraftApplicationFormByJobId,
   selectPublishedApplicationFormByJobId,
   selectPostInterviewReviewSummary,
+  selectFinalDecisionDashboardSummary,
   selectRecentApplications,
   selectUpcomingInterviews,
 } from '../../store/demoSelectors'
@@ -89,6 +90,7 @@ export default function Dashboard() {
   const recentApplications = selectRecentApplications(state)
   const upcomingInterviews = selectUpcomingInterviews(state, DASHBOARD_NOW)
   const postInterview = selectPostInterviewReviewSummary(state)
+  const finalDecisions = selectFinalDecisionDashboardSummary(state)
   const metricCards = [
     { label: 'Active job openings', value: metrics.activeJobs, description: 'Roles currently accepting applications', icon: BriefcaseBusiness },
     { label: 'Total candidates', value: metrics.totalCandidates, description: 'Candidate profiles in the workspace', icon: Users },
@@ -142,6 +144,7 @@ export default function Dashboard() {
           {[["Transcripts", postInterview.transcriptsNeedReview], ["Preparing", postInterview.preparing], ["Analysis review", postInterview.analysesNeedApproval], ["Approved", postInterview.approved]].map(([label, value]) => <div className="rounded-aura-sm bg-frost/70 p-3" key={label}><p className="m-0 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p><p className="mb-0 mt-1 text-xl font-bold text-depth">{value}</p></div>)}
         </div>
         {postInterview.attention[0] ? <Link className="mt-4 inline-flex text-sm font-semibold text-harbor" to={postInterview.attention[0].status === 'TRANSCRIPT_REQUIRED' || postInterview.attention[0].status === 'TRANSCRIPT_DRAFT' ? `/interviews/${postInterview.attention[0].interview.id}/transcript` : `/interviews/${postInterview.attention[0].interview.id}/analysis`}>Review next completed interview</Link> : null}
+        <div className="mt-5 border-t border-harbor/10 pt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="m-0 text-[10px] font-bold uppercase tracking-wide text-marine">Final decisions</p><p className="mb-0 mt-1 text-sm text-aura-text-secondary">{finalDecisions.readyForDecision} ready · {finalDecisions.needsDataReview} data review · {finalDecisions.onHold} on hold · {finalDecisions.decisionsRecorded} recorded</p></div>{finalDecisions.attention[0] ? <Link className="text-sm font-semibold text-harbor" to={`/candidates/${finalDecisions.attention[0].candidateId}/final-evaluation`}>Review final evaluation</Link> : null}</div></div>
       </Card>
 
       {/* Active job openings — delayed entry, interactive rows */}

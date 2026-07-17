@@ -1,0 +1,14 @@
+import type { CompetencyAssessment } from '../../types/competencyAssessment'
+import type { InterviewEvidence } from '../../types/interviewEvidence'
+import type { InterviewQuestionAssessment } from '../../types/interviewQuestionAssessment'
+import type { InterviewTranscriptSegment } from '../../types/interviewTranscript'
+import type { RatingAnchor } from '../../types/interviewScoringRubric'
+import { Badge } from '../ui/Badge'
+import { Card } from '../ui/Card'
+import { ScoreAuditTrail } from './ScoreAuditTrail'
+
+const ratingLabel = ['Not assessed', 'No demonstrated evidence', 'Limited evidence', 'Meets requirement', 'Strong evidence', 'Exceptional evidence']
+export function CompetencyAssessmentCard({ competency, questions, transcriptSegments, anchors, evidence }: { competency: CompetencyAssessment; questions: InterviewQuestionAssessment[]; transcriptSegments: InterviewTranscriptSegment[]; anchors: RatingAnchor[]; evidence: InterviewEvidence[] }) {
+  const contribution = competency.normalizedScore === undefined ? undefined : Math.round((competency.normalizedScore * competency.weight) / 100)
+  return <Card className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="m-0 text-base font-semibold text-depth">{competency.label}</h3><p className="mb-0 mt-1 text-xs text-aura-text-muted">{competency.importance.replace('_', ' ').toLocaleLowerCase()} · Weight {competency.weight}%</p></div><Badge tone={competency.assessmentState === 'NOT_ASSESSED' ? 'warning' : competency.gatePassed === false ? 'neutral' : 'accent'}>{competency.assessmentState.replaceAll('_', ' ').toLocaleLowerCase()}</Badge></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><div><p className="m-0 text-xs text-aura-text-muted">System rating</p><p className="mb-0 mt-1 text-sm font-semibold text-depth">{competency.systemRating ? `${competency.systemRating} / 5 — ${ratingLabel[competency.systemRating]}` : 'Not assessed'}</p></div><div><p className="m-0 text-xs text-aura-text-muted">Evidence confidence</p><p className="mb-0 mt-1 text-sm font-semibold text-depth">{competency.confidence.toLocaleLowerCase()}</p></div><div><p className="m-0 text-xs text-aura-text-muted">Weighted contribution</p><p className="mb-0 mt-1 text-sm font-semibold text-depth">{contribution === undefined ? 'Unavailable' : `${contribution} / ${competency.weight} points`}</p></div></div>{competency.importance === 'MUST_HAVE' ? <p className="mb-0 mt-3 rounded-aura-sm bg-frost px-3 py-2 text-xs font-semibold text-depth">Must-have gate: {competency.assessmentState === 'NOT_ASSESSED' ? 'Not assessed' : competency.gatePassed ? 'Passed' : `Below required rating ${competency.minimumPassingRating ?? 3}`}</p> : null}<p className="mb-0 mt-3 text-sm leading-6 text-aura-text-secondary">{competency.rationale}</p><ScoreAuditTrail competency={competency} questions={questions} transcriptSegments={transcriptSegments} anchors={anchors} evidence={evidence} /></Card>
+}

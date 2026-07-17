@@ -9,6 +9,8 @@ import type { InterviewQuestionSet } from '../types/interviewQuestionSet'
 import type { InterviewSession } from '../types/interviewSession'
 import type { InterviewTranscript } from '../types/interviewTranscript'
 import type { InterviewAnalysis } from '../types/interviewAnalysis'
+import type { FinalEvaluation } from '../types/finalEvaluation'
+import type { EvaluationChallenge } from '../types/evaluationChallenge'
 import type { InterviewSchedulingInvitation } from '../types/interviewSchedulingInvitation'
 import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPolicy'
 import type { Job } from '../types/job'
@@ -28,6 +30,8 @@ export type DemoState = {
   interviewSessions: InterviewSession[]
   interviewTranscripts: InterviewTranscript[]
   interviewAnalyses: InterviewAnalysis[]
+  finalEvaluations: FinalEvaluation[]
+  evaluationChallenges: EvaluationChallenge[]
   interviewSchedulingPolicies: InterviewSchedulingPolicy[]
   interviewSchedulingInvitations: InterviewSchedulingInvitation[]
   transcripts: Transcript[]

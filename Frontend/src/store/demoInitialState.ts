@@ -95,6 +95,8 @@ export function createInitialDemoState(): DemoState {
     interviewSessions: [],
     interviewTranscripts: [],
     interviewAnalyses: [],
+    finalEvaluations: [],
+    evaluationChallenges: [],
     interviewSchedulingPolicies: interviewSchedulingPolicies.map((policy) => ({
       ...policy,
       workingDays: [...policy.workingDays],

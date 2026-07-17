@@ -22,7 +22,7 @@ import {
   selectHiringFunnel,
   selectInterviewByApplicationId,
   selectJobById,
-  selectLatestFinalEvaluation,
+  selectLatestLegacyFinalEvaluation,
   selectLatestScreeningEvaluation,
   selectPublishedApplicationFormByJobId,
   selectTranscriptByInterviewId,
@@ -588,7 +588,7 @@ export function validateDemoStore(): DemoStoreValidationResult {
   )
   recordCheck(
     errors,
-    Boolean(selectLatestFinalEvaluation(initialDemoState, 'application-001')),
+    Boolean(selectLatestLegacyFinalEvaluation(initialDemoState, 'application-001')),
     'John does not have a final evaluation',
   )
 
