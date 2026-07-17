@@ -31,6 +31,7 @@ export function validateDemoPostInterviewFastForward(): DemoPostInterviewFastFor
   const cleaned = normalizeGeneratedInterviewAnalysis({ analysis: duplicateAnalysis, transcript: fixture.transcript, state: fixture.state })
   check(errors, cleaned.strengths.length === 1 && cleaned.concerns.length === 1 && cleaned.missingEvidence.length === 1, 'Duplicate analysis list items were not cleaned.')
   check(errors, cleaned.evidence.length === 1 && cleaned.evidence[0].transcriptSegmentIds.length === 1, 'Duplicate evidence or mappings were not cleaned.')
+  check(errors, cleaned.evidence[0].questionIds[0] === fixture.evidence[0].questionIds[0] && JSON.stringify(cleaned.evidence[0].criterionKeys) === JSON.stringify(fixture.evidence[0].criterionKeys), 'Valid analysis evidence mappings were removed during cleanup.')
 
   const result = generateCompleteDemoEvaluation({ state: base, interviewId: fixture.interview.id, timestamp: stamp, demoMode: true })
   check(errors, result.transcript.status === 'APPROVED' && result.transcript.approvedBy === 'AURA Demo Automation', 'Valid simulated transcript was not auto-approved.')

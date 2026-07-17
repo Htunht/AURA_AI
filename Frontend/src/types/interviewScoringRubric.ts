@@ -14,6 +14,7 @@ export type CompetencyScoringRule = {
   description: string
   weight: number
   requirementIds: string[]
+  requirementLabels?: Record<string, string>
   criterionKeys: string[]
   questionIds: string[]
   importance: 'MUST_HAVE' | 'IMPORTANT' | 'PREFERRED'

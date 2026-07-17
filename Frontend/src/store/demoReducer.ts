@@ -41,6 +41,7 @@ import { evaluateInterviewAnalysisReadiness } from '../utils/interviewAnalysisRe
 import { canRecordFinalDecision, doesHumanDecisionDifferFromSystem } from '../utils/finalDecisionPermissions'
 import type { DemoState } from './demoStateTypes'
 import type { DemoPostInterviewFastForwardResult } from '../services/demoPostInterviewFastForward'
+import { finalEvaluationSourcesChanged } from '../utils/finalEvaluationSourceFingerprint'
 
 export { initialDemoState } from './demoInitialState'
 export type { DemoState } from './demoStateTypes'
@@ -1610,7 +1611,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
     case 'UPDATE_INTERVIEW_ANALYSIS_CONTENT':
       return { ...state, interviewAnalyses: state.interviewAnalyses.map((analysis) => analysis.id === action.payload.analysisId && analysis.status === 'DRAFT' ? { ...analysis, ...(action.payload.interviewerSummary !== undefined ? { interviewerSummary: action.payload.interviewerSummary.slice(0, 800) } : {}), ...(action.payload.strengths ? { strengths: action.payload.strengths.slice(0, 10) } : {}), ...(action.payload.concerns ? { concerns: action.payload.concerns.slice(0, 10) } : {}), ...(action.payload.missingEvidence ? { missingEvidence: action.payload.missingEvidence.slice(0, 10) } : {}), updatedAt: action.payload.updatedAt } : analysis) }
     case 'APPROVE_INTERVIEW_ANALYSIS': {
-      const analysis = state.interviewAnalyses.find((item) => item.id === action.payload.analysisId); const transcript = analysis ? state.interviewTranscripts.find((item) => item.id === analysis.transcriptId) : undefined; const application = analysis ? state.interviews.find((item) => item.id === analysis.interviewId) : undefined; const app = application ? state.applications.find((item) => item.id === application.applicationId) : undefined; const job = app ? state.jobs.find((item) => item.id === app.jobId) : undefined; if (!analysis || analysis.status !== 'DRAFT' || !transcript || !job || !evaluateInterviewAnalysisReadiness({ analysis, transcript, requirements: deriveJobRequirements(job) }).ready) return state; return { ...state, interviewAnalyses: state.interviewAnalyses.map((item) => item.id === analysis.id ? { ...item, status: 'APPROVED', approvedAt: action.payload.approvedAt, approvedBy: action.payload.approvedBy, updatedAt: action.payload.approvedAt } : item) }
+      const analysis = state.interviewAnalyses.find((item) => item.id === action.payload.analysisId); const transcript = analysis ? state.interviewTranscripts.find((item) => item.id === analysis.transcriptId) : undefined; const application = analysis ? state.interviews.find((item) => item.id === analysis.interviewId) : undefined; const app = application ? state.applications.find((item) => item.id === application.applicationId) : undefined; const job = app ? state.jobs.find((item) => item.id === app.jobId) : undefined; const questionSet = analysis ? state.interviewQuestionSets.find((item) => item.interviewId === analysis.interviewId && item.status === 'APPROVED') : undefined; if (!analysis || analysis.status !== 'DRAFT' || !transcript || !job || !questionSet || !evaluateInterviewAnalysisReadiness({ analysis, transcript, requirements: deriveJobRequirements(job), questionSet }).ready) return state; return { ...state, interviewAnalyses: state.interviewAnalyses.map((item) => item.id === analysis.id ? { ...item, status: 'APPROVED', approvedAt: action.payload.approvedAt, approvedBy: action.payload.approvedBy, updatedAt: action.payload.approvedAt } : item) }
     }
     case 'APPLY_DEMO_POST_INTERVIEW_FAST_FORWARD': {
       const result = action.payload.result
@@ -1629,7 +1630,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       if (result.analysis) {
         const analysis = result.analysis
         if (transcript.status !== 'APPROVED' || analysis.interviewId !== interview.id || analysis.transcriptId !== transcript.id || !['DRAFT', 'APPROVED'].includes(analysis.status)) return state
-        if (analysis.status === 'APPROVED' && (!evaluateInterviewAnalysisReadiness({ analysis, transcript, requirements: deriveJobRequirements(job) }).ready || analysis.approvedBy !== 'AURA Demo Automation' || !analysis.approvedAt)) return state
+        if (analysis.status === 'APPROVED' && (!evaluateInterviewAnalysisReadiness({ analysis, transcript, requirements: deriveJobRequirements(job), questionSet }).ready || analysis.approvedBy !== 'AURA Demo Automation' || !analysis.approvedAt)) return state
         if (analysis.status === 'DRAFT' && (result.stage !== 'ANALYSIS_REVIEW' || result.finalEvaluation)) return state
         next = { ...next, interviewAnalyses: [...next.interviewAnalyses, { ...analysis, evidence: analysis.evidence.map((item) => ({ ...item, analysisId: analysis.id })) }] }
       }
@@ -1663,9 +1664,10 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
     case 'ADD_RECALCULATED_FINAL_EVALUATION': {
       const previous = state.finalEvaluations.find((item) => item.id === action.payload.previousEvaluationId)
       const evaluation = action.payload.evaluation
-      const challenges = previous ? state.evaluationChallenges.filter((item) => item.finalEvaluationId === previous.id) : []
-      if (!previous || previous.status === 'DECIDED' || previous.supersededByEvaluationId || !challenges.some((item) => item.status === 'RESOLVED') || challenges.some((item) => item.status === 'OPEN') || evaluation.version !== previous.version + 1 || evaluation.applicationId !== previous.applicationId || !finalEvaluationProvenanceIsValid(state, evaluation) || state.finalEvaluations.some((item) => item.id === evaluation.id)) return state
-      return { ...state, finalEvaluations: [...state.finalEvaluations.map((item) => item.id === previous.id ? { ...item, supersededByEvaluationId: evaluation.id, updatedAt: evaluation.createdAt } : item), evaluation] }
+      const transcript = previous ? state.interviewTranscripts.find((item) => item.interviewId === previous.interviewId && item.status === 'APPROVED') : undefined
+      const analysis = previous ? state.interviewAnalyses.find((item) => item.id === previous.interviewAnalysisId && item.status === 'APPROVED') : undefined
+      if (!previous || previous.status === 'DECIDED' || !transcript || !analysis || !finalEvaluationSourcesChanged(previous, transcript, analysis) || evaluation.version !== previous.version + 1 || evaluation.applicationId !== previous.applicationId || !finalEvaluationProvenanceIsValid(state, evaluation) || state.finalEvaluations.some((item) => item.id === evaluation.id)) return state
+      return { ...state, finalEvaluations: [...state.finalEvaluations, evaluation] }
     }
     case 'RECORD_HUMAN_FINAL_DECISION': {
       const evaluation = state.finalEvaluations.find((item) => item.id === action.payload.finalEvaluationId)

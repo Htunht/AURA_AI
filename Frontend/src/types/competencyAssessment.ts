@@ -16,6 +16,13 @@ export type CompetencyAssessment = {
   evidenceIds: string[]
   requirementIds: string[]
   criterionKeys: string[]
+  mappingDiagnostic?: {
+    matchedBy: Array<{ type: 'REQUIREMENT' | 'CRITERION' | 'QUESTION'; label: string }>
+    questionCount: number
+    candidateAnswerSegmentCount: number
+    evidenceItemCount: number
+    unresolvedReason?: string
+  }
   rationale: string
   strengths: string[]
   concerns: string[]

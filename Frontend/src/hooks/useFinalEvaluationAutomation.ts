@@ -21,7 +21,7 @@ export function useFinalEvaluationAutomation() {
       if (!interview || interview.status !== 'COMPLETED' || !application || !candidate || !job || !rubric || !questionSet || !transcript || !session) return
       try {
         const scoringRubric = derivePublishedInterviewScoringRubric(rubric, deriveJobRequirements(job), questionSet.questions)
-        const result = generateFinalEvaluation({ candidateId: candidate.id, applicationId: application.id, jobId: job.id, interviewId: interview.id, analysisId: analysis.id, rubric: scoringRubric, questions: questionSet.questions, answerSegments: transcript.segments.filter((item) => item.speaker === 'CANDIDATE').map((item) => ({ id: item.id, questionId: item.questionId, text: item.text })), evidence: analysis.evidence, analysis, sessionProgress: session.questionProgress, existingEvaluations: state.finalEvaluations, generatedAt })
+        const result = generateFinalEvaluation({ candidateId: candidate.id, applicationId: application.id, jobId: job.id, interviewId: interview.id, analysisId: analysis.id, rubric: scoringRubric, questions: questionSet.questions, answerSegments: transcript.segments.filter((item) => item.speaker === 'CANDIDATE').map((item) => ({ id: item.id, questionId: item.questionId, text: item.text })), evidence: analysis.evidence, analysis, transcript, sessionProgress: session.questionProgress, existingEvaluations: state.finalEvaluations, generatedAt })
         dispatch({ type: 'ADD_FINAL_EVALUATION', payload: { evaluation: result.finalEvaluation } })
       } catch (error) {
         const version = nextFinalEvaluationVersion(state.finalEvaluations, application.id)

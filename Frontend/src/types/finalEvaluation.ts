@@ -32,6 +32,8 @@ export type FinalEvaluation = {
   systemRecommendationRationale: string
   systemScoreLocked: boolean
   systemRecommendationLocked: boolean
+  sourceTranscriptFingerprint?: string
+  sourceAnalysisFingerprint?: string
   humanDecision?: HumanFinalDecision
   humanDecisionReason?: string
   candidateFacingReasonDraft?: string
