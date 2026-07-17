@@ -26,9 +26,9 @@ import { getScreeningRecommendationLabel } from '../utils/recommendation'
 const DASHBOARD_NOW = new Date('2026-07-16T10:30:00Z')
 
 const primaryLinkClass =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-4 text-sm font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] hover:bg-[#5b8da8] hover:border-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf] focus-visible:ring-offset-2'
+  'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#C7FF38] bg-[#C7FF38] px-4 text-sm font-semibold text-[#1E2022] no-underline transition-all shadow-[0_0_10px_rgba(199,255,56,0.45)] hover:bg-[#a5db2c] hover:border-[#a5db2c] hover:shadow-[0_0_16px_rgba(199,255,56,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7FF38] focus-visible:ring-offset-2'
 const buttonLinkClass =
-  'inline-flex h-9 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-3 text-xs font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] hover:bg-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf] focus-visible:ring-offset-2'
+  'inline-flex h-9 items-center justify-center gap-2 rounded-aura-sm border border-[#C7FF38] bg-[#C7FF38] px-3 text-xs font-semibold text-[#1E2022] no-underline transition-all shadow-[0_0_10px_rgba(199,255,56,0.45)] hover:bg-[#a5db2c] hover:shadow-[0_0_16px_rgba(199,255,56,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C7FF38] focus-visible:ring-offset-2'
 
 function recommendationTone(recommendation?: string) {
   if (recommendation === 'STRONG_YES' || recommendation === 'YES') return 'success'

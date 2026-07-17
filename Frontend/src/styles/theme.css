@@ -1,13 +1,13 @@
 @theme {
-  --color-depth: #1D4052;
-  --color-harbor: #1d4052;
-  --color-marine: #446e87;
-  --color-glacier: #72a3bf;
-  --color-frost: #e0e8e6;
+  --color-depth: #1E2022;
+  --color-harbor: #1C1D1F;
+  --color-marine: #2D3033;
+  --color-glacier: #C7FF38;
+  --color-frost: #F4F1EA;
 
   --color-aura-white: #ffffff;
 
-  --color-aura-ink: #1D4052;
+  --color-aura-ink: #1E2022;
   --color-aura-text-secondary: #526371;
   --color-aura-text-muted: #71808b;
 

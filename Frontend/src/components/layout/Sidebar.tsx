@@ -4,8 +4,13 @@ import logo from '../../assets/logo.png'
 
 // Inactive: hover fades in a subtle background + brightens text
 // Active: solid left border animates in via border-l-2 → border-l-[3px] scale
-const navLinkClass =
-  'flex min-h-10 items-center gap-2.5 border-l-2 border-transparent px-3 py-2 text-sm font-semibold text-frost/70 no-underline transition-all duration-200 ease-in-out hover:bg-[#2a4555]/50 hover:text-white hover:border-l-glacier/40 max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
+const getLinkClass = (isActive: boolean) => {
+  const base = 'flex min-h-10 items-center gap-2.5 border-l-2 px-3 py-2 text-sm font-semibold no-underline transition-all duration-200 ease-in-out max-[680px]:text-[0px] max-[680px]:[&_svg]:size-5'
+  if (isActive) {
+    return `${base} border-[#C7FF38] bg-[#2D3033]/40 text-[#C7FF38]`
+  }
+  return `${base} border-transparent text-white/60 hover:bg-white/5 hover:text-[#C7FF38] hover:border-l-[#C7FF38]/40`
+}
 
 export function Sidebar() {
   return (
@@ -16,65 +21,55 @@ export function Sidebar() {
       >
         <img src={logo} alt="AURA Logo" className="size-8 flex-none object-contain" />
         <span className="grid gap-0.5">
-          <span className="text-[16px] font-bold tracking-[-0.01em]">
+          <span className="text-[16px] font-bold tracking-[-0.01em] text-white">
             AURA AI
           </span>
-          <span className="hidden text-[11px] font-medium text-frost/55 lg:block">
+          <span className="hidden text-[11px] font-medium text-white/40 lg:block">
             Recruitment Operations
           </span>
         </span>
       </div>
       <nav className="flex items-center gap-1 lg:grid lg:gap-5" aria-label="Admin navigation">
         <div className="lg:grid lg:gap-1">
-          <p className="mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-frost/40 lg:block">
+          <p className="mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/30 lg:block">
             Overview
           </p>
           <NavLink
             to="/dashboard"
-            className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
-            }
+            className={({ isActive }) => getLinkClass(isActive)}
           >
             <LayoutDashboard size={18} aria-hidden="true" />
             Dashboard
           </NavLink>
         </div>
         <div className="flex items-center gap-1 lg:grid lg:gap-1">
-          <p className="mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-frost/40 lg:block">
+          <p className="mb-2 hidden px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/30 lg:block">
             Recruitment
           </p>
           <NavLink
             to="/jobs"
-            className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
-            }
+            className={({ isActive }) => getLinkClass(isActive)}
           >
             <BriefcaseBusiness size={18} aria-hidden="true" />
             Job Openings
           </NavLink>
           <NavLink
             to="/candidates"
-            className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
-            }
+            className={({ isActive }) => getLinkClass(isActive)}
           >
             <Users size={18} aria-hidden="true" />
             Candidates
           </NavLink>
           <NavLink
             to="/reviews"
-            className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
-            }
+            className={({ isActive }) => getLinkClass(isActive)}
           >
             <ClipboardCheck size={18} aria-hidden="true" />
             Review Queue
           </NavLink>
           <NavLink
             to="/interviews"
-            className={({ isActive }) =>
-              `${navLinkClass}${isActive ? ' border-glacier bg-marine/35 text-white' : ''}`
-            }
+            className={({ isActive }) => getLinkClass(isActive)}
           >
             <CalendarClock size={18} aria-hidden="true" />
             Interviews

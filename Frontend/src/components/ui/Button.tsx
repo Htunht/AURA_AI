@@ -6,13 +6,13 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClasses = {
   primary:
-    'border-[#72a3bf] bg-[#72a3bf] text-[#1D4052] hover:bg-[#628ea8] focus-visible:ring-[#72a3bf] shadow-[0_0_10px_rgba(114,163,191,0.5)]',
+    'border-[#C7FF38] bg-[#C7FF38] text-[#1E2022] hover:bg-[#a6db2c] hover:shadow-[0_0_14px_rgba(199,255,56,0.65)] focus-visible:ring-[#C7FF38] shadow-[0_0_10px_rgba(199,255,56,0.45)]',
   secondary:
-    'border-[#72a3bf] bg-transparent text-[#72a3bf] hover:bg-[#72a3bf]/10 focus-visible:ring-[#72a3bf] shadow-[0_0_10px_rgba(114,163,191,0.2)]',
+    'border-[#1E2022]/30 bg-transparent text-[#1E2022]/85 hover:border-[#1E2022] hover:text-[#1E2022] hover:bg-[#1E2022]/5 focus-visible:ring-[#1E2022]/30 transition-all duration-150',
   danger:
     'border-aura-danger bg-aura-danger text-white hover:brightness-90 focus-visible:ring-aura-danger/30 shadow-[0_0_10px_rgba(var(--color-aura-danger),0.5)]',
   ghost:
-    'border-transparent bg-transparent text-[#72a3bf] hover:bg-[#72a3bf]/10 focus-visible:ring-[#72a3bf]',
+    'border-transparent bg-transparent text-[#1E2022]/85 hover:text-[#1E2022] hover:bg-[#1E2022]/5 focus-visible:ring-[#1E2022]/30',
 } satisfies Record<NonNullable<ButtonProps['variant']>, string>
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({

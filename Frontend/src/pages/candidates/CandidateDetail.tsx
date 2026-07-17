@@ -35,7 +35,7 @@ import type { ApplicationAnswer } from '../../types/application'
 import { candidateTabAvailability } from '../../utils/candidateDetailPresentation'
 import { formatApplicationStage, formatApplicationStatus, formatDateTime } from '../../utils/helpers'
 
-const backLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#72a3bf] bg-transparent px-4 text-sm font-semibold text-[#446e87] no-underline transition-all shadow-[0_0_8px_rgba(114,163,191,0.25)] hover:bg-[#72a3bf]/15 hover:shadow-[0_0_14px_rgba(114,163,191,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#72a3bf]'
+const backLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#1E2022]/30 bg-transparent px-4 text-sm font-semibold text-[#1E2022]/85 no-underline transition-all hover:border-[#1E2022] hover:text-[#1E2022] hover:bg-[#1E2022]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E2022]'
 
 function renderAnswerValue(answer: ApplicationAnswer) {
   if (Array.isArray(answer.value)) {
