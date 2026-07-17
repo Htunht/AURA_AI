@@ -5,14 +5,14 @@ export function getPostScreeningStage(
   recommendation: Recommendation,
 ): ApplicationStage {
   return recommendation === 'NO' || recommendation === 'STRONG_NO'
-    ? 'DECISION'
-    : 'SHORTLIST_REVIEW'
+    ? 'FINAL_REVIEW'
+    : 'SHORTLISTED'
 }
 
 export function canApplyScreeningTransition(stage: ApplicationStage): boolean {
   return (
-    stage === 'APPLICATION' ||
-    stage === 'AI_SCREENING' ||
-    stage === 'SHORTLIST_REVIEW'
+    stage === 'APPLICATION' || stage === 'APPLIED' ||
+    stage === 'AI_SCREENING' || stage === 'SCREENING' ||
+    stage === 'SHORTLIST_REVIEW' || stage === 'SHORTLISTED'
   )
 }

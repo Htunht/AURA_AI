@@ -32,11 +32,13 @@ import type { DemoState } from './demoReducer'
 import interviewersData from '../data/interviewers.json'
 import type { EmailDeliveryStatus } from '../types/emailDelivery'
 import type { ResolvedInterviewSchedulingPolicy } from '../types/resolvedInterviewSchedulingPolicy'
+import type { CandidateCommunicationDraft, HoldFollowUp, PostDecisionWorkflowStatus } from '../types/postDecision'
 import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyResolution'
 import { evaluateInterviewQuestionSetReadiness } from '../utils/interviewQuestionSetReadiness'
 import { deriveJobRequirements } from '../utils/jobRequirements'
 import { evaluateInterviewTranscriptReadiness } from '../utils/interviewTranscriptReadiness'
 import { derivePublishedInterviewScoringRubric } from '../utils/interviewScoringRubric'
+import { normalizeApplicationStage } from '../utils/applicationStage'
 
 const schedulingInterviewers = interviewersData as Interviewer[]
 
@@ -63,6 +65,50 @@ export function selectFinalEvaluationPreparationStatus(state: DemoState, candida
 export type FinalEvaluationViewModel = { evaluation: FinalEvaluation; candidate: Candidate; application: Application; job: Job; interview: Interview; analysis: InterviewAnalysis; rubric: PublishedInterviewScoringRubric }
 export function selectFinalEvaluationViewModel(state: DemoState, candidateId: string, applicationId?: string): FinalEvaluationViewModel | undefined { const evaluation = selectLatestFinalEvaluation(state, candidateId, applicationId); const candidate = state.candidates.find((item) => item.id === candidateId); const application = evaluation ? state.applications.find((item) => item.id === evaluation.applicationId) : undefined; const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined; const interview = evaluation ? state.interviews.find((item) => item.id === evaluation.interviewId) : undefined; const analysis = evaluation ? state.interviewAnalyses.find((item) => item.id === evaluation.interviewAnalysisId) : undefined; const sourceRubric = evaluation ? state.rubrics.find((item) => `interview-scoring-${item.id}` === evaluation.rubricId && item.version === evaluation.rubricVersion) : undefined; const set = interview ? state.interviewQuestionSets.find((item) => item.interviewId === interview.id && item.status === 'APPROVED') : undefined; const rubric = sourceRubric && job && set ? derivePublishedInterviewScoringRubric(sourceRubric, deriveJobRequirements(job), set.questions) : undefined; return evaluation && candidate && application && job && interview && analysis && rubric ? { evaluation, candidate, application, job, interview, analysis, rubric } : undefined }
 export function selectFinalDecisionDashboardSummary(state: DemoState) { const active = state.finalEvaluations.filter((item) => !item.supersededByEvaluationId); const challenges = state.evaluationChallenges; const attention = active.filter((item) => item.status === 'GENERATION_FAILED' || item.status === 'READY_FOR_DECISION' || item.systemRecommendation === 'INSUFFICIENT_EVIDENCE' || item.humanDecision === 'HOLD' || challenges.some((challenge) => challenge.finalEvaluationId === item.id && challenge.status === 'OPEN')); return { readyForDecision: active.filter((item) => item.status === 'READY_FOR_DECISION').length, needsDataReview: active.filter((item) => item.status === 'DRAFT' || item.status === 'GENERATION_FAILED' || challenges.some((challenge) => challenge.finalEvaluationId === item.id && challenge.status === 'OPEN')).length, onHold: active.filter((item) => item.humanDecision === 'HOLD').length, decisionsRecorded: active.filter((item) => item.status === 'DECIDED').length, attention } }
+
+export type PostDecisionWorkflowView = {
+  evaluation: FinalEvaluation
+  candidate: Candidate
+  application: Application
+  job: Job
+  communicationDraft?: CandidateCommunicationDraft
+  holdFollowUp?: HoldFollowUp
+  status: PostDecisionWorkflowStatus
+  actionLabel: string
+}
+
+export function selectPostDecisionWorkflow(state: DemoState, candidateId: string): PostDecisionWorkflowView | undefined {
+  const evaluation = selectFinalEvaluationsByCandidateId(state, candidateId).find((item) => item.status === 'DECIDED')
+  const candidate = state.candidates.find((item) => item.id === candidateId)
+  const application = evaluation ? state.applications.find((item) => item.id === evaluation.applicationId) : undefined
+  const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+  if (!evaluation || !evaluation.humanDecision || !candidate || !application || !job) return undefined
+  const communicationDraft = state.candidateCommunicationDrafts.find((item) => item.finalEvaluationId === evaluation.id)
+  const holdFollowUp = state.holdFollowUps.find((item) => item.finalEvaluationId === evaluation.id && item.status !== 'CLOSED') ?? state.holdFollowUps.find((item) => item.finalEvaluationId === evaluation.id)
+  if (evaluation.humanDecision === 'SELECTED' || evaluation.humanDecision === 'REJECTED') {
+    return { evaluation, candidate, application, job, communicationDraft, holdFollowUp, status: !communicationDraft ? 'ACTION_REQUIRED' : communicationDraft.status === 'READY' ? 'READY_FOR_COMMUNICATION' : 'COMMUNICATION_PREPARED', actionLabel: !communicationDraft ? `Prepare ${evaluation.humanDecision === 'SELECTED' ? 'selection' : 'rejection'} message` : `Review ${evaluation.humanDecision === 'SELECTED' ? 'selection' : 'rejection'} message` }
+  }
+  const reopened = state.finalEvaluations.some((item) => item.reopenedFromEvaluationId === evaluation.id)
+  return { evaluation, candidate, application, job, communicationDraft, holdFollowUp, status: reopened ? 'COMPLETED' : holdFollowUp?.status === 'OPEN' ? 'FOLLOW_UP_SCHEDULED' : 'ACTION_REQUIRED', actionLabel: reopened ? 'Decision review reopened' : holdFollowUp?.status === 'READY_FOR_REVIEW' ? 'Reopen decision review' : holdFollowUp ? 'View follow-up' : 'Set follow-up' }
+}
+
+export type PostDecisionDashboardItem = PostDecisionWorkflowView & { urgency: number }
+export function selectPostDecisionDashboard(state: DemoState, now: Date) {
+  const items = state.candidates.flatMap((candidate) => {
+    const item = selectPostDecisionWorkflow(state, candidate.id)
+    if (!item || item.status === 'COMPLETED' || item.communicationDraft?.status === 'READY') return []
+    const overdue = item.holdFollowUp?.status === 'OPEN' && Date.parse(item.holdFollowUp.followUpAt) < now.getTime()
+    const due = item.holdFollowUp?.status === 'OPEN' && !overdue
+    return [{ ...item, urgency: overdue ? 0 : item.holdFollowUp?.status === 'READY_FOR_REVIEW' ? 1 : item.status === 'ACTION_REQUIRED' ? 2 : due ? 3 : 4 }]
+  }).sort((left, right) => left.urgency - right.urgency || (left.holdFollowUp?.followUpAt ?? left.evaluation.decidedAt ?? '').localeCompare(right.holdFollowUp?.followUpAt ?? right.evaluation.decidedAt ?? ''))
+  return {
+    selectionMessagesToPrepare: items.filter((item) => item.evaluation.humanDecision === 'SELECTED' && !item.communicationDraft).length,
+    rejectionMessagesToPrepare: items.filter((item) => item.evaluation.humanDecision === 'REJECTED' && !item.communicationDraft).length,
+    holdFollowUpsDue: items.filter((item) => item.evaluation.humanDecision === 'HOLD' && item.holdFollowUp?.status === 'OPEN' && Date.parse(item.holdFollowUp.followUpAt) >= now.getTime()).length,
+    overdueHoldReviews: items.filter((item) => item.evaluation.humanDecision === 'HOLD' && item.holdFollowUp?.status === 'OPEN' && Date.parse(item.holdFollowUp.followUpAt) < now.getTime()).length,
+    items,
+  }
+}
 export function selectInterviewSessionById(state: DemoState, sessionId: string): InterviewSession | undefined { return state.interviewSessions.find((session) => session.id === sessionId) }
 export type InterviewSessionViewModel = { session: InterviewSession; interview: Interview; questionSet: InterviewQuestionSet; candidate: Candidate; application: Application; job: Job }
 export function selectInterviewSessionViewModel(state: DemoState, interviewId: string): InterviewSessionViewModel | undefined {
@@ -110,7 +156,7 @@ export function selectInterviewQuestionPreparationStatus(state: DemoState, inter
 }
 
 export function selectInterviewPreparationSummary(state: DemoState) {
-  const scheduled = state.interviews.filter((interview) => interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS')
+  const scheduled = state.interviews.filter((interview) => interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS' || interview.status === 'PAUSED')
   const statuses = scheduled.map((interview) => ({ interview, status: selectInterviewQuestionPreparationStatus(state, interview.id) }))
   return {
     readyForReview: statuses.filter((item) => item.status === 'DRAFT_READY').length,
@@ -289,8 +335,8 @@ export function selectInterviewByApplicationId(
   return state.interviews
     .filter((interview) => interview.applicationId === applicationId)
     .sort((left, right) => {
-      const leftActive = left.status === 'SCHEDULED' || left.status === 'IN_PROGRESS'
-      const rightActive = right.status === 'SCHEDULED' || right.status === 'IN_PROGRESS'
+      const leftActive = left.status === 'SCHEDULED' || left.status === 'IN_PROGRESS' || left.status === 'PAUSED'
+      const rightActive = right.status === 'SCHEDULED' || right.status === 'IN_PROGRESS' || right.status === 'PAUSED'
       if (leftActive !== rightActive) return leftActive ? -1 : 1
       return right.scheduledStart.localeCompare(left.scheduledStart)
     })[0]
@@ -626,10 +672,10 @@ export function selectSelfSchedulingCandidates(state: DemoState): SelfScheduling
         decision?.humanRecommendation === 'REVIEW'
       const activeInterview = state.interviews.some((item) =>
         item.applicationId === application.id &&
-        (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+        (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS' || item.status === 'PAUSED'),
       )
       return candidate && job && decision && positive && policy &&
-        application.currentStage === 'SHORTLIST_REVIEW' && !activeInterview &&
+        normalizeApplicationStage(application.currentStage) === 'SHORTLISTED' && !activeInterview &&
         invitation?.status !== 'PENDING' && invitation?.status !== 'SCHEDULED'
         ? { application, candidate, job, decision, policy, invitation, interview }
         : undefined
@@ -659,7 +705,7 @@ export function selectInterviewAutomationSummary(
       (item) => item.state === 'READY_TO_SHARE' || item.state === 'AWAITING_CANDIDATE',
     ).length,
     scheduledInterviews: state.interviews.filter(
-      (item) => item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS',
+      (item) => item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS' || item.status === 'PAUSED',
     ).length,
     schedulingExceptions: selectSchedulingAutomationViewModels(state).filter(
       (item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED',
@@ -698,14 +744,14 @@ export function selectInterviewSchedulingCandidates(
         (interview) =>
           interview.applicationId === application.id &&
           (interview.status === 'SCHEDULED' ||
-            interview.status === 'IN_PROGRESS'),
+            interview.status === 'IN_PROGRESS' || interview.status === 'PAUSED'),
       )
 
       return candidate &&
         job &&
         decision &&
         positiveDecision &&
-        application.currentStage === 'SHORTLIST_REVIEW' &&
+        normalizeApplicationStage(application.currentStage) === 'SHORTLISTED' &&
         !hasActiveInterview
         ? { application, candidate, job, decision, existingInterview }
         : undefined
@@ -727,8 +773,9 @@ export function selectInterviewListItems(state: DemoState): InterviewListItem[] 
   const statusPriority: Record<Interview['status'], number> = {
     SCHEDULED: 0,
     IN_PROGRESS: 1,
-    COMPLETED: 2,
-    CANCELLED: 3,
+    PAUSED: 2,
+    COMPLETED: 3,
+    CANCELLED: 4,
   }
   return state.interviews
     .map((interview): InterviewListItem | undefined => {
@@ -747,7 +794,7 @@ export function selectInterviewListItems(state: DemoState): InterviewListItem[] 
         statusPriority[left.interview.status] - statusPriority[right.interview.status]
       if (priorityDifference !== 0) return priorityDifference
       return left.interview.status === 'SCHEDULED' ||
-        left.interview.status === 'IN_PROGRESS'
+        left.interview.status === 'IN_PROGRESS' || left.interview.status === 'PAUSED'
         ? left.interview.scheduledStart.localeCompare(
             right.interview.scheduledStart,
           )
@@ -989,7 +1036,7 @@ export function selectUpcomingInterviews(
     .filter(
       (interview) =>
         (interview.status === 'SCHEDULED' ||
-          interview.status === 'IN_PROGRESS') &&
+          interview.status === 'IN_PROGRESS' || interview.status === 'PAUSED') &&
         new Date(interview.scheduledStart).getTime() >= nowTimestamp,
     )
     .map((interview): UpcomingInterviewItem | undefined => {
@@ -1079,6 +1126,65 @@ export type CandidateListItem = {
   decision?: Decision
   screeningQueueItem?: ScreeningQueueItem
   screeningStatus: CandidateScreeningDisplayStatus
+  operationalStatus?: CandidateOperationalStatus
+}
+
+export type CandidateOperationalStatus = {
+  label: string
+  occurredAt?: string
+}
+
+export function selectCandidateOperationalStatus(
+  state: DemoState,
+  applicationId: string,
+): CandidateOperationalStatus | undefined {
+  const application = selectApplicationById(state, applicationId)
+  if (!application) return undefined
+
+  const stage = normalizeApplicationStage(application.currentStage)
+  const interview = selectInterviewByApplicationId(state, applicationId)
+  const invitation = state.interviewSchedulingInvitations
+    .filter((item) => item.applicationId === applicationId)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+
+  if (stage === 'SELECTED' || stage === 'REJECTED' || stage === 'HOLD') {
+    const workflow = selectPostDecisionWorkflow(state, application.candidateId)
+    if (stage === 'SELECTED') return { label: workflow?.communicationDraft ? 'Selection message ready' : 'Selection message required' }
+    if (stage === 'REJECTED') return { label: workflow?.communicationDraft ? 'Rejection message ready' : 'Rejection message required' }
+    if (workflow?.holdFollowUp) {
+      const overdue = workflow.holdFollowUp.status === 'OPEN' && Date.parse(workflow.holdFollowUp.followUpAt) < Date.now()
+      return { label: overdue ? 'Follow-up overdue' : workflow.holdFollowUp.status === 'READY_FOR_REVIEW' ? 'Hold review ready' : 'Follow-up due', occurredAt: workflow.holdFollowUp.followUpAt }
+    }
+    return { label: 'Follow-up required' }
+  }
+
+  if (stage === 'FINAL_REVIEW') {
+    const evaluation = state.finalEvaluations
+      .filter((item) => item.applicationId === applicationId && !item.supersededByEvaluationId)
+      .sort((left, right) => right.version - left.version)[0]
+    if (evaluation?.status === 'READY_FOR_DECISION') return { label: 'Decision required' }
+    if (evaluation?.status === 'DRAFT' || evaluation?.status === 'GENERATION_FAILED') return { label: 'Evidence review required' }
+    const analysis = interview ? selectLatestInterviewAnalysis(state, interview.id) : undefined
+    if (analysis?.status === 'APPROVED') return { label: 'Analysis ready' }
+    if (analysis) return { label: 'Analysis review' }
+    const transcript = interview ? selectInterviewTranscriptByInterviewId(state, interview.id) : undefined
+    if (transcript?.status === 'APPROVED') return { label: 'Analysis preparing' }
+    if (transcript) return { label: 'Transcript review' }
+    return { label: 'Final review started' }
+  }
+
+  if (stage === 'INTERVIEW') {
+    const session = interview ? selectInterviewSessionByInterviewId(state, interview.id) : undefined
+    if (session?.status === 'PAUSED' || interview?.status === 'PAUSED') return { label: 'Paused' }
+    if (session?.status === 'IN_PROGRESS' || interview?.status === 'IN_PROGRESS') return { label: 'In progress' }
+    if (interview?.status === 'COMPLETED') return { label: 'Interview completed' }
+    if (interview?.status === 'SCHEDULED') return { label: 'Scheduled', occurredAt: interview.scheduledStart }
+    if (invitation?.status === 'PENDING') return { label: 'Awaiting candidate' }
+    return { label: 'Scheduling started' }
+  }
+
+  if (stage === 'SHORTLISTED') return { label: 'Scheduling not started' }
+  return undefined
 }
 
 export type CandidateScreeningDisplayStatus =
@@ -1246,6 +1352,7 @@ export function selectCandidateListItems(
             interview: selectInterviewByApplicationId(state, application.id),
             decision: selectDecisionByApplicationId(state, application.id),
             screeningQueueItem,
+            operationalStatus: selectCandidateOperationalStatus(state, application.id),
             screeningStatus: deriveCandidateScreeningStatus(
               screeningEvaluation,
               screeningQueueItem,
@@ -1434,6 +1541,7 @@ export type CandidateTimelineEvent = {
   type:
     | 'APPLICATION_SUBMITTED'
     | 'SCREENING_COMPLETED'
+    | 'CANDIDATE_SHORTLISTED'
     | 'SCHEDULING_INVITATION_PREPARED'
     | 'SCHEDULING_INVITATION_EXPIRED'
     | 'SCHEDULING_EXCEPTION'
@@ -1441,6 +1549,7 @@ export type CandidateTimelineEvent = {
     | 'INTERVIEW_RESCHEDULED'
     | 'INTERVIEW_CANCELLED'
     | 'INTERVIEW_COMPLETED'
+    | 'FINAL_REVIEW_STARTED'
     | 'INTERVIEW_QUESTIONS_PREPARED'
     | 'INTERVIEW_PLAN_APPROVED'
     | 'INTERVIEW_STARTED'
@@ -1453,6 +1562,11 @@ export type CandidateTimelineEvent = {
     | 'EVALUATION_CHALLENGE_OPENED'
     | 'SYSTEM_EVALUATION_RECALCULATED'
     | 'FINAL_DECISION_RECORDED'
+    | 'OUTCOME_DRAFT_CREATED'
+    | 'OUTCOME_COMMUNICATION_PREPARED'
+    | 'HOLD_FOLLOW_UP_SCHEDULED'
+    | 'HOLD_READY_FOR_REVIEW'
+    | 'DECISION_REVIEW_REOPENED'
     | 'FINAL_EVALUATION_COMPLETED'
     | 'DECISION_RECORDED'
     | 'COMMUNICATION_SENT'
@@ -1520,8 +1634,7 @@ export function selectCandidateTimeline(
           id: `interview-cancelled-${interview.id}`,
           type: 'INTERVIEW_CANCELLED',
           title: 'Interview cancelled',
-          description:
-            'The scheduled interview was cancelled and the application returned to shortlist review.',
+          description: 'The scheduled interview was cancelled. The recruitment stage was preserved for follow-up.',
           occurredAt: interview.updatedAt ?? interview.scheduledStart,
         })
       }
@@ -1546,13 +1659,25 @@ export function selectCandidateTimeline(
     const summary = selectInterviewSessionProgressSummary(session)
     if (session.startedAt) events.push({ id: `interview-started-${session.id}`, type: 'INTERVIEW_STARTED', title: 'Interview started', occurredAt: session.startedAt })
     if (session.status === 'PAUSED' && session.pausedAt) events.push({ id: `interview-paused-${session.id}`, type: 'INTERVIEW_PAUSED', title: 'Interview paused', occurredAt: session.pausedAt })
-    if (session.status === 'COMPLETED' && session.completedAt) events.push({ id: `interview-session-completed-${session.id}`, type: 'INTERVIEW_COMPLETED', title: 'Interview completed', description: `The interview ended after ${Math.round(session.accumulatedActiveSeconds / 60)} minutes. ${summary.asked} questions were asked.`, occurredAt: session.completedAt })
+    if (session.status === 'COMPLETED' && session.completedAt) {
+      events.push({ id: `interview-session-completed-${session.id}`, type: 'INTERVIEW_COMPLETED', title: 'Interview completed', description: `The interview ended after ${Math.round(session.accumulatedActiveSeconds / 60)} minutes. ${summary.asked} questions were asked.`, occurredAt: session.completedAt })
+      events.push({ id: `final-review-started-${session.id}`, type: 'FINAL_REVIEW_STARTED', title: 'Final review started', description: 'The completed interview is ready for transcript, analysis, and final evaluation review.', occurredAt: session.completedAt })
+    }
   })
   state.interviewTranscripts.filter((item) => applicationInterviewIds.has(item.interviewId)).forEach((item) => { events.push({ id: `interview-transcript-added-${item.id}`, type: 'INTERVIEW_TRANSCRIPT_ADDED', title: 'Interview transcript added', occurredAt: item.createdAt }); if (item.approvedAt) events.push({ id: `interview-transcript-approved-${item.id}`, type: 'INTERVIEW_TRANSCRIPT_APPROVED', title: 'Interview transcript approved', occurredAt: item.approvedAt }) })
   state.interviewAnalyses.filter((item) => applicationInterviewIds.has(item.interviewId)).forEach((item) => { events.push({ id: `interview-analysis-prepared-${item.id}`, type: 'INTERVIEW_ANALYSIS_PREPARED', title: 'Interview analysis prepared', occurredAt: item.createdAt }); if (item.approvedAt) events.push({ id: `interview-analysis-approved-${item.id}`, type: 'INTERVIEW_ANALYSIS_APPROVED', title: 'Interview analysis approved', occurredAt: item.approvedAt }) })
   state.finalEvaluations.filter((item) => item.applicationId === applicationId).forEach((item) => {
     events.push({ id: `system-final-evaluation-prepared-${item.id}`, type: item.version > 1 ? 'SYSTEM_EVALUATION_RECALCULATED' : 'SYSTEM_FINAL_EVALUATION_PREPARED', title: item.version > 1 ? 'System evaluation recalculated' : 'System final evaluation prepared', description: 'A standardized evidence score and recommendation were prepared from the approved interview evidence.', occurredAt: item.generatedAt ?? item.createdAt })
-    if (item.status === 'DECIDED' && item.decidedAt) events.push({ id: `final-decision-recorded-${item.id}`, type: 'FINAL_DECISION_RECORDED', title: 'Final candidate decision recorded', description: `${item.humanDecision?.toLocaleLowerCase()} was recorded by ${item.decidedByRole?.replaceAll('_', ' ').toLocaleLowerCase()}.`, occurredAt: item.decidedAt })
+    if (item.status === 'DECIDED' && item.decidedAt) events.push({ id: `final-decision-recorded-${item.id}`, type: 'FINAL_DECISION_RECORDED', title: 'Final decision recorded', description: `${item.humanDecision?.toLocaleLowerCase()} was recorded by ${item.decidedByRole?.replaceAll('_', ' ').toLocaleLowerCase()}.`, occurredAt: item.decidedAt })
+  })
+  state.candidateCommunicationDrafts.filter((item) => state.finalEvaluations.some((evaluation) => evaluation.id === item.finalEvaluationId && evaluation.applicationId === applicationId)).forEach((item) => {
+    events.push({ id: `outcome-draft-created-${item.id}`, type: 'OUTCOME_DRAFT_CREATED', title: 'Outcome draft created', description: 'Candidate outcome communication was prepared for review.', occurredAt: item.createdAt })
+    if (item.status === 'READY') events.push({ id: `outcome-communication-prepared-${item.id}`, type: 'OUTCOME_COMMUNICATION_PREPARED', title: 'Candidate outcome communication prepared', description: 'The candidate-facing message is ready. No email was sent.', occurredAt: item.updatedAt })
+  })
+  state.holdFollowUps.filter((item) => state.finalEvaluations.some((evaluation) => evaluation.id === item.finalEvaluationId && evaluation.applicationId === applicationId)).forEach((item) => {
+    events.push({ id: `hold-follow-up-scheduled-${item.id}`, type: 'HOLD_FOLLOW_UP_SCHEDULED', title: 'Candidate hold follow-up scheduled', description: `A follow-up review was assigned for ${item.followUpAt.slice(0, 10)}.`, occurredAt: item.createdAt })
+    if (item.status === 'READY_FOR_REVIEW' || item.status === 'CLOSED') events.push({ id: `hold-ready-${item.id}`, type: 'HOLD_READY_FOR_REVIEW', title: 'Candidate hold review ready', description: 'The assigned follow-up was marked ready for authorized decision review.', occurredAt: item.status === 'CLOSED' ? item.closedAt ?? item.updatedAt : item.updatedAt })
+    if (item.status === 'CLOSED') events.push({ id: `decision-review-reopened-${item.id}`, type: 'DECISION_REVIEW_REOPENED', title: 'Final decision review reopened', description: 'A new decision version was opened. The original HOLD decision remains in history.', occurredAt: item.closedAt ?? item.updatedAt })
   })
   state.evaluationChallenges.filter((challenge) => state.finalEvaluations.some((evaluation) => evaluation.id === challenge.finalEvaluationId && evaluation.applicationId === applicationId)).forEach((challenge) => events.push({ id: `evaluation-challenge-opened-${challenge.id}`, type: 'EVALUATION_CHALLENGE_OPENED', title: 'Evaluation challenge opened', description: 'A job-related evidence or data-quality issue was flagged for review.', occurredAt: challenge.createdAt }))
 
@@ -1563,7 +1688,7 @@ export function selectCandidateTimeline(
         events.push({
           id: `scheduling-invitation-prepared-${invitation.id}`,
           type: 'SCHEDULING_INVITATION_PREPARED',
-          title: 'Interview scheduling invitation prepared',
+          title: 'Interview scheduling started',
           description: 'Candidate-selectable interview availability was prepared automatically.',
           occurredAt: invitation.createdAt,
         })
@@ -1635,6 +1760,15 @@ export function selectCandidateTimeline(
             : `AURA recommended “${aiLabel}”. The recruiter recorded “${humanLabel}”.`,
         occurredAt: decision.createdAt,
       })
+      if (decision.humanRecommendation === 'STRONG_YES' || decision.humanRecommendation === 'YES' || decision.humanRecommendation === 'REVIEW') {
+        events.push({
+          id: `candidate-shortlisted-${decision.id}`,
+          type: 'CANDIDATE_SHORTLISTED',
+          title: 'Candidate shortlisted',
+          description: 'A positive human-reviewed recommendation moved the application to the shortlist.',
+          occurredAt: decision.createdAt,
+        })
+      }
     })
 
   state.communications

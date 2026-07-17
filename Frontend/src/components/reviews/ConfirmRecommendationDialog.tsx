@@ -18,7 +18,7 @@ export function ConfirmRecommendationDialog({
   const recommendation = item.evaluation?.recommendation
   if (!recommendation) return null
 
-  const movesToDecision = getPostScreeningStage(recommendation) === 'DECISION'
+  const movesToDecision = getPostScreeningStage(recommendation) === 'FINAL_REVIEW'
 
   return (
     <Dialog open={open} title="Confirm AURA recommendation" onClose={onClose}>

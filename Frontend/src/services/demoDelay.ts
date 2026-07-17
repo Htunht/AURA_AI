@@ -4,6 +4,6 @@ export async function demoDelay(milliseconds: number): Promise<void> {
   }
 
   await new Promise<void>((resolve) => {
-    window.setTimeout(resolve, milliseconds)
+    globalThis.setTimeout(resolve, milliseconds)
   })
 }

@@ -97,7 +97,7 @@ export function OverrideRecommendationDialog({
         <p className="m-0 text-xs text-aura-text-muted">Minimum 15 characters. The reason becomes part of the decision audit record.</p>
         {destination ? (
           <p className="m-0 rounded-aura-sm border border-harbor/10 bg-frost/65 px-3 py-2 text-xs font-medium text-depth">
-            Workflow impact: the application will move to {destination === 'DECISION' ? 'decision review' : 'shortlist review'}.
+            Workflow impact: the application will move to {destination === 'FINAL_REVIEW' ? 'final review' : 'shortlisted'}.
           </p>
         ) : null}
         {error ? <p className="m-0 rounded-aura-sm bg-aura-danger-soft px-3 py-2 text-sm font-medium text-aura-danger" role="alert">{error}</p> : null}

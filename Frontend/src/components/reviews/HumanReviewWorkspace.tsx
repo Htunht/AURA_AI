@@ -9,7 +9,6 @@ import type { Recommendation } from '../../types/evaluation'
 import type { HumanReviewQueueItem } from '../../types/reviewQueue'
 import { formatApplicationStage, formatDateTime } from '../../utils/helpers'
 import { getScreeningRecommendationLabel } from '../../utils/recommendation'
-import { getPostScreeningStage } from '../../utils/screeningWorkflow'
 import { ScreeningCriteria } from '../screening/ScreeningCriteria'
 import { ScreeningEvidence } from '../screening/ScreeningEvidence'
 import { Badge } from '../ui/Badge'
@@ -59,13 +58,6 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
           ? 'CONFIRM_RECOMMENDATION'
           : 'OVERRIDE_RECOMMENDATION',
       payload: { decision },
-    })
-    dispatch({
-      type: 'UPDATE_APPLICATION_STAGE',
-      payload: {
-        applicationId: item.application.id,
-        stage: getPostScreeningStage(recommendation),
-      },
     })
   }
 

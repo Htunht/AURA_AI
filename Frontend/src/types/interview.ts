@@ -1,6 +1,7 @@
 export type InterviewStatus =
   | 'SCHEDULED'
   | 'IN_PROGRESS'
+  | 'PAUSED'
   | 'COMPLETED'
   | 'CANCELLED'
 

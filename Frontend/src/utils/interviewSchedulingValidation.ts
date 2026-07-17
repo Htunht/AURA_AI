@@ -186,9 +186,10 @@ export function validateInterviewSchedulingDomain(): InterviewSchedulingDomainVa
   const interview = createScheduledInterview(firstApplication)
   const addedState = demoReducer(state, { type: 'ADD_INTERVIEW', payload: { interview } })
   check(errors, addedState.interviews.length === state.interviews.length + 1, 'Adding an interview did not create one record')
+  check(errors, addedState.applications.find((item) => item.id === firstApplication.id)?.currentStage === 'INTERVIEW', 'Interview creation did not atomically move the application to INTERVIEW')
   const duplicateState = demoReducer(addedState, { type: 'ADD_INTERVIEW', payload: { interview: { ...interview, id: 'interview-duplicate-validation' } } })
   check(errors, duplicateState === addedState, 'Duplicate active interview was not prevented')
-  const interviewStageState = demoReducer(addedState, { type: 'UPDATE_APPLICATION_STAGE', payload: { applicationId: firstApplication.id, stage: 'INTERVIEW' } })
+  const interviewStageState = addedState
   check(errors, interviewStageState.applications.find((item) => item.id === firstApplication.id)?.currentStage === 'INTERVIEW', 'Scheduling did not move the application to INTERVIEW')
 
   const rescheduledState = demoReducer(interviewStageState, { type: 'UPDATE_INTERVIEW', payload: { interviewId: interview.id, changes: { scheduledStart: '2026-07-24T09:00:00.000Z', scheduledEnd: '2026-07-24T10:00:00.000Z', updatedAt: '2026-07-21T09:00:00.000Z' } } })
@@ -197,13 +198,12 @@ export function validateInterviewSchedulingDomain(): InterviewSchedulingDomainVa
   check(errors, validateInterviewScheduleDraft({ draft: rescheduleDraft, state: rescheduledState, interviewers, now, excludeInterviewId: interview.id }).valid, 'Rescheduling did not exclude the current interview from conflicts')
 
   const cancelledState = demoReducer(rescheduledState, { type: 'UPDATE_INTERVIEW_STATUS', payload: { interviewId: interview.id, status: 'CANCELLED', updatedAt: '2026-07-21T10:00:00.000Z' } })
-  const shortlistState = demoReducer(cancelledState, { type: 'UPDATE_APPLICATION_STAGE', payload: { applicationId: firstApplication.id, stage: 'SHORTLIST_REVIEW' } })
   check(errors, cancelledState.interviews.some((item) => item.id === interview.id && item.status === 'CANCELLED'), 'Cancelling did not preserve the interview record')
-  check(errors, shortlistState.applications.find((item) => item.id === firstApplication.id)?.currentStage === 'SHORTLIST_REVIEW', 'Cancellation did not return the application to SHORTLIST_REVIEW')
+  check(errors, cancelledState.applications.find((item) => item.id === firstApplication.id)?.currentStage === 'INTERVIEW', 'Cancellation moved the broad application stage backwards')
   check(errors, selectUpcomingInterviews(interviewStageState, now).some((item) => item.interview.id === interview.id), 'Dashboard upcoming interviews did not include the scheduled interview')
   check(errors, selectCandidateTimeline(interviewStageState, firstApplication.id).some((event) => event.type === 'INTERVIEW_SCHEDULED'), 'Candidate timeline did not include the scheduled interview')
   check(errors, selectInterviewByApplicationId(interviewStageState, firstApplication.id)?.id === interview.id, 'Candidate detail did not resolve the scheduled interview')
-  check(errors, typeof JSON.stringify(shortlistState) === 'string', 'Scheduling state was not JSON serializable')
+  check(errors, typeof JSON.stringify(cancelledState) === 'string', 'Scheduling state was not JSON serializable')
   check(errors, JSON.stringify(initialDemoState) === sourceSnapshot, 'Interview scheduling validation mutated source state')
 
   return { valid: errors.length === 0, errors }

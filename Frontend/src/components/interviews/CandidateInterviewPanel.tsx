@@ -11,6 +11,8 @@ import {
   selectLatestInterviewQuestionSet,
 } from '../../store/demoSelectors'
 import { formatInterviewDate, formatInterviewMode, formatInterviewTime } from '../../utils/helpers'
+import { normalizeApplicationStage } from '../../utils/applicationStage'
+import { getInterviewDetailPath } from '../../utils/interviewRoutes'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
@@ -49,7 +51,7 @@ export function CandidateInterviewPanel({ applicationId }: { applicationId: stri
           <Detail label="Format" value={formatInterviewMode(interview.mode ?? 'VIDEO')} />
           <div className="sm:col-span-2"><Detail label="Interviewers" value={interview.interviewers.map((person) => person.name).join(', ')} /></div>
         </dl>
-        <div className="mt-5 border-t border-harbor/10 pt-4"><p className="m-0 text-xs font-bold uppercase tracking-wide text-aura-text-muted">Interview preparation</p><p className="mb-0 mt-1 text-sm font-semibold text-depth">{preparationStatus === 'APPROVED' ? 'Question plan approved' : preparationStatus === 'DRAFT_READY' ? 'Question plan ready for recruiter review' : preparationStatus === 'FAILED' ? 'Question preparation needs attention' : 'Questions are being prepared'}</p>{questionSet ? <p className="mb-0 mt-1 text-xs text-aura-text-muted">{questionSet.questions.length} questions · Version {questionSet.version}</p> : null}</div><div className="mt-5 flex flex-wrap gap-2"><Link className={linkClass} to={`/interviews/${interview.id}`}>View interview</Link><Link className={linkClass} to={`/interviews/${interview.id}/questions`}>{preparationStatus === 'APPROVED' ? 'View plan' : 'Review questions'}</Link></div>
+        <div className="mt-5 border-t border-harbor/10 pt-4"><p className="m-0 text-xs font-bold uppercase tracking-wide text-aura-text-muted">Interview preparation</p><p className="mb-0 mt-1 text-sm font-semibold text-depth">{preparationStatus === 'APPROVED' ? 'Question plan approved' : preparationStatus === 'DRAFT_READY' ? 'Question plan ready for recruiter review' : preparationStatus === 'FAILED' ? 'Question preparation needs attention' : 'Questions are being prepared'}</p>{questionSet ? <p className="mb-0 mt-1 text-xs text-aura-text-muted">{questionSet.questions.length} questions · Version {questionSet.version}</p> : null}</div><div className="mt-5 flex flex-wrap gap-2"><Link className={linkClass} to={getInterviewDetailPath(interview.id)}>View interview</Link><Link className={linkClass} to={`/interviews/${interview.id}/questions`}>{preparationStatus === 'APPROVED' ? 'View plan' : 'Review questions'}</Link></div>
       </Card>
     )
   }
@@ -70,7 +72,7 @@ export function CandidateInterviewPanel({ applicationId }: { applicationId: stri
     return <Card className="p-6"><div className="flex items-start gap-3"><span className="inline-grid size-10 place-items-center rounded-aura-sm bg-glacier/15 text-marine"><CalendarClock size={19} /></span><div><Badge tone="accent">AURA in progress</Badge><h2 className="mb-0 mt-2 text-lg font-semibold text-depth">Preparing interview availability</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">AURA is applying the scheduling policy, assigning the interview team, and generating candidate-ready times.</p></div></div></Card>
   }
 
-  if (positive && application?.currentStage === 'SHORTLIST_REVIEW') {
+  if (positive && application && normalizeApplicationStage(application.currentStage) === 'SHORTLISTED') {
     return <Card className="p-6"><h2 className="m-0 text-lg font-semibold text-depth">{resolvedPolicy ? 'Interview scheduling is prepared automatically' : 'Scheduling defaults required'}</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{resolvedPolicy ? 'AURA is assigning the interview team and generating candidate-selectable times.' : 'No organization, department, or custom scheduling setup currently covers this role.'}</p>{resolvedPolicy ? <div className="mt-4"><SchedulingPolicySource resolved={resolvedPolicy} /></div> : <Link className="mt-4 inline-flex font-semibold text-harbor" to="/interviews/settings">Set up scheduling defaults</Link>}</Card>
   }
 

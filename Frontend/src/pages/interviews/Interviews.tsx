@@ -23,7 +23,7 @@ export default function Interviews() {
   const inProgress = automation.filter((item) => item.state === 'IN_PROGRESS')
   const awaiting = automation.filter((item) => item.state === 'AWAITING_CANDIDATE')
   const attention = automation.filter((item) => item.state === 'EXCEPTION' || item.state === 'EXPIRED')
-  const current = items.filter((item) => item.interview.status === 'SCHEDULED' || item.interview.status === 'IN_PROGRESS')
+  const current = items.filter((item) => item.interview.status === 'SCHEDULED' || item.interview.status === 'IN_PROGRESS' || item.interview.status === 'PAUSED')
   const history = items.filter((item) => item.interview.status === 'COMPLETED' || item.interview.status === 'CANCELLED')
   const [activeTab, setActiveTab] = useState<OperationsTab>(attention.length ? 'attention' : current.length ? 'scheduled' : 'awaiting')
   const tabs: Array<{ id: OperationsTab; label: string; count: number }> = [

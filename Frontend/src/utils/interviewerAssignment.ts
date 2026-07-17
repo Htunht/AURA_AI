@@ -6,7 +6,7 @@ export type InterviewerAssignmentResult = { interviewerIds: string[]; errors: st
 
 function bookingCount(interviewerId: string, interviews: Interview[], start: string, end: string) {
   return interviews.filter((interview) =>
-    (interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS') &&
+    (interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS' || interview.status === 'PAUSED') &&
     interview.scheduledStart < end && interview.scheduledEnd > start &&
     interview.interviewers.some((person) => person.id === interviewerId),
   ).length

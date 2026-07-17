@@ -5,6 +5,7 @@ import { assignInterviewers } from '../utils/interviewerAssignment'
 import { generateInterviewSlots } from '../utils/interviewSlotGeneration'
 import { resolveInterviewSchedulingPolicy } from '../utils/interviewSchedulingPolicyResolution'
 import type { InterviewSchedulingPolicySource } from '../types/resolvedInterviewSchedulingPolicy'
+import { normalizeApplicationStage } from '../utils/applicationStage'
 
 export type PrepareSchedulingInvitationResult = {
   invitation?: InterviewSchedulingInvitation
@@ -68,7 +69,7 @@ export function prepareSchedulingInvitation(input: {
     .filter((item) => item.applicationId === application.id)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
   const positive = decision?.humanRecommendation === 'STRONG_YES' || decision?.humanRecommendation === 'YES' || decision?.humanRecommendation === 'REVIEW'
-  if (!positive || application.currentStage !== 'SHORTLIST_REVIEW') return { errors: ['A positive human-reviewed shortlist decision is required.'] }
+  if (!positive || normalizeApplicationStage(application.currentStage) !== 'SHORTLISTED') return { errors: ['A positive human-reviewed shortlist decision is required.'] }
   const resolvedPolicy = resolveInterviewSchedulingPolicy({ policies: input.state.interviewSchedulingPolicies, job })
   if (!resolvedPolicy) {
     const error = 'No organization, department, or custom scheduling setup is available for this job.'

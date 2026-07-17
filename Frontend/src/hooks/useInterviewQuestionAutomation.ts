@@ -42,7 +42,7 @@ export function useInterviewQuestionAutomationController(): InterviewQuestionAut
 
   useEffect(() => {
     state.interviews.forEach((interview) => {
-      if ((interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS') && !state.interviewQuestionSets.some((set) => set.interviewId === interview.id)) prepare(interview.id)
+      if ((interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS' || interview.status === 'PAUSED') && !state.interviewQuestionSets.some((set) => set.interviewId === interview.id)) prepare(interview.id)
     })
   }, [prepare, state.interviews, state.interviewQuestionSets])
 

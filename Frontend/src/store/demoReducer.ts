@@ -1,5 +1,6 @@
 import type {
   Application,
+  BroadApplicationStage,
   ApplicationStage,
   ApplicationStatus,
 } from '../types/application'
@@ -26,6 +27,7 @@ import type { InterviewSchedulingPolicy } from '../types/interviewSchedulingPoli
 import type { EmailDeliveryErrorCode } from '../types/emailDelivery'
 import type { Transcript } from '../types/transcript'
 import type { ScreeningQueueItem } from '../types/screeningQueue'
+import type { CandidateCommunicationDraft, HoldFollowUp } from '../types/postDecision'
 import type { EvaluationRubric } from '../types/rubric'
 import { validateRecruitmentApplicationForm } from '../utils/applicationFormValidation'
 import { canDeleteJob, canOpenJob, isValidJobTransition, validateJob } from '../utils/jobValidation'
@@ -42,6 +44,8 @@ import { canRecordFinalDecision, doesHumanDecisionDifferFromSystem } from '../ut
 import type { DemoState } from './demoStateTypes'
 import type { DemoPostInterviewFastForwardResult } from '../services/demoPostInterviewFastForward'
 import { finalEvaluationSourcesChanged } from '../utils/finalEvaluationSourceFingerprint'
+import { advanceApplicationStage, normalizeApplicationStage } from '../utils/applicationStage'
+import { canManageHoldFollowUp, canPrepareCandidateOutcome, canReopenHoldDecision, validateCommunicationDraft, validateHoldFollowUp } from '../utils/postDecisionWorkflow'
 
 export { initialDemoState } from './demoInitialState'
 export type { DemoState } from './demoStateTypes'
@@ -217,6 +221,12 @@ export type DemoAction =
   | { type: 'DISMISS_EVALUATION_CHALLENGE'; payload: { challengeId: string; resolutionNote: string; resolvedAt: string; actorRole: UserRole } }
   | { type: 'ADD_RECALCULATED_FINAL_EVALUATION'; payload: { previousEvaluationId: string; evaluation: FinalEvaluation } }
   | { type: 'RECORD_HUMAN_FINAL_DECISION'; payload: { finalEvaluationId: string; decision: HumanFinalDecision; decisionReason: string; candidateFacingReasonDraft?: string; disagreementReason?: DecisionDisagreementReason; disagreementExplanation?: string; holdReviewDate?: string; decidedBy: string; decidedByRole: UserRole; decidedAt: string } }
+  | { type: 'ADD_CANDIDATE_COMMUNICATION_DRAFT'; payload: { draft: CandidateCommunicationDraft; actorRole: UserRole } }
+  | { type: 'UPDATE_CANDIDATE_COMMUNICATION_DRAFT'; payload: { draftId: string; subject: string; body: string; updatedAt: string; actorRole: UserRole } }
+  | { type: 'MARK_CANDIDATE_COMMUNICATION_READY'; payload: { draftId: string; updatedAt: string; actorRole: UserRole } }
+  | { type: 'UPSERT_HOLD_FOLLOW_UP'; payload: { followUp: HoldFollowUp; actorRole: UserRole } }
+  | { type: 'MARK_HOLD_FOLLOW_UP_READY'; payload: { followUpId: string; updatedAt: string; actorRole: UserRole } }
+  | { type: 'REOPEN_HOLD_DECISION_REVIEW'; payload: { finalEvaluationId: string; followUpId: string; reopenedAt: string; reopenedBy: string; actorRole: UserRole } }
   | {
       type: 'UPDATE_INTERVIEW_STATUS'
       payload: { interviewId: string; status: InterviewStatus; updatedAt?: string }
@@ -258,7 +268,7 @@ function interviewHasConflict(
   const interviewerIds = new Set(interview.interviewers.map((person) => person.id))
   return interviews.some((existing) =>
     existing.id !== excludeInterviewId &&
-    (existing.status === 'SCHEDULED' || existing.status === 'IN_PROGRESS') &&
+    (existing.status === 'SCHEDULED' || existing.status === 'IN_PROGRESS' || existing.status === 'PAUSED') &&
     interview.scheduledStart < existing.scheduledEnd &&
     interview.scheduledEnd > existing.scheduledStart &&
     existing.interviewers.some((person) => interviewerIds.has(person.id)),
@@ -315,6 +325,10 @@ function cloneInvitation(invitation: InterviewSchedulingInvitation): InterviewSc
       interviewerIds: [...slot.interviewerIds],
     })),
   }
+}
+
+function advanceApplications(applications: Application[], applicationId: string, stage: BroadApplicationStage) {
+  return applications.map((application) => application.id === applicationId ? { ...application, currentStage: advanceApplicationStage(application.currentStage, stage) } : application)
 }
 
 function finalEvaluationProvenanceIsValid(state: DemoState, evaluation: FinalEvaluation) {
@@ -395,11 +409,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
     case 'UPDATE_APPLICATION_STAGE':
       return {
         ...state,
-        applications: state.applications.map((application) =>
-          application.id === action.payload.applicationId
-            ? { ...application, currentStage: action.payload.stage }
-            : application,
-        ),
+        applications: advanceApplications(state.applications, action.payload.applicationId, normalizeApplicationStage(action.payload.stage)),
       }
 
     case 'ADD_APPLICATION_FORM':
@@ -772,7 +782,8 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         return state
       }
 
-      return { ...state, decisions: [...state.decisions, decision] }
+      const nextStage: BroadApplicationStage = ['STRONG_YES', 'YES', 'REVIEW'].includes(decision.humanRecommendation) ? 'SHORTLISTED' : 'FINAL_REVIEW'
+      return { ...state, decisions: [...state.decisions, decision], applications: advanceApplications(state.applications, application.id, nextStage) }
     }
 
     case 'OVERRIDE_RECOMMENDATION': {
@@ -806,7 +817,8 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         return state
       }
 
-      return { ...state, decisions: [...state.decisions, decision] }
+      const nextStage: BroadApplicationStage = ['STRONG_YES', 'YES', 'REVIEW'].includes(decision.humanRecommendation) ? 'SHORTLISTED' : 'FINAL_REVIEW'
+      return { ...state, decisions: [...state.decisions, decision], applications: advanceApplications(state.applications, application.id, nextStage) }
     }
 
     case 'QUEUE_SCREENING_APPLICATION':
@@ -861,7 +873,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         ...state,
         applications: state.applications.map((application) =>
           queuedApplicationIds.has(application.id)
-            ? { ...application, currentStage: 'AI_SCREENING' }
+            ? { ...application, currentStage: advanceApplicationStage(application.currentStage, 'SCREENING') }
             : application,
         ),
         screeningQueue: [...state.screeningQueue, ...queueItems],
@@ -1112,14 +1124,14 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       )
       const hasActiveInterview = state.interviews.some(
         (item) => item.applicationId === invitation.applicationId &&
-          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS' || item.status === 'PAUSED'),
       )
       const hasPendingInvitation = state.interviewSchedulingInvitations.some(
         (item) => item.applicationId === invitation.applicationId && item.status === 'PENDING',
       )
       if (
         !application || !activePolicy || application.jobId !== invitation.jobId ||
-        application.currentStage !== 'SHORTLIST_REVIEW' ||
+        normalizeApplicationStage(application.currentStage) !== 'SHORTLISTED' ||
         !hasPositiveHumanDecision(state, application.id) || hasActiveInterview ||
         hasPendingInvitation || invitation.status !== 'PENDING' ||
         invitation.availableSlots.length === 0 ||
@@ -1129,6 +1141,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       ) return state
       return {
         ...state,
+        applications: advanceApplications(state.applications, application.id, 'INTERVIEW'),
         interviewSchedulingInvitations: [
           ...state.interviewSchedulingInvitations,
           cloneInvitation(invitation),
@@ -1219,7 +1232,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       const slot = invitation?.availableSlots.find((item) => item.id === slotId)
       const hasActiveInterview = state.interviews.some(
         (item) => item.applicationId === invitation?.applicationId &&
-          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS' || item.status === 'PAUSED'),
       )
       if (
         !invitation || invitation.status !== 'PENDING' || !slot || hasActiveInterview ||
@@ -1240,11 +1253,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
           interviewers: interview.interviewers.map((person) => ({ ...person })),
           questions: interview.questions.map((question) => ({ ...question })),
         }],
-        applications: state.applications.map((application) =>
-          application.id === invitation.applicationId
-            ? { ...application, currentStage: 'INTERVIEW' }
-            : application,
-        ),
+        applications: advanceApplications(state.applications, invitation.applicationId, 'INTERVIEW'),
         interviewSchedulingInvitations: state.interviewSchedulingInvitations.map((item) =>
           item.id === invitation.id
             ? {
@@ -1310,7 +1319,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       const hasActiveInterview = state.interviews.some(
         (item) =>
           item.applicationId === interview.applicationId &&
-          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+          (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS' || item.status === 'PAUSED'),
       )
       if (
         !applicationExists ||
@@ -1322,6 +1331,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       }
       return {
         ...state,
+        applications: advanceApplications(state.applications, interview.applicationId, 'INTERVIEW'),
         interviews: [
           ...state.interviews,
           {
@@ -1472,17 +1482,22 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       const set = session ? state.interviewQuestionSets.find((item) => item.id === session.questionSetId) : undefined
       const first = session?.questionProgress[0]
       if (!session || !interview || !set || !first || session.status !== 'NOT_STARTED' || interview.status !== 'SCHEDULED' || set.status !== 'APPROVED') return state
-      return { ...state, interviews: state.interviews.map((item) => item.id === interview.id ? { ...item, status: 'IN_PROGRESS', updatedAt: action.payload.startedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, status: 'IN_PROGRESS', startedAt: action.payload.startedAt, updatedAt: action.payload.startedAt, currentQuestionId: first.questionId, questionProgress: item.questionProgress.map((progress, index) => index === 0 ? { ...progress, status: 'CURRENT', startedAt: action.payload.startedAt } : progress) } : item) }
+      return { ...state, applications: advanceApplications(state.applications, interview.applicationId, 'INTERVIEW'), interviews: state.interviews.map((item) => item.id === interview.id ? { ...item, status: 'IN_PROGRESS', updatedAt: action.payload.startedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, status: 'IN_PROGRESS', startedAt: action.payload.startedAt, updatedAt: action.payload.startedAt, currentQuestionId: first.questionId, questionProgress: item.questionProgress.map((progress, index) => index === 0 ? { ...progress, status: 'CURRENT', startedAt: action.payload.startedAt } : progress) } : item) }
     }
 
     case 'PAUSE_INTERVIEW_SESSION': {
       const { sessionId, pausedAt, activeSecondsSinceResume } = action.payload
       if (!Number.isFinite(activeSecondsSinceResume) || activeSecondsSinceResume < 0) return state
-      return { ...state, interviewSessions: state.interviewSessions.map((session) => session.id === sessionId && session.status === 'IN_PROGRESS' ? { ...session, status: 'PAUSED', pausedAt, updatedAt: pausedAt, accumulatedActiveSeconds: session.accumulatedActiveSeconds + Math.floor(activeSecondsSinceResume) } : session) }
+      const session = state.interviewSessions.find((item) => item.id === sessionId && item.status === 'IN_PROGRESS')
+      if (!session) return state
+      return { ...state, interviews: state.interviews.map((item) => item.id === session.interviewId && item.status === 'IN_PROGRESS' ? { ...item, status: 'PAUSED', updatedAt: pausedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id === sessionId ? { ...item, status: 'PAUSED', pausedAt, updatedAt: pausedAt, accumulatedActiveSeconds: item.accumulatedActiveSeconds + Math.floor(activeSecondsSinceResume) } : item) }
     }
 
-    case 'RESUME_INTERVIEW_SESSION':
-      return { ...state, interviewSessions: state.interviewSessions.map((session) => session.id === action.payload.sessionId && session.status === 'PAUSED' ? { ...session, status: 'IN_PROGRESS', resumedAt: action.payload.resumedAt, updatedAt: action.payload.resumedAt } : session) }
+    case 'RESUME_INTERVIEW_SESSION': {
+      const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId && item.status === 'PAUSED')
+      if (!session) return state
+      return { ...state, interviews: state.interviews.map((item) => item.id === session.interviewId && item.status === 'PAUSED' ? { ...item, status: 'IN_PROGRESS', updatedAt: action.payload.resumedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id === session.id ? { ...item, status: 'IN_PROGRESS', resumedAt: action.payload.resumedAt, updatedAt: action.payload.resumedAt } : item) }
+    }
 
     case 'UPDATE_SESSION_QUESTION_NOTES': {
       const session = state.interviewSessions.find((item) => item.id === action.payload.sessionId)
@@ -1538,7 +1553,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       const skipped = session.questionProgress.filter((item) => item.status === 'SKIPPED').length
       const notReached = session.questionProgress.length - asked - skipped
       const completionSummary = `${asked} question${asked === 1 ? '' : 's'} asked, ${skipped} skipped, and ${notReached} not reached.`
-      return { ...state, interviews: state.interviews.map((item) => item.id === interview.id ? { ...item, status: 'COMPLETED', updatedAt: action.payload.completedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id !== session.id ? item : { ...item, status: 'COMPLETED', completedAt: action.payload.completedAt, updatedAt: action.payload.completedAt, currentQuestionId: undefined, accumulatedActiveSeconds: item.accumulatedActiveSeconds + Math.floor(action.payload.activeSecondsSinceResume), completionSummary, questionProgress: item.questionProgress.map((progress) => progress.status === 'CURRENT' || progress.status === 'NOT_ASKED' ? { ...progress, status: 'NOT_REACHED' } : progress) }) }
+      return { ...state, applications: advanceApplications(state.applications, interview.applicationId, 'FINAL_REVIEW'), interviews: state.interviews.map((item) => item.id === interview.id ? { ...item, status: 'COMPLETED', updatedAt: action.payload.completedAt } : item), interviewSessions: state.interviewSessions.map((item) => item.id !== session.id ? item : { ...item, status: 'COMPLETED', completedAt: action.payload.completedAt, updatedAt: action.payload.completedAt, currentQuestionId: undefined, accumulatedActiveSeconds: item.accumulatedActiveSeconds + Math.floor(action.payload.activeSecondsSinceResume), completionSummary, questionProgress: item.questionProgress.map((progress) => progress.status === 'CURRENT' || progress.status === 'NOT_ASKED' ? { ...progress, status: 'NOT_REACHED' } : progress) }) }
     }
 
     case 'UPDATE_INTERVIEW_STATUS':
@@ -1570,7 +1585,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
     case 'ADD_INTERVIEW_TRANSCRIPT': {
       const transcript = action.payload.transcript; const interview = state.interviews.find((item) => item.id === transcript.interviewId); const session = state.interviewSessions.find((item) => item.id === transcript.sessionId); const ids = transcript.segments.map((item) => item.id)
       if (!interview || interview.status !== 'COMPLETED' || !session || session.status !== 'COMPLETED' || session.interviewId !== interview.id || state.interviewTranscripts.some((item) => item.id === transcript.id || item.interviewId === transcript.interviewId) || new Set(ids).size !== ids.length) return state
-      return { ...state, interviewTranscripts: [...state.interviewTranscripts, { ...transcript, segments: transcript.segments.map((item, index) => ({ ...item, order: index + 1 })) }] }
+      return { ...state, applications: advanceApplications(state.applications, interview.applicationId, 'FINAL_REVIEW'), interviewTranscripts: [...state.interviewTranscripts, { ...transcript, segments: transcript.segments.map((item, index) => ({ ...item, order: index + 1 })) }] }
     }
     case 'UPDATE_INTERVIEW_TRANSCRIPT_RAW_TEXT':
       if (action.payload.rawText.length > 100000 || !state.interviewTranscripts.some((item) => item.id === action.payload.transcriptId && item.status === 'DRAFT')) return state
@@ -1595,7 +1610,7 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
     }
     case 'ADD_INTERVIEW_ANALYSIS':
     case 'MARK_INTERVIEW_ANALYSIS_GENERATION_FAILED': {
-      const analysis = action.payload.analysis; const transcript = state.interviewTranscripts.find((item) => item.id === analysis.transcriptId); if (!transcript || transcript.status !== 'APPROVED' || transcript.interviewId !== analysis.interviewId || state.interviewAnalyses.some((item) => item.id === analysis.id || item.interviewId === analysis.interviewId)) return state; return { ...state, interviewAnalyses: [...state.interviewAnalyses, { ...analysis, evidence: analysis.evidence.map((item) => ({ ...item, analysisId: analysis.id })) }] }
+      const analysis = action.payload.analysis; const transcript = state.interviewTranscripts.find((item) => item.id === analysis.transcriptId); const interview = state.interviews.find((item) => item.id === analysis.interviewId); if (!transcript || !interview || transcript.status !== 'APPROVED' || transcript.interviewId !== analysis.interviewId || state.interviewAnalyses.some((item) => item.id === analysis.id || item.interviewId === analysis.interviewId)) return state; return { ...state, applications: advanceApplications(state.applications, interview.applicationId, 'FINAL_REVIEW'), interviewAnalyses: [...state.interviewAnalyses, { ...analysis, evidence: analysis.evidence.map((item) => ({ ...item, analysisId: analysis.id })) }] }
     }
     case 'RETRY_INTERVIEW_ANALYSIS_GENERATION': {
       const failed = state.interviewAnalyses.find((item) => item.id === action.payload.analysisId && item.status === 'GENERATION_FAILED')
@@ -1639,14 +1654,14 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
         next = { ...next, finalEvaluations: [...next.finalEvaluations, result.finalEvaluation] }
       }
       if (result.stage === 'FINAL_EVALUATION' && !result.finalEvaluation) return state
-      return next
+      return { ...next, applications: advanceApplications(next.applications, application.id, 'FINAL_REVIEW') }
     }
 
     case 'ADD_FINAL_EVALUATION':
     case 'MARK_FINAL_EVALUATION_GENERATION_FAILED': {
       const evaluation = action.payload.evaluation
       if (!finalEvaluationProvenanceIsValid(state, evaluation) || state.finalEvaluations.some((item) => item.id === evaluation.id || (item.applicationId === evaluation.applicationId && !item.supersededByEvaluationId))) return state
-      return { ...state, finalEvaluations: [...state.finalEvaluations, evaluation] }
+      return { ...state, applications: advanceApplications(state.applications, evaluation.applicationId, 'FINAL_REVIEW'), finalEvaluations: [...state.finalEvaluations, evaluation] }
     }
     case 'ADD_EVALUATION_CHALLENGE': {
       const challenge = action.payload.challenge
@@ -1669,6 +1684,45 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       if (!previous || previous.status === 'DECIDED' || !transcript || !analysis || !finalEvaluationSourcesChanged(previous, transcript, analysis) || evaluation.version !== previous.version + 1 || evaluation.applicationId !== previous.applicationId || !finalEvaluationProvenanceIsValid(state, evaluation) || state.finalEvaluations.some((item) => item.id === evaluation.id)) return state
       return { ...state, finalEvaluations: [...state.finalEvaluations, evaluation] }
     }
+    case 'ADD_CANDIDATE_COMMUNICATION_DRAFT': {
+      const draft = action.payload.draft
+      const evaluation = state.finalEvaluations.find((item) => item.id === draft.finalEvaluationId && item.candidateId === draft.candidateId && item.status === 'DECIDED')
+      const expectedType = evaluation?.humanDecision === 'SELECTED' ? 'SELECTION' : evaluation?.humanDecision === 'REJECTED' ? 'REJECTION' : undefined
+      if (!canPrepareCandidateOutcome(action.payload.actorRole) || !evaluation || draft.type !== expectedType || draft.status !== 'DRAFT' || !validateCommunicationDraft(draft.subject, draft.body).valid || state.candidateCommunicationDrafts.some((item) => item.id === draft.id || item.finalEvaluationId === draft.finalEvaluationId)) return state
+      return { ...state, candidateCommunicationDrafts: [...state.candidateCommunicationDrafts, { ...draft, subject: draft.subject.trim(), body: draft.body.trim() }] }
+    }
+    case 'UPDATE_CANDIDATE_COMMUNICATION_DRAFT': {
+      const draft = state.candidateCommunicationDrafts.find((item) => item.id === action.payload.draftId)
+      if (!draft || draft.status !== 'DRAFT' || !canPrepareCandidateOutcome(action.payload.actorRole) || !validateCommunicationDraft(action.payload.subject, action.payload.body).valid) return state
+      return { ...state, candidateCommunicationDrafts: state.candidateCommunicationDrafts.map((item) => item.id === draft.id ? { ...item, subject: action.payload.subject.trim(), body: action.payload.body.trim(), updatedAt: action.payload.updatedAt } : item) }
+    }
+    case 'MARK_CANDIDATE_COMMUNICATION_READY': {
+      const draft = state.candidateCommunicationDrafts.find((item) => item.id === action.payload.draftId)
+      if (!draft || draft.status !== 'DRAFT' || !canPrepareCandidateOutcome(action.payload.actorRole) || !validateCommunicationDraft(draft.subject, draft.body).valid) return state
+      return { ...state, candidateCommunicationDrafts: state.candidateCommunicationDrafts.map((item) => item.id === draft.id ? { ...item, status: 'READY', updatedAt: action.payload.updatedAt } : item) }
+    }
+    case 'UPSERT_HOLD_FOLLOW_UP': {
+      const followUp = action.payload.followUp
+      const evaluation = state.finalEvaluations.find((item) => item.id === followUp.finalEvaluationId && item.candidateId === followUp.candidateId && item.status === 'DECIDED' && item.humanDecision === 'HOLD')
+      const existing = state.holdFollowUps.find((item) => item.id === followUp.id)
+      const duplicateOpen = state.holdFollowUps.some((item) => item.id !== followUp.id && item.finalEvaluationId === followUp.finalEvaluationId && item.status !== 'CLOSED')
+      if (!canManageHoldFollowUp(action.payload.actorRole) || !evaluation || duplicateOpen || followUp.status !== 'OPEN' || !validateHoldFollowUp(followUp, followUp.updatedAt).valid || (existing && existing.status !== 'OPEN')) return state
+      const normalized = { ...followUp, reason: followUp.reason.trim(), requiredReview: followUp.requiredReview.trim(), assignedReviewer: followUp.assignedReviewer.trim() }
+      return { ...state, holdFollowUps: existing ? state.holdFollowUps.map((item) => item.id === existing.id ? normalized : item) : [...state.holdFollowUps, normalized] }
+    }
+    case 'MARK_HOLD_FOLLOW_UP_READY': {
+      const followUp = state.holdFollowUps.find((item) => item.id === action.payload.followUpId)
+      if (!followUp || followUp.status !== 'OPEN' || !canManageHoldFollowUp(action.payload.actorRole)) return state
+      return { ...state, holdFollowUps: state.holdFollowUps.map((item) => item.id === followUp.id ? { ...item, status: 'READY_FOR_REVIEW', updatedAt: action.payload.updatedAt } : item) }
+    }
+    case 'REOPEN_HOLD_DECISION_REVIEW': {
+      const evaluation = state.finalEvaluations.find((item) => item.id === action.payload.finalEvaluationId)
+      const followUp = state.holdFollowUps.find((item) => item.id === action.payload.followUpId)
+      if (!evaluation || evaluation.status !== 'DECIDED' || evaluation.humanDecision !== 'HOLD' || !followUp || followUp.finalEvaluationId !== evaluation.id || followUp.status !== 'READY_FOR_REVIEW' || !canReopenHoldDecision(action.payload.actorRole) || state.finalEvaluations.some((item) => item.reopenedFromEvaluationId === evaluation.id)) return state
+      const version = Math.max(...state.finalEvaluations.filter((item) => item.candidateId === evaluation.candidateId).map((item) => item.version), evaluation.version) + 1
+      const reopened: FinalEvaluation = { ...evaluation, id: `${evaluation.id}-decision-v${version}`, version, status: 'READY_FOR_DECISION', humanDecision: undefined, humanDecisionReason: undefined, candidateFacingReasonDraft: undefined, differsFromSystem: undefined, disagreementReason: undefined, disagreementExplanation: undefined, holdReviewDate: undefined, decidedBy: undefined, decidedByRole: undefined, decidedAt: undefined, supersededByEvaluationId: undefined, reopenedFromEvaluationId: evaluation.id, reopenedBy: action.payload.reopenedBy, createdAt: action.payload.reopenedAt, updatedAt: action.payload.reopenedAt }
+      return { ...state, finalEvaluations: [...state.finalEvaluations, reopened], holdFollowUps: state.holdFollowUps.map((item) => item.id === followUp.id ? { ...item, status: 'CLOSED', closedAt: action.payload.reopenedAt, updatedAt: action.payload.reopenedAt } : item) }
+    }
     case 'RECORD_HUMAN_FINAL_DECISION': {
       const evaluation = state.finalEvaluations.find((item) => item.id === action.payload.finalEvaluationId)
       const reason = action.payload.decisionReason.trim()
@@ -1676,7 +1730,8 @@ export function demoReducer(state: DemoState, action: DemoAction): DemoState {
       const differs = doesHumanDecisionDifferFromSystem(evaluation.systemRecommendation, action.payload.decision)
       const explanation = action.payload.disagreementExplanation?.trim()
       if (differs && (!action.payload.disagreementReason || !explanation || explanation.length < 20 || explanation.length > 2000)) return state
-      return { ...state, finalEvaluations: state.finalEvaluations.map((item) => item.id !== evaluation.id ? item : { ...item, status: 'DECIDED', humanDecision: action.payload.decision, humanDecisionReason: reason, candidateFacingReasonDraft: action.payload.candidateFacingReasonDraft?.trim() || undefined, differsFromSystem: differs, disagreementReason: differs ? action.payload.disagreementReason : undefined, disagreementExplanation: differs ? explanation : undefined, holdReviewDate: action.payload.decision === 'HOLD' ? action.payload.holdReviewDate : undefined, decidedBy: action.payload.decidedBy, decidedByRole: action.payload.decidedByRole, decidedAt: action.payload.decidedAt, updatedAt: action.payload.decidedAt }) }
+      const terminalStage: BroadApplicationStage = action.payload.decision === 'SELECTED' ? 'SELECTED' : action.payload.decision === 'REJECTED' ? 'REJECTED' : 'HOLD'
+      return { ...state, applications: state.applications.map((item) => item.id === evaluation.applicationId ? { ...item, currentStage: terminalStage } : item), finalEvaluations: state.finalEvaluations.map((item) => item.id !== evaluation.id ? item : { ...item, status: 'DECIDED', humanDecision: action.payload.decision, humanDecisionReason: reason, candidateFacingReasonDraft: action.payload.candidateFacingReasonDraft?.trim() || undefined, differsFromSystem: differs, disagreementReason: differs ? action.payload.disagreementReason : undefined, disagreementExplanation: differs ? explanation : undefined, holdReviewDate: action.payload.decision === 'HOLD' ? action.payload.holdReviewDate : undefined, decidedBy: action.payload.decidedBy, decidedByRole: action.payload.decidedByRole, decidedAt: action.payload.decidedAt, updatedAt: action.payload.decidedAt }) }
     }
 
     case 'ADD_TRANSCRIPT': {

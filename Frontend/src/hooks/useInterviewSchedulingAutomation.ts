@@ -5,6 +5,7 @@ import type { Interviewer } from '../types/interviewer'
 import { useDemoStore } from './useDemoStore'
 import { getEmailConfig } from '../config/emailConfig'
 import { canRecoverPolicyMissingSchedulingException } from '../utils/interviewSchedulingPolicyResolution'
+import { normalizeApplicationStage } from '../utils/applicationStage'
 
 const interviewers = interviewersData as Interviewer[]
 
@@ -72,13 +73,13 @@ export function useInterviewSchedulingAutomationController(): InterviewSchedulin
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]
       const positive = decision?.humanRecommendation === 'STRONG_YES' || decision?.humanRecommendation === 'YES' || decision?.humanRecommendation === 'REVIEW'
       const hasActiveInterview = state.interviews.some((item) =>
-        item.applicationId === application.id && (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS'),
+        item.applicationId === application.id && (item.status === 'SCHEDULED' || item.status === 'IN_PROGRESS' || item.status === 'PAUSED'),
       )
       const hasAutomationRecord = state.interviewSchedulingInvitations.some(
         (item) => item.applicationId === application.id &&
           ['PENDING', 'SCHEDULED', 'EXPIRED', 'CANCELLED', 'EXCEPTION_REQUIRED'].includes(item.status),
       )
-      if (positive && application.currentStage === 'SHORTLIST_REVIEW' && !hasActiveInterview && !hasAutomationRecord) {
+      if (positive && normalizeApplicationStage(application.currentStage) === 'SHORTLISTED' && !hasActiveInterview && !hasAutomationRecord) {
         prepare(application.id)
       }
     }

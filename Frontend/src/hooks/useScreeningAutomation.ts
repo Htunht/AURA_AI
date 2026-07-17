@@ -152,7 +152,7 @@ export function useScreeningAutomationController(): ScreeningAutomationControlle
 
         actionDispatch({
           type: 'UPDATE_APPLICATION_STAGE',
-          payload: { applicationId, stage: 'AI_SCREENING' },
+          payload: { applicationId, stage: 'SCREENING' },
         })
 
         const result = await runCandidateScreening({

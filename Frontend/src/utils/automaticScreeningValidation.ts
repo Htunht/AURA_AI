@@ -105,8 +105,8 @@ export async function validateAutomaticScreeningDomain(): Promise<AutomaticScree
   )
   recordCheck(
     errors,
-    state.applications.find((item) => item.id === application.id)?.currentStage === 'AI_SCREENING',
-    'Queued application did not enter AI_SCREENING',
+    state.applications.find((item) => item.id === application.id)?.currentStage === 'SCREENING',
+    'Queued application did not enter SCREENING',
   )
   recordCheck(
     errors,

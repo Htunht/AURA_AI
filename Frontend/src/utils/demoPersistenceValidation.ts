@@ -5,6 +5,8 @@ import {
   type DemoState,
 } from '../store/demoReducer'
 import { validateApplicationFormDomain } from './applicationFormDomainValidation'
+import { validateApplicationStageDomain } from './applicationStageValidation'
+import { validatePostDecisionWorkflowDomain } from './postDecisionWorkflowValidation'
 import { validateDemoData } from './demoDataValidation'
 import { validateDemoStore } from './demoStoreValidation'
 import { validatePersistedDemoState } from './persistedDemoStateValidation'
@@ -35,6 +37,8 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
     'interviewSchedulingInvitations',
     'transcripts',
     'communications',
+    'candidateCommunicationDrafts',
+    'holdFollowUps',
     'decisions',
     'screeningQueue',
   ]
@@ -213,6 +217,8 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
   const demoDataValidation = validateDemoData()
   const demoStoreValidation = validateDemoStore()
   const applicationFormValidation = validateApplicationFormDomain()
+  const applicationStageValidation = validateApplicationStageDomain()
+  const postDecisionValidation = validatePostDecisionWorkflowDomain()
   const rubricBuilderValidation = validateRubricBuilderDomain()
 
   recordCheck(
@@ -235,6 +241,12 @@ export function validateDemoPersistence(): DemoPersistenceValidationResult {
     rubricBuilderValidation.valid,
     `Rubric builder validation failed: ${rubricBuilderValidation.errors.join('; ')}`,
   )
+  recordCheck(
+    errors,
+    applicationStageValidation.valid,
+    `Application stage validation failed: ${applicationStageValidation.errors.join('; ')}`,
+  )
+  recordCheck(errors, postDecisionValidation.valid, `Post-decision workflow validation failed: ${postDecisionValidation.errors.join('; ')}`)
 
   return { valid: errors.length === 0, errors }
 }

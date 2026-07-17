@@ -22,7 +22,7 @@ function recommendationTone(recommendation?: string) {
 }
 
 export function CandidateCard({ item, onRetryFailed }: CandidateCardProps) {
-  const { candidate, application, job, screeningEvaluation, decision, screeningStatus } = item
+  const { candidate, application, job, screeningEvaluation, decision, screeningStatus, operationalStatus } = item
   const recommendation = decision?.humanRecommendation ?? screeningEvaluation?.recommendation
 
   return (
@@ -72,7 +72,8 @@ export function CandidateCard({ item, onRetryFailed }: CandidateCardProps) {
         </div>
         <div>
           <dt className="text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">Stage</dt>
-          <dd className="mt-1 text-sm text-depth">{formatApplicationStage(application.currentStage)}</dd>
+          <dd className="mt-1 text-sm font-semibold text-depth">{formatApplicationStage(application.currentStage)}</dd>
+          {operationalStatus ? <dd className="mt-0.5 text-xs text-aura-text-muted">{operationalStatus.label}{operationalStatus.occurredAt ? ` · ${formatDate(operationalStatus.occurredAt)}` : ''}</dd> : null}
         </div>
         <div>
           <dt className="text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">Submitted</dt>

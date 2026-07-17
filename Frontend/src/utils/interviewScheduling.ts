@@ -2,6 +2,7 @@ import type { DemoState } from '../store/demoReducer'
 import type { Interview, InterviewMode } from '../types/interview'
 import type { InterviewScheduleDraft, InterviewScheduleValidationResult } from '../types/interviewScheduling'
 import type { Interviewer } from '../types/interviewer'
+import { normalizeApplicationStage } from './applicationStage'
 
 export type InterviewConflict = {
   interviewId: string
@@ -12,7 +13,7 @@ export type InterviewConflict = {
   candidateName?: string
 }
 
-const activeStatuses = new Set(['SCHEDULED', 'IN_PROGRESS'])
+const activeStatuses = new Set(['SCHEDULED', 'IN_PROGRESS', 'PAUSED'])
 const supportedDurations = new Set([30, 45, 60, 90])
 const interviewModes = new Set<InterviewMode>(['VIDEO', 'PHONE', 'ONSITE'])
 
@@ -162,7 +163,7 @@ export function validateInterviewScheduleDraft(input: {
     if (!editedInterview) {
       if (!decision) errors.applicationId = 'A recruiter decision is required before scheduling.'
       else if (!positiveDecision) errors.applicationId = 'Only positive recruiter decisions are eligible for scheduling.'
-      if (application.currentStage !== 'SHORTLIST_REVIEW') {
+      if (normalizeApplicationStage(application.currentStage) !== 'SHORTLISTED') {
         errors.applicationId = 'The application must be in shortlist review before scheduling.'
       }
       const hasActiveInterview = state.interviews.some(

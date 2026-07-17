@@ -55,6 +55,8 @@ function validateInitialCounts(errors: string[]) {
     ['interviewSchedulingInvitations', 0],
     ['transcripts', transcriptsData.length],
     ['communications', communicationsData.length],
+    ['candidateCommunicationDrafts', 0],
+    ['holdFollowUps', 0],
     ['decisions', 0],
     ['screeningQueue', 0],
   ]

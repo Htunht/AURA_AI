@@ -7,14 +7,24 @@ export type ApplicationStatus =
   | 'REJECTED'
   | 'ON_HOLD'
 
-export type ApplicationStage =
+export type BroadApplicationStage =
+  | 'APPLIED'
+  | 'SCREENING'
+  | 'SHORTLISTED'
+  | 'INTERVIEW'
+  | 'FINAL_REVIEW'
+  | 'SELECTED'
+  | 'REJECTED'
+  | 'HOLD'
+
+export type LegacyApplicationStage =
   | 'APPLICATION'
   | 'AI_SCREENING'
   | 'SHORTLIST_REVIEW'
-  | 'INTERVIEW'
-  | 'FINAL_REVIEW'
   | 'DECISION'
   | 'COMMUNICATION'
+
+export type ApplicationStage = BroadApplicationStage | LegacyApplicationStage
 
 export type ApplicationAnswer = {
   id: string

@@ -103,6 +103,8 @@ export function validatePersistedDemoState(
     'interviewAnalyses',
     'finalEvaluations',
     'evaluationChallenges',
+    'candidateCommunicationDrafts',
+    'holdFollowUps',
   ] as const) {
     if (value[collectionName] !== undefined && !Array.isArray(value[collectionName])) {
       errors.push(`Persisted demo state ${collectionName} must be an array.`)
@@ -138,6 +140,8 @@ export function validatePersistedDemoState(
   const interviewAnalyses = Array.isArray(value.interviewAnalyses) ? value.interviewAnalyses : []
   const finalEvaluations = Array.isArray(value.finalEvaluations) ? value.finalEvaluations : []
   const evaluationChallenges = Array.isArray(value.evaluationChallenges) ? value.evaluationChallenges : []
+  const candidateCommunicationDrafts = Array.isArray(value.candidateCommunicationDrafts) ? value.candidateCommunicationDrafts : []
+  const holdFollowUps = Array.isArray(value.holdFollowUps) ? value.holdFollowUps : []
 
   validateRecords(
     jobs,
@@ -213,6 +217,8 @@ export function validatePersistedDemoState(
   validateRecords(interviewAnalyses, 'interviewAnalyses', (record) => hasStringProperties(record, ['id', 'interviewId', 'transcriptId', 'status', 'interviewerSummary', 'createdAt', 'updatedAt']) && Number.isInteger(record.version) && Array.isArray(record.evidence), errors)
   validateRecords(finalEvaluations, 'finalEvaluations', (record) => hasStringProperties(record, ['id', 'candidateId', 'applicationId', 'jobId', 'interviewId', 'interviewAnalysisId', 'rubricId', 'status', 'systemRecommendation', 'createdAt', 'updatedAt']) && Number.isInteger(record.version) && Array.isArray(record.questionAssessments) && Array.isArray(record.competencyAssessments) && record.systemScoreLocked === true && record.systemRecommendationLocked === true, errors)
   validateRecords(evaluationChallenges, 'evaluationChallenges', (record) => hasStringProperties(record, ['id', 'finalEvaluationId', 'reason', 'explanation', 'status', 'createdBy', 'createdAt']) && Array.isArray(record.questionAssessmentIds) && Array.isArray(record.competencyAssessmentIds), errors)
+  validateRecords(candidateCommunicationDrafts, 'candidateCommunicationDrafts', (record) => hasStringProperties(record, ['id', 'candidateId', 'finalEvaluationId', 'type', 'subject', 'body', 'status', 'createdAt', 'updatedAt']) && ['SELECTION', 'REJECTION'].includes(record.type as string) && ['DRAFT', 'READY'].includes(record.status as string), errors)
+  validateRecords(holdFollowUps, 'holdFollowUps', (record) => hasStringProperties(record, ['id', 'candidateId', 'finalEvaluationId', 'reason', 'requiredReview', 'assignedReviewer', 'followUpAt', 'status', 'createdAt', 'updatedAt']) && ['OPEN', 'READY_FOR_REVIEW', 'CLOSED'].includes(record.status as string), errors)
   validateRecords(
     transcripts,
     'transcripts',
@@ -299,6 +305,7 @@ export function validatePersistedDemoState(
   const candidateIds = stringIds(candidates)
   const applicationIds = stringIds(applications)
   const interviewIds = stringIds(interviews)
+  const finalEvaluationIds = stringIds(finalEvaluations)
   const policyIds = stringIds(policies)
 
   validateReference(applications, 'applications', 'jobId', jobIds, errors)
@@ -329,6 +336,10 @@ export function validatePersistedDemoState(
   validateReference(finalEvaluations, 'finalEvaluations', 'candidateId', candidateIds, errors)
   validateReference(finalEvaluations, 'finalEvaluations', 'jobId', jobIds, errors)
   validateReference(finalEvaluations, 'finalEvaluations', 'interviewId', interviewIds, errors)
+  validateReference(candidateCommunicationDrafts, 'candidateCommunicationDrafts', 'candidateId', candidateIds, errors)
+  validateReference(candidateCommunicationDrafts, 'candidateCommunicationDrafts', 'finalEvaluationId', finalEvaluationIds, errors)
+  validateReference(holdFollowUps, 'holdFollowUps', 'candidateId', candidateIds, errors)
+  validateReference(holdFollowUps, 'holdFollowUps', 'finalEvaluationId', finalEvaluationIds, errors)
   validateReference(
     transcripts,
     'transcripts',

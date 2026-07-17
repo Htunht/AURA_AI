@@ -19,6 +19,7 @@ import type { Job } from '../types/job'
 import type { EvaluationRubric } from '../types/rubric'
 import type { Transcript } from '../types/transcript'
 import { validateDemoData } from '../utils/demoDataValidation'
+import { normalizeApplicationStage } from '../utils/applicationStage'
 import type { DemoState } from './demoStateTypes'
 
 const jobs = jobsData as Job[]
@@ -50,6 +51,7 @@ export function createInitialDemoState(): DemoState {
     })),
     applications: applications.map((application) => ({
       ...application,
+      currentStage: normalizeApplicationStage(application.currentStage),
       answers: application.answers.map((answer) => ({
         ...answer,
         value: Array.isArray(answer.value) ? [...answer.value] : answer.value,
@@ -111,6 +113,8 @@ export function createInitialDemoState(): DemoState {
     communications: communications.map((communication) => ({
       ...communication,
     })),
+    candidateCommunicationDrafts: [],
+    holdFollowUps: [],
     decisions: [],
     screeningQueue: [],
   }

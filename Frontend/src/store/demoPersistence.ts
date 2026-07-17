@@ -1,5 +1,6 @@
 import { validatePersistedDemoState } from '../utils/persistedDemoStateValidation'
 import { createInitialDemoState } from './demoInitialState'
+import { normalizeApplicationStage, synchronizeApplicationStages } from '../utils/applicationStage'
 import type { DemoState } from './demoStateTypes'
 import { migrateLegacyInterviewQuestions } from '../utils/interviewQuestionMigration'
 
@@ -49,7 +50,7 @@ export function hydratePersistedDemoStateValue(value: string | null, recoverActi
   const validation = validatePersistedDemoState(parsed)
   if (!validation.valid) return undefined
   return normalizePersistedDemoState(
-    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses' | 'finalEvaluations' | 'evaluationChallenges'> & {
+    parsed as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses' | 'finalEvaluations' | 'evaluationChallenges' | 'candidateCommunicationDrafts' | 'holdFollowUps'> & {
       screeningQueue?: PersistedDemoState['screeningQueue']
       interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
       interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
@@ -59,6 +60,8 @@ export function hydratePersistedDemoStateValue(value: string | null, recoverActi
       interviewAnalyses?: PersistedDemoState['interviewAnalyses']
       finalEvaluations?: PersistedDemoState['finalEvaluations']
       evaluationChallenges?: PersistedDemoState['evaluationChallenges']
+      candidateCommunicationDrafts?: PersistedDemoState['candidateCommunicationDrafts']
+      holdFollowUps?: PersistedDemoState['holdFollowUps']
     },
     recoverActiveSessions,
   )
@@ -127,7 +130,7 @@ export function recoverInterruptedScreeningQueue(state: DemoState): DemoState {
 }
 
 export function normalizePersistedDemoState(
-  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses' | 'finalEvaluations' | 'evaluationChallenges'> & {
+  state: Omit<DemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses' | 'finalEvaluations' | 'evaluationChallenges' | 'candidateCommunicationDrafts' | 'holdFollowUps'> & {
     screeningQueue?: DemoState['screeningQueue']
     interviewSchedulingPolicies?: DemoState['interviewSchedulingPolicies']
     interviewSchedulingInvitations?: DemoState['interviewSchedulingInvitations']
@@ -137,6 +140,8 @@ export function normalizePersistedDemoState(
     interviewAnalyses?: DemoState['interviewAnalyses']
     finalEvaluations?: DemoState['finalEvaluations']
     evaluationChallenges?: DemoState['evaluationChallenges']
+    candidateCommunicationDrafts?: DemoState['candidateCommunicationDrafts']
+    holdFollowUps?: DemoState['holdFollowUps']
   },
   recoverActiveSessions = true,
 ): DemoState {
@@ -192,6 +197,7 @@ export function normalizePersistedDemoState(
 
   const normalized = recoverInterruptedScreeningQueue({
     ...state,
+    applications: state.applications.map((application) => ({ ...application, currentStage: normalizeApplicationStage(application.currentStage) })),
     candidates,
     jobs: state.jobs.map((job) => ({
       ...job,
@@ -242,8 +248,11 @@ export function normalizePersistedDemoState(
     interviewAnalyses: Array.isArray(state.interviewAnalyses) ? state.interviewAnalyses.map((analysis) => ({ ...analysis, evidence: analysis.evidence.map((item) => ({ ...item, transcriptSegmentIds: [...item.transcriptSegmentIds], questionIds: [...item.questionIds], requirementIds: [...item.requirementIds], criterionKeys: [...item.criterionKeys] })), strengths: [...analysis.strengths], concerns: [...analysis.concerns], missingEvidence: [...analysis.missingEvidence] })) : [],
     finalEvaluations: Array.isArray(state.finalEvaluations) ? state.finalEvaluations.map((evaluation) => ({ ...evaluation, questionAssessments: evaluation.questionAssessments.map((item) => ({ ...item, transcriptSegmentIds: [...item.transcriptSegmentIds], evidenceIds: [...item.evidenceIds], requirementIds: [...item.requirementIds], criterionKeys: [...item.criterionKeys], competencyKeys: [...item.competencyKeys], reviewReasons: [...item.reviewReasons] })), competencyAssessments: evaluation.competencyAssessments.map((item) => ({ ...item, questionAssessmentIds: [...item.questionAssessmentIds], evidenceIds: [...item.evidenceIds], requirementIds: [...item.requirementIds], criterionKeys: [...item.criterionKeys], strengths: [...item.strengths], concerns: [...item.concerns], missingEvidence: [...item.missingEvidence], reviewReasons: [...item.reviewReasons] })), mustHaveGaps: [...evaluation.mustHaveGaps], unresolvedEvidence: [...evaluation.unresolvedEvidence], dataQualityIssues: [...evaluation.dataQualityIssues] })) : [],
     evaluationChallenges: Array.isArray(state.evaluationChallenges) ? state.evaluationChallenges.map((challenge) => ({ ...challenge, questionAssessmentIds: [...challenge.questionAssessmentIds], competencyAssessmentIds: [...challenge.competencyAssessmentIds], transcriptSegmentIds: [...challenge.transcriptSegmentIds], evidenceIds: [...challenge.evidenceIds] })) : [],
+    candidateCommunicationDrafts: Array.isArray(state.candidateCommunicationDrafts) ? state.candidateCommunicationDrafts.map((draft) => ({ ...draft })) : [],
+    holdFollowUps: Array.isArray(state.holdFollowUps) ? state.holdFollowUps.map((followUp) => ({ ...followUp })) : [],
   })
-  return recoverActiveSessions ? recoverInterruptedInterviewSessions(normalized) : normalized
+  const recovered = recoverActiveSessions ? recoverInterruptedInterviewSessions(normalized) : normalized
+  return synchronizeApplicationStages(recovered)
 }
 
 export function loadPersistedDemoState(): DemoStateHydrationResult {
@@ -307,7 +316,7 @@ export function loadPersistedDemoState(): DemoStateHydrationResult {
 
   return {
     state: normalizePersistedDemoState(
-      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses' | 'finalEvaluations' | 'evaluationChallenges'> & {
+      parsedValue as Omit<PersistedDemoState, 'screeningQueue' | 'interviewSchedulingPolicies' | 'interviewSchedulingInvitations' | 'interviewQuestionSets' | 'interviewSessions' | 'interviewTranscripts' | 'interviewAnalyses' | 'finalEvaluations' | 'evaluationChallenges' | 'candidateCommunicationDrafts' | 'holdFollowUps'> & {
         screeningQueue?: PersistedDemoState['screeningQueue']
         interviewSchedulingPolicies?: PersistedDemoState['interviewSchedulingPolicies']
         interviewSchedulingInvitations?: PersistedDemoState['interviewSchedulingInvitations']
@@ -317,6 +326,8 @@ export function loadPersistedDemoState(): DemoStateHydrationResult {
         interviewAnalyses?: PersistedDemoState['interviewAnalyses']
         finalEvaluations?: PersistedDemoState['finalEvaluations']
         evaluationChallenges?: PersistedDemoState['evaluationChallenges']
+        candidateCommunicationDrafts?: PersistedDemoState['candidateCommunicationDrafts']
+        holdFollowUps?: PersistedDemoState['holdFollowUps']
       },
     ),
     source: 'PERSISTED',

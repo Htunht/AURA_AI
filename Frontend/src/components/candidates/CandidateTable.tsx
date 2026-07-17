@@ -34,7 +34,7 @@ export function CandidateTable({ items, onRetryFailed }: CandidateTableProps) {
           </tr>
         </thead>
         <tbody className="divide-y divide-harbor/10">
-          {items.map(({ candidate, application, job, screeningEvaluation, decision, screeningStatus }) => {
+          {items.map(({ candidate, application, job, screeningEvaluation, decision, screeningStatus, operationalStatus }) => {
             const recommendation = decision?.humanRecommendation ?? screeningEvaluation?.recommendation
             return (
               <tr key={application.id} className="transition-colors hover:bg-glacier/[0.07]">
@@ -58,7 +58,10 @@ export function CandidateTable({ items, onRetryFailed }: CandidateTableProps) {
                 <td className="px-4 py-4 align-top">
                   {screeningStatus === 'COMPLETED' && recommendation && screeningEvaluation ? <><Badge tone={recommendationTone(recommendation)}>{getScreeningRecommendationLabel(recommendation)}</Badge><span className="mt-1.5 block text-xs font-semibold text-depth">{Math.round(screeningEvaluation.overallScore)}/100 · {screeningEvaluation.confidence}% confidence</span><span className="mt-1 block text-[10px] text-aura-text-muted">{decision ? decision.reviewAction === 'CONFIRM' ? 'Recruiter confirmed' : `Overrode AURA: ${getScreeningRecommendationLabel(decision.aiRecommendation)}` : 'Recruiter review pending'}</span></> : <span className="text-aura-text-muted">—</span>}
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 align-top text-aura-text-secondary">{formatApplicationStage(application.currentStage)}</td>
+                <td className="whitespace-nowrap px-4 py-4 align-top">
+                  <span className="block font-semibold text-depth">{formatApplicationStage(application.currentStage)}</span>
+                  {operationalStatus ? <span className="mt-1 block text-xs text-aura-text-muted">{operationalStatus.label}{operationalStatus.occurredAt ? ` · ${formatDate(operationalStatus.occurredAt)}` : ''}</span> : null}
+                </td>
                 <td className="whitespace-nowrap px-4 py-4 align-top text-aura-text-secondary">{formatDate(application.submittedAt)}</td>
                 <td className="px-4 py-4 align-top">
                   <Link className="inline-flex text-harbor hover:text-depth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier" to={screeningStatus === 'COMPLETED' ? `/reviews?applicationId=${application.id}` : `/candidates/${candidate.id}`} aria-label={screeningStatus === 'COMPLETED' ? `Review ${candidate.fullName}` : `View ${candidate.fullName}`}>

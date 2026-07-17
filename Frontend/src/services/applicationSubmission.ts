@@ -136,7 +136,7 @@ export function prepareApplicationSubmission(input: {
       jobId: input.form.jobId,
       candidateId: candidate.id,
       status: 'SUBMITTED',
-      currentStage: 'APPLICATION',
+      currentStage: 'APPLIED',
       answers,
       documents: [
         {

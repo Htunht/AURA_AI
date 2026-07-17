@@ -15,7 +15,6 @@ import { validateDemoData } from './demoDataValidation'
 import { validateDemoPersistence } from './demoPersistenceValidation'
 import { validateDemoStore } from './demoStoreValidation'
 import { validateRecruitmentUiDomain } from './recruitmentUiValidation'
-import { getPostScreeningStage } from './screeningWorkflow'
 
 export type ScreeningUiValidationResult = {
   valid: boolean
@@ -86,10 +85,7 @@ export async function validateScreeningUiDomain(): Promise<ScreeningUiValidation
     'Screening strengths or concerns are not arrays',
   )
 
-  const confirmBase = demoReducer(freshState, {
-    type: 'UPDATE_APPLICATION_STAGE',
-    payload: { applicationId: johnView.application.id, stage: 'AI_SCREENING' },
-  })
+  const confirmBase = { ...freshState, applications: freshState.applications.map((item) => item.id === johnView.application.id ? { ...item, currentStage: 'SCREENING' as const } : item), interviews: freshState.interviews.filter((item) => item.applicationId !== johnView.application.id), interviewSessions: freshState.interviewSessions.filter((session) => !freshState.interviews.some((interview) => interview.applicationId === johnView.application.id && interview.id === session.interviewId)) }
   const confirmation: Decision = {
     id: 'decision-screening-validation-confirm',
     applicationId: johnView.application.id,
@@ -104,13 +100,7 @@ export async function validateScreeningUiDomain(): Promise<ScreeningUiValidation
     type: 'CONFIRM_RECOMMENDATION',
     payload: { decision: confirmation },
   })
-  const confirmedState = demoReducer(confirmedWithDecision, {
-    type: 'UPDATE_APPLICATION_STAGE',
-    payload: {
-      applicationId: confirmation.applicationId,
-      stage: getPostScreeningStage(confirmation.humanRecommendation),
-    },
-  })
+  const confirmedState = confirmedWithDecision
   recordCheck(
     errors,
     confirmedState.decisions.length === freshState.decisions.length + 1,
@@ -125,7 +115,7 @@ export async function validateScreeningUiDomain(): Promise<ScreeningUiValidation
     errors,
     confirmedState.applications.find(
       (application) => application.id === confirmation.applicationId,
-    )?.currentStage === 'SHORTLIST_REVIEW',
+    )?.currentStage === 'SHORTLISTED',
     'Confirmation did not transition the application to shortlist review',
   )
 
@@ -154,13 +144,7 @@ export async function validateScreeningUiDomain(): Promise<ScreeningUiValidation
     type: 'OVERRIDE_RECOMMENDATION',
     payload: { decision: override },
   })
-  const overriddenState = demoReducer(overriddenWithDecision, {
-    type: 'UPDATE_APPLICATION_STAGE',
-    payload: {
-      applicationId: override.applicationId,
-      stage: getPostScreeningStage(override.humanRecommendation),
-    },
-  })
+  const overriddenState = overriddenWithDecision
   const storedOverride = selectLatestDecisionByApplicationId(
     overriddenState,
     override.applicationId,
@@ -176,7 +160,7 @@ export async function validateScreeningUiDomain(): Promise<ScreeningUiValidation
     errors,
     overriddenState.applications.find(
       (application) => application.id === override.applicationId,
-    )?.currentStage === 'DECISION',
+    )?.currentStage === 'FINAL_REVIEW',
     'Override did not transition using the human recommendation',
   )
 

@@ -53,7 +53,7 @@ export function generateInterviewSlots(input: {
       if (new Date(start).getTime() < minimumStart) continue
       const buffer = input.policy.bufferMinutes * 60_000
       const conflicts = input.existingInterviews.some((interview) =>
-        (interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS') &&
+        (interview.status === 'SCHEDULED' || interview.status === 'IN_PROGRESS' || interview.status === 'PAUSED') &&
         interview.interviewers.some((person) => input.interviewerIds.includes(person.id)) &&
         new Date(start).getTime() - buffer < new Date(interview.scheduledEnd).getTime() &&
         new Date(end).getTime() + buffer > new Date(interview.scheduledStart).getTime(),

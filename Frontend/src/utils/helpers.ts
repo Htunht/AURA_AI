@@ -61,13 +61,19 @@ export function formatInterviewTime(value: string): string {
 }
 
 const stageLabels: Record<ApplicationStage, string> = {
-  APPLICATION: 'Application',
-  AI_SCREENING: 'AI screening',
-  SHORTLIST_REVIEW: 'Shortlist review',
+  APPLICATION: 'Applied',
+  APPLIED: 'Applied',
+  AI_SCREENING: 'Screening',
+  SCREENING: 'Screening',
+  SHORTLIST_REVIEW: 'Shortlisted',
+  SHORTLISTED: 'Shortlisted',
   INTERVIEW: 'Interview',
   FINAL_REVIEW: 'Final review',
-  DECISION: 'Decision',
-  COMMUNICATION: 'Communication',
+  DECISION: 'Final review',
+  COMMUNICATION: 'Final review',
+  SELECTED: 'Selected',
+  REJECTED: 'Rejected',
+  HOLD: 'Hold',
 }
 
 const statusLabels: Record<ApplicationStatus, string> = {
@@ -103,6 +109,7 @@ const interviewModeLabels: Record<InterviewMode, string> = {
 const interviewStatusLabels: Record<InterviewStatus, string> = {
   SCHEDULED: 'Scheduled',
   IN_PROGRESS: 'In progress',
+  PAUSED: 'Paused',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 }

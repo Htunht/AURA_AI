@@ -5,6 +5,7 @@ import { CandidateProfile } from '../../components/candidates/CandidateProfile'
 import { CandidateTimeline } from '../../components/candidates/CandidateTimeline'
 import { CandidateInterviewPanel } from '../../components/interviews/CandidateInterviewPanel'
 import { CandidateScreeningPanel } from '../../components/screening/CandidateScreeningPanel'
+import { PostDecisionNextStep } from '../../components/evaluation/PostDecisionNextStep'
 import { PageContainer } from '../../components/layout/PageContainer'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -18,14 +19,19 @@ import {
   selectCandidateTimeline,
   selectInterviewByApplicationId,
   selectInterviewAnalysisPreparationStatus,
+  selectInterviewQuestionPreparationStatus,
   selectInterviewSessionOperationalStatus,
   selectInterviewSessionByInterviewId,
   selectInterviewSessionProgressSummary,
+  selectInterviewTranscriptByInterviewId,
+  selectLatestInterviewAnalysis,
   selectLatestFinalEvaluation,
   selectEvaluationChallengesByEvaluationId,
 } from '../../store/demoSelectors'
 import type { ApplicationAnswer } from '../../types/application'
-import { formatApplicationStage, formatApplicationStatus, formatDateTime } from '../../utils/helpers'
+import type { Interview } from '../../types/interview'
+import { formatApplicationStage, formatApplicationStatus, formatDateTime, formatInterviewDate, formatInterviewStatus, formatInterviewTime } from '../../utils/helpers'
+import { getInterviewDetailPath } from '../../utils/interviewRoutes'
 
 const tabs: TabItem[] = [
   { id: 'application', label: 'Application' },
@@ -54,6 +60,10 @@ function Placeholder({ title, description }: { title: string; description: strin
   return <Card className="p-8 text-center md:p-12"><span className="mx-auto mb-4 inline-grid size-11 place-items-center rounded-full bg-glacier/15 text-lg font-bold text-marine">A</span><h2 className="m-0 text-lg font-semibold text-depth">{title}</h2><p className="mx-auto mb-0 mt-2 max-w-xl text-sm leading-6 text-aura-text-secondary">{description}</p></Card>
 }
 
+function InterviewRecordSummary({ interview, questionPlan, session, transcript, analysis, finalEvaluation }: { interview: Interview; questionPlan: string; session: string; transcript: string; analysis: string; finalEvaluation: string }) {
+  return <Card className="p-5 md:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="m-0 text-lg font-semibold text-depth">Interview record</h2><p className="mb-0 mt-1 text-sm text-aura-text-secondary">Recruitment stage and interview operations are tracked separately.</p></div><Badge tone={interview.status === 'COMPLETED' ? 'success' : interview.status === 'CANCELLED' ? 'neutral' : 'accent'}>{formatInterviewStatus(interview.status)}</Badge></div><dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs text-aura-text-muted">Schedule</dt><dd className="mb-0 mt-1 font-semibold text-depth">{formatInterviewDate(interview.scheduledStart)}</dd><dd className="m-0 text-xs text-aura-text-secondary">{formatInterviewTime(interview.scheduledStart)}–{formatInterviewTime(interview.scheduledEnd)}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-aura-text-muted">Interview team</dt><dd className="mb-0 mt-1 font-semibold leading-6 text-depth">{interview.interviewers.map((person) => person.name).join(', ')}</dd></div><div><dt className="text-xs text-aura-text-muted">Question plan</dt><dd className="mb-0 mt-1 font-semibold capitalize text-depth">{questionPlan}</dd></div>{[['Session', session], ['Transcript', transcript], ['Analysis', analysis], ['Final evaluation', finalEvaluation]].map(([label, value]) => <div key={label}><dt className="text-xs text-aura-text-muted">{label}</dt><dd className="mb-0 mt-1 font-semibold capitalize text-depth">{value}</dd></div>)}</dl><Link className={`${backLinkClass} mt-5`} to={getInterviewDetailPath(interview.id)}>Open interview detail</Link></Card>
+}
+
 export default function CandidateDetail() {
   const { candidateId = '' } = useParams()
   const { state } = useDemoStore()
@@ -80,6 +90,9 @@ export default function CandidateDetail() {
   const sessionStatus = interview ? selectInterviewSessionOperationalStatus(state, interview.id) : 'UNAVAILABLE'
   const session = interview ? selectInterviewSessionByInterviewId(state, interview.id) : undefined
   const sessionProgress = session ? selectInterviewSessionProgressSummary(session) : undefined
+  const questionPlanStatus = interview ? selectInterviewQuestionPreparationStatus(state, interview.id) : undefined
+  const transcript = interview ? selectInterviewTranscriptByInterviewId(state, interview.id) : undefined
+  const analysis = interview ? selectLatestInterviewAnalysis(state, interview.id) : undefined
   const reviewStatus = interview ? selectInterviewAnalysisPreparationStatus(state, interview.id) : undefined
   const finalEvaluation = selectLatestFinalEvaluation(state, candidate.id, application.id)
   const finalChallenges = finalEvaluation ? selectEvaluationChallengesByEvaluationId(state, finalEvaluation.id) : []
@@ -161,6 +174,8 @@ export default function CandidateDetail() {
       {activeTab === 'screening' ? <CandidateScreeningPanel applicationId={application.id} /> : null}
       {activeTab === 'interview' ? <div className="grid gap-4"><CandidateInterviewPanel applicationId={application.id} />{interview && ['READY', 'IN_PROGRESS', 'PAUSED', 'COMPLETED'].includes(sessionStatus) ? <Card className="p-5"><h2 className="m-0 text-lg font-semibold text-depth">Live interview session</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">{sessionStatus === 'READY' ? 'Ready for session' : sessionStatus === 'IN_PROGRESS' ? 'Interview in progress' : sessionStatus === 'PAUSED' ? 'Interview paused' : session?.completionSummary ?? 'Interview completed'}</p>{sessionProgress ? <p className="mb-0 mt-1 text-xs text-aura-text-muted">{sessionProgress.asked} asked · {sessionProgress.skipped} skipped · {sessionProgress.notReached} not reached</p> : null}<Link className={`${backLinkClass} mt-4`} to={`/interviews/${interview.id}/session`}>{sessionStatus === 'READY' ? 'Open session' : sessionStatus === 'COMPLETED' ? 'View session summary' : 'Return to session'}</Link></Card> : null}{interview && sessionStatus === 'COMPLETED' && reviewStatus ? <Card className="p-5"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="m-0 text-lg font-semibold text-depth">Post-interview review</h2><Badge tone={reviewStatus === 'APPROVED' ? 'success' : reviewStatus === 'FAILED' ? 'warning' : 'accent'}>{reviewStatus === 'TRANSCRIPT_REQUIRED' ? 'Transcript needed' : reviewStatus === 'TRANSCRIPT_DRAFT' ? 'Transcript in review' : reviewStatus === 'PREPARING' ? 'Analysis preparing' : reviewStatus === 'DRAFT_READY' ? 'Analysis ready' : reviewStatus === 'APPROVED' ? 'Analysis approved' : 'Preparation failed'}</Badge></div><p className="mb-0 mt-2 text-sm text-aura-text-secondary">Transcript and analysis are interviewer preparation records; they do not make a hiring decision.</p><Link className={`${backLinkClass} mt-4`} to={reviewStatus === 'TRANSCRIPT_REQUIRED' || reviewStatus === 'TRANSCRIPT_DRAFT' ? `/interviews/${interview.id}/transcript` : `/interviews/${interview.id}/analysis`}>{reviewStatus === 'TRANSCRIPT_REQUIRED' ? 'Add transcript' : reviewStatus === 'TRANSCRIPT_DRAFT' ? 'Review transcript' : reviewStatus === 'DRAFT_READY' ? 'Review analysis' : reviewStatus === 'APPROVED' ? 'View analysis' : 'View preparation'}</Link></Card> : null}</div> : null}
       {activeTab === 'final' ? finalEvaluation ? <Card className="p-5 md:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="m-0 text-lg font-semibold text-depth">Final evaluation</h2><p className="mb-0 mt-2 text-sm text-aura-text-secondary">Standardized evidence scoring from the approved interview record.</p></div><Badge tone={finalEvaluation.status === 'DECIDED' ? 'success' : finalEvaluation.status === 'DRAFT' ? 'warning' : 'accent'}>{finalEvaluation.status.replaceAll('_', ' ').toLocaleLowerCase()}</Badge></div><dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><dt className="text-xs text-aura-text-muted">System evidence score</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.weightedEvidenceScore === undefined ? 'Unavailable' : `${finalEvaluation.weightedEvidenceScore} / 100`}</dd></div><div><dt className="text-xs text-aura-text-muted">Assessed coverage</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.assessedWeightPercent}% · {finalEvaluation.overallConfidence.toLocaleLowerCase()} confidence</dd></div><div><dt className="text-xs text-aura-text-muted">Must-have gates</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.mustHavePassed} of {finalEvaluation.mustHaveTotal} passed</dd></div><div><dt className="text-xs text-aura-text-muted">System recommendation</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.systemRecommendation.replaceAll('_', ' ').toLocaleLowerCase()}</dd></div><div><dt className="text-xs text-aura-text-muted">Human final decision</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.humanDecision?.toLocaleLowerCase() ?? 'Not recorded'}</dd></div><div><dt className="text-xs text-aura-text-muted">Decision authority</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalEvaluation.decidedByRole?.replaceAll('_', ' ').toLocaleLowerCase() ?? 'Hiring manager'}</dd></div><div><dt className="text-xs text-aura-text-muted">Open challenges</dt><dd className="mb-0 mt-1 font-semibold text-depth">{finalChallenges.filter((item) => item.status === 'OPEN').length}</dd></div></dl><Link className={`${backLinkClass} mt-5`} to={`/candidates/${candidate.id}/final-evaluation`}>{finalEvaluation.status === 'DECIDED' ? 'View final decision' : finalEvaluation.status === 'READY_FOR_DECISION' ? 'Record final decision' : 'Review final evaluation'}</Link></Card> : <Placeholder title="Final evaluation" description="Approve the interview analysis to prepare standardized evidence scoring." /> : null}
+      {activeTab === 'interview' && interview ? <InterviewRecordSummary interview={interview} questionPlan={questionPlanStatus === 'APPROVED' ? 'Approved' : questionPlanStatus === 'DRAFT_READY' ? 'Review required' : questionPlanStatus === 'FAILED' ? 'Needs attention' : 'Preparing'} session={sessionStatus === 'PLAN_REQUIRED' ? 'Plan required' : sessionStatus === 'UNAVAILABLE' ? 'Not started' : sessionStatus.replaceAll('_', ' ').toLocaleLowerCase()} transcript={transcript?.status.toLocaleLowerCase() ?? 'Not started'} analysis={analysis?.status.replaceAll('_', ' ').toLocaleLowerCase() ?? 'Not started'} finalEvaluation={finalEvaluation?.status.replaceAll('_', ' ').toLocaleLowerCase() ?? 'Not started'} /> : null}
+      {activeTab === 'final' && finalEvaluation?.status === 'DECIDED' ? <div className="mt-4"><PostDecisionNextStep candidateId={candidate.id} /></div> : null}
     </PageContainer>
   )
 }

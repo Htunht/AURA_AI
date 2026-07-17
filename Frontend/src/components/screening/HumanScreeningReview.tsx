@@ -28,13 +28,15 @@ function workflowImpact(
     currentStage === 'INTERVIEW' ||
     currentStage === 'FINAL_REVIEW' ||
     currentStage === 'DECISION' ||
-    currentStage === 'COMMUNICATION'
+    currentStage === 'COMMUNICATION' ||
+    currentStage === 'SELECTED' ||
+    currentStage === 'REJECTED' ||
+    currentStage === 'HOLD'
   ) {
     return `The recruiter decision will be recorded. The current ${formatApplicationStage(currentStage).toLowerCase()} stage will be preserved.`
   }
-  if (recommendation === 'NO' || recommendation === 'STRONG_NO') return 'The application will move to decision review.'
-  if (recommendation === 'REVIEW') return 'The application will remain in recruiter review.'
-  return 'The application will move to shortlist review.'
+  if (recommendation === 'NO' || recommendation === 'STRONG_NO') return 'The application will move to final review.'
+  return 'The application will move to shortlisted.'
 }
 
 export function HumanScreeningReview({ candidateName, evaluation, decision, currentStage, onConfirm, onOverride }: HumanScreeningReviewProps) {

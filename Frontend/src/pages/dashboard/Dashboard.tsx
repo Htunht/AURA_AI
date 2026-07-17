@@ -20,6 +20,7 @@ import {
   selectPublishedApplicationFormByJobId,
   selectPostInterviewReviewSummary,
   selectFinalDecisionDashboardSummary,
+  selectPostDecisionDashboard,
   selectRecentApplications,
   selectUpcomingInterviews,
 } from '../../store/demoSelectors'
@@ -91,6 +92,7 @@ export default function Dashboard() {
   const upcomingInterviews = selectUpcomingInterviews(state, DASHBOARD_NOW)
   const postInterview = selectPostInterviewReviewSummary(state)
   const finalDecisions = selectFinalDecisionDashboardSummary(state)
+  const postDecision = selectPostDecisionDashboard(state, DASHBOARD_NOW)
   const metricCards = [
     { label: 'Active job openings', value: metrics.activeJobs, description: 'Roles currently accepting applications', icon: BriefcaseBusiness },
     { label: 'Total candidates', value: metrics.totalCandidates, description: 'Candidate profiles in the workspace', icon: Users },
@@ -146,6 +148,8 @@ export default function Dashboard() {
         {postInterview.attention[0] ? <Link className="mt-4 inline-flex text-sm font-semibold text-harbor" to={postInterview.attention[0].status === 'TRANSCRIPT_REQUIRED' || postInterview.attention[0].status === 'TRANSCRIPT_DRAFT' ? `/interviews/${postInterview.attention[0].interview.id}/transcript` : `/interviews/${postInterview.attention[0].interview.id}/analysis`}>Review next completed interview</Link> : null}
         <div className="mt-5 border-t border-harbor/10 pt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="m-0 text-[10px] font-bold uppercase tracking-wide text-marine">Final decisions</p><p className="mb-0 mt-1 text-sm text-aura-text-secondary">{finalDecisions.readyForDecision} ready · {finalDecisions.needsDataReview} data review · {finalDecisions.onHold} on hold · {finalDecisions.decisionsRecorded} recorded</p></div>{finalDecisions.attention[0] ? <Link className="text-sm font-semibold text-harbor" to={`/candidates/${finalDecisions.attention[0].candidateId}/final-evaluation`}>Review final evaluation</Link> : null}</div></div>
       </Card>
+
+      <Card className="mt-4 overflow-hidden p-0"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-harbor/10 bg-frost/60 px-5 py-4"><div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Post-decision work</p><h2 className="mb-0 mt-1 text-base font-semibold text-depth">Outcome preparation and hold reviews</h2></div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-aura-text-secondary"><span><strong className="text-depth">{postDecision.selectionMessagesToPrepare}</strong> selection</span><span><strong className="text-depth">{postDecision.rejectionMessagesToPrepare}</strong> rejection</span><span><strong className="text-depth">{postDecision.holdFollowUpsDue}</strong> hold due</span><span className={postDecision.overdueHoldReviews ? 'font-semibold text-aura-danger' : ''}><strong>{postDecision.overdueHoldReviews}</strong> overdue</span></div></div>{postDecision.items.length ? <div className="divide-y divide-harbor/10">{postDecision.items.slice(0, 5).map((item) => <article className="grid gap-2 px-5 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={item.evaluation.id}><div><Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${item.candidate.id}`}>{item.candidate.fullName}</Link><p className="mb-0 mt-1 text-xs text-aura-text-muted">{item.job.title} · {item.evaluation.humanDecision === 'HOLD' && item.holdFollowUp ? item.holdFollowUp.status === 'READY_FOR_REVIEW' ? 'Hold review ready' : `Follow-up ${formatDate(item.holdFollowUp.followUpAt)}` : item.actionLabel}</p></div><Link className={buttonLinkClass} to={item.evaluation.humanDecision === 'HOLD' ? `/candidates/${item.candidate.id}/final-evaluation` : `/candidates/${item.candidate.id}/outcome`}>{item.actionLabel}</Link></article>)}</div> : <p className="m-0 px-5 py-4 text-sm text-aura-text-secondary">No post-decision work requires attention.</p>}</Card>
 
       {/* Active job openings — delayed entry, interactive rows */}
       <div className="mt-4 overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm opacity-0 [animation:fade-in-up_0.5s_ease-out_450ms_forwards]">

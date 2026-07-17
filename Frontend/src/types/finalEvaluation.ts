@@ -47,6 +47,8 @@ export type FinalEvaluation = {
   generatedAt?: string
   generationError?: string
   supersededByEvaluationId?: string
+  reopenedFromEvaluationId?: string
+  reopenedBy?: string
   createdAt: string
   updatedAt: string
 }

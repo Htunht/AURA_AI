@@ -240,8 +240,8 @@ export function validateHumanReviewDomain(): HumanReviewValidationResult {
   )
   recordCheck(
     errors,
-    confirmedState.applications.find((item) => item.id === positiveDecision.applicationId)?.currentStage === 'SHORTLIST_REVIEW',
-    'Positive confirmation did not move to SHORTLIST_REVIEW',
+    confirmedState.applications.find((item) => item.id === positiveDecision.applicationId)?.currentStage === 'SHORTLISTED',
+    'Positive confirmation did not move to SHORTLISTED',
   )
   recordCheck(
     errors,
@@ -261,8 +261,8 @@ export function validateHumanReviewDomain(): HumanReviewValidationResult {
   )
   recordCheck(
     errors,
-    reviewConfirmedState.applications.find((item) => item.id === reviewEvaluation.applicationId)?.currentStage === 'SHORTLIST_REVIEW',
-    'REVIEW confirmation did not move to SHORTLIST_REVIEW',
+    reviewConfirmedState.applications.find((item) => item.id === reviewEvaluation.applicationId)?.currentStage === 'SHORTLISTED',
+    'REVIEW confirmation did not move to SHORTLISTED',
   )
 
   const negativeEvaluation = state.evaluations.find(
@@ -274,8 +274,8 @@ export function validateHumanReviewDomain(): HumanReviewValidationResult {
   )
   recordCheck(
     errors,
-    negativeConfirmedState.applications.find((item) => item.id === negativeEvaluation.applicationId)?.currentStage === 'DECISION',
-    'Negative confirmation did not move to DECISION',
+    negativeConfirmedState.applications.find((item) => item.id === negativeEvaluation.applicationId)?.currentStage === 'FINAL_REVIEW',
+    'Negative confirmation did not move to FINAL_REVIEW',
   )
 
   const noEvaluation = state.evaluations.find(
@@ -295,8 +295,8 @@ export function validateHumanReviewDomain(): HumanReviewValidationResult {
   recordCheck(errors, storedOverride?.overrideReason === overrideReason, 'Override reason was not stored')
   recordCheck(
     errors,
-    positiveOverrideState.applications.find((item) => item.id === noEvaluation.applicationId)?.currentStage === 'SHORTLIST_REVIEW',
-    'Positive override did not move to SHORTLIST_REVIEW',
+    positiveOverrideState.applications.find((item) => item.id === noEvaluation.applicationId)?.currentStage === 'SHORTLISTED',
+    'Positive override did not move to SHORTLISTED',
   )
 
   const yesEvaluation = state.evaluations.find(
@@ -308,8 +308,8 @@ export function validateHumanReviewDomain(): HumanReviewValidationResult {
   )
   recordCheck(
     errors,
-    negativeOverrideState.applications.find((item) => item.id === yesEvaluation.applicationId)?.currentStage === 'DECISION',
-    'Negative override did not move to DECISION',
+    negativeOverrideState.applications.find((item) => item.id === yesEvaluation.applicationId)?.currentStage === 'FINAL_REVIEW',
+    'Negative override did not move to FINAL_REVIEW',
   )
 
   const sameRecommendationState = demoReducer(state, {

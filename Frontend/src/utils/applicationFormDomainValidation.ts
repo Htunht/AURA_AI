@@ -186,8 +186,8 @@ export function validateApplicationFormDomain(): ApplicationFormDomainValidation
   )
   recordCheck(
     errors,
-    prepared.application.currentStage === 'APPLICATION',
-    'Prepared application stage is not APPLICATION',
+    prepared.application.currentStage === 'APPLIED',
+    'Prepared application stage is not APPLIED',
   )
   recordCheck(
     errors,

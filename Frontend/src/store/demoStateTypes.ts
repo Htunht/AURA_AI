@@ -17,6 +17,7 @@ import type { Job } from '../types/job'
 import type { EvaluationRubric } from '../types/rubric'
 import type { ScreeningQueueItem } from '../types/screeningQueue'
 import type { Transcript } from '../types/transcript'
+import type { CandidateCommunicationDraft, HoldFollowUp } from '../types/postDecision'
 
 export type DemoState = {
   jobs: Job[]
@@ -36,6 +37,8 @@ export type DemoState = {
   interviewSchedulingInvitations: InterviewSchedulingInvitation[]
   transcripts: Transcript[]
   communications: Communication[]
+  candidateCommunicationDrafts: CandidateCommunicationDraft[]
+  holdFollowUps: HoldFollowUp[]
   decisions: Decision[]
   screeningQueue: ScreeningQueueItem[]
 }
