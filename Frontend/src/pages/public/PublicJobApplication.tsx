@@ -5,7 +5,7 @@ import logo from '../../assets/logo.png'
 import { DynamicFormField } from '../../components/forms/DynamicFormField'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
-import { backendWorkspaceMode, demoWorkspaceMode } from '../../config/workspaceMode'
+import { backendWorkspaceMode } from '../../config/workspaceMode'
 import { useDemoStore } from '../../hooks/useDemoStore'
 import { API_BASE_URL } from '../../services/api'
 import { getPublicBackendApplicationForm } from '../../services/backendRecruiterApi'
@@ -18,11 +18,9 @@ import { isBackendUuid, isDemoId } from '../../utils/backendIds'
 import { canAcceptPublicApplications } from '../../utils/jobValidation'
 import { normalizeUrlFieldValue } from '../../utils/urlFieldValidation'
 
-const DEMO_TIMESTAMP = '2026-07-16T10:30:00Z'
-
 export default function PublicJobApplication() {
   const { jobId = '' } = useParams()
-  if (backendWorkspaceMode) return <BackendPublicJobApplication jobId={jobId} />
+  if (backendWorkspaceMode && !isDemoId(jobId)) return <BackendPublicJobApplication jobId={jobId} />
   return <DemoPublicJobApplication jobId={jobId} />
 }
 
@@ -151,7 +149,7 @@ function DemoPublicJobApplication({ jobId }: { jobId: string }) {
     }
     setValues(normalizedValues)
 
-    if (!demoWorkspaceMode) {
+    if (backendWorkspaceMode && isBackendUuid(job.id)) {
       setIsSubmitting(true)
       setErrors([])
       try {
@@ -219,7 +217,7 @@ function DemoPublicJobApplication({ jobId }: { jobId: string }) {
         candidateId: `candidate-demo-${sequence}`,
         applicationId: `application-demo-${sequence}`,
         documentId: `document-demo-${sequence}-cv`,
-        submittedAt: DEMO_TIMESTAMP,
+        submittedAt: new Date().toISOString(),
       })
 
       dispatch({

@@ -185,6 +185,280 @@ def test_public_backend_application_form_uses_backend_job_and_url_field(client: 
     assert fields["cv"]["type"] == "FILE"
 
 
+def _backend_job_payload(weight: int = 100) -> dict:
+    return {
+        "title": "Backend API Engineer",
+        "department": "Engineering",
+        "description": "Own reliable API delivery, database-backed services, and production quality controls.",
+        "status": "DRAFT",
+        "position_count": 2,
+        "employment_type": "FULL_TIME",
+        "work_arrangement": "REMOTE",
+        "location": "Remote",
+        "minimum_experience_years": 2,
+        "application_deadline": "2026-08-30",
+        "is_accepting_applications": False,
+        "cv_required": False,
+        "github_repository_required": False,
+        "requirements": [
+            {"code": "minimum_experience", "title": "Minimum 2 years experience", "description": "At least 2 years.", "priority": "MUST_HAVE"},
+            {"code": "api_design", "title": "API design", "description": "REST API evidence.", "priority": "MUST_HAVE"},
+        ],
+        "application_fields": [
+            {"field_key": "full_name", "label": "Full name", "field_type": "TEXT", "required": True, "display_order": 0, "options": [], "linked_requirement_codes": [], "evaluation_categories": []},
+            {"field_key": "email", "label": "Email", "field_type": "EMAIL", "required": True, "display_order": 1, "options": [], "linked_requirement_codes": [], "evaluation_categories": []},
+            {"field_key": "github_repository_url", "label": "GitHub Repository URL", "field_type": "URL", "required": False, "display_order": 2, "options": [], "linked_requirement_codes": [], "evaluation_categories": []},
+            {"field_key": "cv", "label": "CV", "field_type": "FILE", "required": False, "display_order": 3, "options": [], "linked_requirement_codes": [], "evaluation_categories": []},
+            {"field_key": "api_design_evidence", "label": "Describe API design work", "field_type": "TEXTAREA", "required": True, "display_order": 4, "options": [], "linked_requirement_codes": ["api_design"], "evaluation_categories": ["required_qualifications"]},
+        ],
+        "screening_rubric": {
+            "version": 1,
+            "status": "DRAFT",
+            "minimum_assessed_coverage": 70,
+            "advance_threshold": 70,
+            "criteria": [
+                {"criterion_key": "required_qualifications", "title": "Required qualifications", "description": "Assess must-have evidence.", "weight": weight, "must_have": True, "minimum_rating": 3, "linked_requirement_codes": ["api_design"]},
+            ],
+        },
+    }
+
+
+def test_recruiter_job_create_publish_and_public_form_flow(client: TestClient) -> None:
+    token = _admin_token(client)
+    response = client.post(
+        "/api/v1/recruiter/jobs",
+        headers={"Authorization": f"Bearer {token}"},
+        json=_backend_job_payload(),
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    job_id = body["id"]
+    assert uuid.UUID(job_id)
+    assert not job_id.startswith("job-")
+    assert body["requirements"]
+    assert body["application_fields"]
+    assert body["screening_rubric"]["criteria"]
+    assert body["position_count"] == 2
+    assert body["employment_type"] == "FULL_TIME"
+    assert body["work_arrangement"] == "REMOTE"
+    assert body["location"] == "Remote"
+    assert body["minimum_experience_years"] == 2
+    assert body["application_deadline"] == "2026-08-30"
+
+    draft_public = client.get(f"/api/v1/public/jobs/{job_id}/application-form")
+    assert draft_public.status_code == 400
+
+    publish = client.post(
+        f"/api/v1/recruiter/jobs/{job_id}/publish",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"is_accepting_applications": True},
+    )
+    assert publish.status_code == 200
+    assert publish.json()["status"] == "PUBLISHED"
+
+    public = client.get(f"/api/v1/public/jobs/{job_id}/application-form")
+    assert public.status_code == 200
+    fields = {field["key"]: field for field in public.json()["fields"]}
+    assert fields["github_repository_url"]["type"] == "URL"
+    assert fields["cv"]["type"] == "FILE"
+
+    close = client.post(f"/api/v1/recruiter/jobs/{job_id}/close", headers={"Authorization": f"Bearer {token}"})
+    assert close.status_code == 200
+    assert client.get(f"/api/v1/public/jobs/{job_id}/application-form").status_code == 400
+
+
+def test_recruiter_job_setup_steps_match_frontend_hiring_flow(client: TestClient) -> None:
+    token = _admin_token(client)
+    create = client.post(
+        "/api/v1/recruiter/jobs",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "title": "Draft role",
+            "department": "Engineering",
+            "description": "Initial role outline.",
+            "status": "DRAFT",
+            "requirements": [],
+            "application_fields": [],
+            "screening_rubric": None,
+        },
+    )
+    assert create.status_code == 201
+    job_id = create.json()["id"]
+
+    requirements = client.put(
+        f"/api/v1/recruiter/jobs/{job_id}/requirements",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "title": "Backend Platform Engineer",
+            "department": "Platform",
+            "description": "Build internal APIs, database-backed services, and production operations.",
+            "position_count": 3,
+            "employment_type": "CONTRACT",
+            "work_arrangement": "HYBRID",
+            "location": "Yangon",
+            "minimum_experience_years": 3,
+            "application_deadline": "2026-09-15",
+            "requirements": [
+                {
+                    "code": "api_design",
+                    "title": "API design",
+                    "description": "Can design maintainable service APIs.",
+                    "priority": "MUST_HAVE",
+                },
+                {
+                    "code": "database_models",
+                    "title": "Database modeling",
+                    "description": "Can model relational data safely.",
+                    "priority": "IMPORTANT",
+                },
+            ],
+        },
+    )
+    assert requirements.status_code == 200
+    assert requirements.json()["title"] == "Backend Platform Engineer"
+    assert requirements.json()["position_count"] == 3
+    assert requirements.json()["location"] == "Yangon"
+    assert [item["code"] for item in requirements.json()["requirements"]] == ["api_design", "database_models"]
+
+    form = client.put(
+        f"/api/v1/recruiter/jobs/{job_id}/application-form",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "cv_required": True,
+            "github_repository_required": True,
+            "application_fields": [
+                {
+                    "field_key": "full_name",
+                    "label": "Full name",
+                    "field_type": "TEXT",
+                    "required": True,
+                    "display_order": 0,
+                },
+                {
+                    "field_key": "email",
+                    "label": "Email",
+                    "field_type": "EMAIL",
+                    "required": True,
+                    "display_order": 1,
+                },
+                {
+                    "field_key": "github_repository_url",
+                    "label": "GitHub Repository URL",
+                    "field_type": "URL",
+                    "placeholder": "https://github.com/username/repository",
+                    "help_text": "Enter a public GitHub repository URL containing work relevant to this role.",
+                    "required": True,
+                    "display_order": 2,
+                    "linked_requirement_codes": ["api_design"],
+                    "evaluation_categories": ["required_qualifications"],
+                },
+                {
+                    "field_key": "cv",
+                    "label": "CV",
+                    "field_type": "FILE",
+                    "required": True,
+                    "display_order": 3,
+                },
+            ],
+        },
+    )
+    assert form.status_code == 200
+    fields = {field["field_key"]: field for field in form.json()["application_fields"]}
+    assert fields["github_repository_url"]["field_type"] == "URL"
+    assert fields["cv"]["field_type"] == "FILE"
+
+    rules = client.put(
+        f"/api/v1/recruiter/jobs/{job_id}/screening-rules",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "screening_rubric": {
+                "version": 1,
+                "status": "DRAFT",
+                "minimum_assessed_coverage": 70,
+                "advance_threshold": 70,
+                "criteria": [
+                    {
+                        "criterion_key": "required_qualifications",
+                        "title": "Required qualifications",
+                        "description": "Assess the must-have backend requirements.",
+                        "weight": 100,
+                        "must_have": True,
+                        "minimum_rating": 3,
+                        "linked_requirement_codes": ["api_design", "database_models"],
+                    }
+                ],
+            }
+        },
+    )
+    assert rules.status_code == 200
+    assert rules.json()["screening_rubric"]["criteria"][0]["weight"] == 100
+
+    publish = client.post(
+        f"/api/v1/recruiter/jobs/{job_id}/publish",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"is_accepting_applications": True},
+    )
+    assert publish.status_code == 200
+    assert publish.json()["status"] == "PUBLISHED"
+
+
+def test_recruiter_job_publish_requires_weight_total_100(client: TestClient) -> None:
+    token = _admin_token(client)
+    response = client.post(
+        "/api/v1/recruiter/jobs",
+        headers={"Authorization": f"Bearer {token}"},
+        json=_backend_job_payload(weight=90),
+    )
+    assert response.status_code == 201
+    publish = client.post(
+        f"/api/v1/recruiter/jobs/{response.json()['id']}/publish",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"is_accepting_applications": True},
+    )
+    assert publish.status_code == 400
+    assert "weights must total 100" in publish.json()["detail"]
+
+
+def test_recruiter_job_update_preserves_rubric_used_by_screening_run(client: TestClient) -> None:
+    token = _admin_token(client)
+    create = client.post(
+        "/api/v1/recruiter/jobs",
+        headers={"Authorization": f"Bearer {token}"},
+        json=_backend_job_payload(),
+    )
+    assert create.status_code == 201
+    job_id = create.json()["id"]
+    publish = client.post(
+        f"/api/v1/recruiter/jobs/{job_id}/publish",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"is_accepting_applications": True},
+    )
+    assert publish.status_code == 200
+
+    submit = _submit_application(client, job_id, f"screening-{uuid.uuid4()}")
+    assert submit.status_code == 202
+
+    updated_payload = _backend_job_payload()
+    updated_payload["description"] = "Updated job setup while preserving previous screening audit records."
+    updated_payload["screening_rubric"]["criteria"][0]["title"] = "Updated required qualifications"
+    update = client.put(
+        f"/api/v1/recruiter/jobs/{job_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json=updated_payload,
+    )
+
+    assert update.status_code == 200
+    assert update.json()["screening_rubric"]["version"] == 2
+    with SessionLocal() as db:
+        rubrics = db.scalars(select(ScreeningRubric).where(ScreeningRubric.job_id == uuid.UUID(job_id))).all()
+        run_count = db.scalar(
+            select(func.count()).select_from(ScreeningRun).where(ScreeningRun.rubric_id.in_([rubric.id for rubric in rubrics]))
+        )
+    assert len(rubrics) == 2
+    assert run_count == 1
+
+
 def test_override_review_requires_reason(client: TestClient) -> None:
     job_id = client.post("/api/v1/demo/seed-ai-screening").json()["job_id"]
     submit_response = _submit_application(client, job_id, f"screening-{uuid.uuid4()}")

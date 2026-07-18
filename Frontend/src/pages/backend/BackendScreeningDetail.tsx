@@ -1,6 +1,6 @@
 import { ArrowLeft, RefreshCw, RotateCcw } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PageContainer } from '../../components/layout/PageContainer'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -42,6 +42,7 @@ function sourceTone(source: string) {
 
 export default function BackendScreeningDetail({ applicationId }: { applicationId: string }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [detail, setDetail] = useState<RecruiterScreeningDetail>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -53,6 +54,8 @@ export default function BackendScreeningDetail({ applicationId }: { applicationI
 
   const invalidBackendId = isDemoId(applicationId) || !isBackendUuid(applicationId)
   const selectedAction = actions.find((item) => item.value === reviewAction)
+  const requestedPanel = searchParams.get('panel')
+  const humanReviewPanelRef = useRef<HTMLElement | null>(null)
 
   async function load() {
     if (invalidBackendId) return
@@ -80,6 +83,14 @@ export default function BackendScreeningDetail({ applicationId }: { applicationI
     const interval = window.setInterval(() => void load(), 3000)
     return () => window.clearInterval(interval)
   }, [detail?.screening_status, applicationId])
+
+  useEffect(() => {
+    if (requestedPanel !== 'human-review' || !detail || detail.screening_status !== 'COMPLETED') return
+    window.setTimeout(() => {
+      humanReviewPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      humanReviewPanelRef.current?.focus({ preventScroll: true })
+    }, 0)
+  }, [detail, requestedPanel])
 
   const referencesByCriterion = useMemo(() => {
     const map = new Map<string, RecruiterScreeningDetail['evidence_references']>()
@@ -210,7 +221,13 @@ export default function BackendScreeningDetail({ applicationId }: { applicationI
                 </Card>
                 {[...detail.data_quality_warnings, ...((detail.github_analysis?.warnings as string[] | undefined) ?? [])].length ? <Card className="p-5"><h2 className="m-0 text-base font-semibold text-depth">Warnings</h2><ul className="mb-0 mt-3 grid gap-2 pl-5 text-sm text-aura-text-secondary">{[...detail.data_quality_warnings, ...((detail.github_analysis?.warnings as string[] | undefined) ?? [])].map((warning) => <li key={warning}>{warning}</li>)}</ul></Card> : null}
                 {detail.screening_status === 'COMPLETED' ? (
-                  <Card className="p-5">
+                  <section
+                    ref={humanReviewPanelRef}
+                    tabIndex={-1}
+                    className="rounded-aura-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier"
+                    aria-label="Human screening review"
+                  >
+                  <Card className={`p-5 ${requestedPanel === 'human-review' ? 'border-marine/35 shadow-[0_0_0_3px_rgba(114,163,191,0.18)]' : ''}`}>
                     <h2 className="m-0 text-base font-semibold text-depth">Human review</h2>
                     <form className="mt-4 grid gap-3" onSubmit={submitReview}>
                       <label className="grid gap-1.5 text-sm font-semibold text-depth">Decision<select className="h-10 rounded-aura-sm border border-harbor/20 px-3 text-sm" value={reviewAction} onChange={(event) => setReviewAction(event.target.value as HumanScreeningReviewPayload['action'])}>{actions.map((action) => <option key={action.value} value={action.value}>{action.label}</option>)}</select></label>
@@ -221,6 +238,7 @@ export default function BackendScreeningDetail({ applicationId }: { applicationI
                     </form>
                     {detail.human_reviews.length ? <div className="mt-4 border-t border-harbor/10 pt-3"><p className="m-0 text-xs font-bold uppercase tracking-wide text-aura-text-muted">History</p>{detail.human_reviews.map((review) => <p className="mb-0 mt-2 text-sm text-aura-text-secondary" key={review.id}>{label(review.action)} · {formatDateTime(review.created_at)}</p>)}</div> : null}
                   </Card>
+                  </section>
                 ) : null}
               </aside>
             </div>
@@ -230,4 +248,3 @@ export default function BackendScreeningDetail({ applicationId }: { applicationI
     </PageContainer>
   )
 }
-

@@ -19,7 +19,11 @@ def get_latest_public_application_form(
     job = db.scalar(
         select(Job)
         .where(Job.status == "PUBLISHED", Job.is_accepting_applications.is_(True))
-        .options(selectinload(Job.requirements), selectinload(Job.rubrics).selectinload(ScreeningRubric.criteria))
+        .options(
+            selectinload(Job.requirements),
+            selectinload(Job.application_fields),
+            selectinload(Job.rubrics).selectinload(ScreeningRubric.criteria),
+        )
         .order_by(Job.created_at.desc())
     )
     if job is None:
@@ -29,13 +33,21 @@ def get_latest_public_application_form(
 
 @router.get("/{job_id}/application-form", response_model=PublicJobApplicationForm)
 def get_public_application_form(
-    job_id: uuid.UUID,
+    job_id: str,
     db: Annotated[Session, Depends(get_db)],
 ) -> PublicJobApplicationForm:
+    try:
+        parsed_job_id = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Published backend job was not found.") from None
     job = db.scalar(
         select(Job)
-        .where(Job.id == job_id)
-        .options(selectinload(Job.requirements), selectinload(Job.rubrics).selectinload(ScreeningRubric.criteria))
+        .where(Job.id == parsed_job_id)
+        .options(
+            selectinload(Job.requirements),
+            selectinload(Job.application_fields),
+            selectinload(Job.rubrics).selectinload(ScreeningRubric.criteria),
+        )
     )
     if job is None:
         raise HTTPException(status_code=404, detail="Published backend job was not found.")
@@ -45,6 +57,31 @@ def get_public_application_form(
 
 
 def _public_form(job: Job) -> PublicJobApplicationForm:
+    if job.application_fields:
+        fields = [
+            PublicApplicationFormField(
+                id=str(field.id),
+                key=field.field_key,
+                label=field.label,
+                type=field.field_type,
+                required=field.required,
+                placeholder=field.placeholder,
+                helpText=field.help_text,
+                options=field.options,
+                linkedRequirementCodes=field.linked_requirement_codes,
+            )
+            for field in sorted(job.application_fields, key=lambda item: item.display_order)
+        ]
+        return PublicJobApplicationForm(
+            job_id=job.id,
+            title=job.title,
+            department=job.department,
+            description=job.description,
+            cv_required=job.cv_required,
+            github_repository_required=job.github_repository_required,
+            fields=fields,
+        )
+
     fields: list[PublicApplicationFormField] = [
         PublicApplicationFormField(id="field-full-name", key="full_name", label="Full Name", type="TEXT", required=True, placeholder="Your full name"),
         PublicApplicationFormField(id="field-email", key="email", label="Email", type="EMAIL", required=True, placeholder="you@example.com"),

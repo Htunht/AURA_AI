@@ -9,7 +9,6 @@ import {
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { PageContainer } from '../../components/layout/PageContainer'
-import { ScreeningAutomationStatus } from '../../components/screening/ScreeningAutomationStatus'
 import { Badge } from '../../components/ui/Badge'
 import { Card } from '../../components/ui/Card'
 import { useDemoStore } from '../../hooks/useDemoStore'
@@ -237,26 +236,13 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Screening automation panel — delayed entry */}
-      <div className="mt-4 opacity-0 [animation:fade-in-up_0.5s_ease-out_300ms_forwards]">
-        <ScreeningAutomationStatus pendingRecruiterReviews={metrics.pendingRecruiterReviews} />
-      </div>
-
-      {/* Submissions + Schedule — delayed entry */}
-      <div className="mt-4 space-y-4 opacity-0 [animation:fade-in-up_0.5s_ease-out_350ms_forwards]">
-        {/* Recent applications (Row 1 - full width) */}
-        <div className="overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm bg-white">
-          <div className="bg-depth px-5 py-4 md:px-6">
-            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-glacier">Submissions</p>
-            <h2 className="mb-0 mt-2 text-lg font-semibold text-white">Recent applications</h2>
-          </div>
-          {/* Column headers */}
-          <div className="hidden border-b border-harbor/10 bg-frost/60 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-aura-text-muted md:grid md:grid-cols-3 md:px-6">
-            <span>Candidate</span>
-            <span className="text-center">Applied role</span>
-            <span className="text-right">Review status</span>
-          </div>
-          <div className="divide-y divide-harbor/10 bg-white">
+      <div className="mt-4 grid gap-4">
+        <section className="overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-sm">
+          <header className="flex items-center justify-between border-b border-harbor/10 px-5 py-3 md:px-6">
+            <h2 className="m-0 text-lg font-semibold text-depth">Recent applications</h2>
+            <Badge>{recentApplications.length}</Badge>
+          </header>
+          <div className="divide-y divide-harbor/10">
             {recentApplications.map(({ candidate, application, job, screeningEvaluation, decision }) => {
               const recommendation = decision?.humanRecommendation ?? screeningEvaluation?.recommendation
               const label = decision
@@ -268,87 +254,49 @@ export default function Dashboard() {
                 ? `Recruiter ${decision.reviewAction === 'CONFIRM' ? 'confirmed' : 'overrode'}`
                 : formatApplicationStage(application.currentStage)
               return (
-                <article
-                  className="grid items-center gap-2 px-5 py-4 transition-colors duration-200 hover:bg-[#f8fafa] md:grid-cols-3 md:px-6"
-                  key={application.id}
-                >
+                <article className="grid items-center gap-2 px-5 py-3 transition-colors hover:bg-frost/45 md:grid-cols-[1fr_1fr_auto] md:px-6" key={application.id}>
                   <div className="min-w-0">
-                    <Link className="text-sm font-semibold text-depth no-underline hover:text-marine transition-colors duration-150" to={`/candidates/${candidate.id}`}>
-                      {candidate.fullName}
-                    </Link>
+                    <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
                     <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{candidate.currentPosition}</p>
                   </div>
-                  <div className="min-w-0 md:text-center">
-                    <Link className="text-sm font-medium text-harbor no-underline hover:text-depth transition-colors duration-150" to={`/jobs/${job.id}`}>
-                      {job.title}
-                    </Link>
+                  <div className="min-w-0">
+                    <Link className="text-sm font-medium text-harbor no-underline hover:text-depth" to={`/jobs/${job.id}`}>{job.title}</Link>
                     <p className="mb-0 mt-0.5 text-xs text-aura-text-muted">{formatDate(application.submittedAt)} · {subtitle}</p>
                   </div>
-                  <div className="md:text-right">
-                    <Badge tone={recommendationTone(recommendation)}>{label}</Badge>
-                  </div>
+                  <Badge tone={recommendationTone(recommendation)}>{label}</Badge>
                 </article>
               )
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Row 2: Upcoming interviews and Calendar side-by-side */}
-        <div className="grid gap-4 lg:grid-cols-5 items-start">
-          {/* Upcoming interviews */}
-          <div className="lg:col-span-3 overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm bg-white">
-            <div className="bg-depth px-5 py-4 md:px-6">
-              <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-glacier">Schedule</p>
-              <h2 className="mb-0 mt-2 text-lg font-semibold text-white">Upcoming interviews</h2>
-            </div>
-            <div className="bg-white">
-              {upcomingInterviews.length === 0 ? (
-                <div className="p-5 md:p-6">
-                  <div className="rounded-aura-sm border border-dashed border-harbor/20 bg-frost/50 p-5 text-center text-sm text-aura-text-secondary">
-                    No upcoming interviews are currently scheduled.
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Column headers */}
-                  <div className="hidden border-b border-harbor/10 bg-frost/60 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-aura-text-muted md:grid md:grid-cols-3 md:px-6">
-                    <span>Candidate</span>
-                    <span className="text-center">Date &amp; time</span>
-                    <span className="text-right">Status</span>
-                  </div>
-                  <div className="divide-y divide-harbor/10">
-                    {upcomingInterviews.map(({ interview, candidate, job }) => (
-                      <article
-                        className="grid items-center gap-2 px-5 py-4 transition-colors duration-200 hover:bg-[#f8fafa] md:grid-cols-3 md:px-6"
-                        key={interview.id}
-                      >
-                        <div className="min-w-0">
-                          <Link className="text-sm font-semibold text-depth no-underline hover:text-marine transition-colors duration-150" to={`/candidates/${candidate.id}`}>
-                            {candidate.fullName}
-                          </Link>
-                          <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{job.title}</p>
-                        </div>
-                        <div className="min-w-0 md:text-center">
-                          <p className="m-0 text-sm font-semibold text-harbor">
-                            {formatDate(interview.scheduledStart)} · {formatTime(interview.scheduledStart)}
-                          </p>
-                          <p className="mb-0 mt-0.5 text-xs text-slate-500">
-                            With {interview.interviewers.map((person) => person.name).join(', ')}
-                          </p>
-                        </div>
-                        <div className="md:text-right">
-                          <Badge tone="accent">{interview.status}</Badge>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+        <div className="grid items-start gap-4 lg:grid-cols-5">
+          <section className="overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-sm lg:col-span-3">
+            <header className="flex items-center justify-between border-b border-harbor/10 px-5 py-3 md:px-6">
+              <h2 className="m-0 text-lg font-semibold text-depth">Upcoming events</h2>
+              <Badge tone="accent">{upcomingInterviews.length}</Badge>
+            </header>
+            {upcomingInterviews.length === 0 ? (
+              <p className="m-0 px-5 py-5 text-sm text-aura-text-muted">No upcoming interviews.</p>
+            ) : (
+              <div className="divide-y divide-harbor/10">
+                {upcomingInterviews.map(({ interview, candidate, job }) => (
+                  <article className="grid items-center gap-2 px-5 py-3 transition-colors hover:bg-frost/45 md:grid-cols-[1fr_1fr_auto] md:px-6" key={interview.id}>
+                    <div className="min-w-0">
+                      <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
+                      <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{job.title}</p>
+                    </div>
+                    <div className="min-w-0 text-sm font-semibold text-harbor">
+                      {formatDate(interview.scheduledStart)} · {formatTime(interview.scheduledStart)}
+                    </div>
+                    <Badge tone="accent">{interview.status}</Badge>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
 
-          {/* Calendar Widget */}
-          <div className="lg:col-span-2 h-full">
+          <div className="lg:col-span-2">
             <DashboardCalendar upcomingInterviews={upcomingInterviews} />
           </div>
         </div>

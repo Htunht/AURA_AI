@@ -4,6 +4,7 @@ import type {
   RecruiterScreeningDetail,
   RecruiterScreeningListItem,
 } from '../types/backendScreening'
+import type { BackendInterviewCalendarResponse } from '../types/interviewCalendar'
 import { apiRequest, setBackendAccessToken } from './api'
 
 export async function login(email: string, password: string) {
@@ -58,3 +59,18 @@ export function getLatestPublicBackendApplicationForm() {
   return apiRequest<PublicBackendApplicationForm>('/public/jobs/latest/application-form')
 }
 
+export function getInterviewCalendar(params: {
+  start: string
+  end: string
+  job_id?: string
+  status?: string
+  interviewer_id?: string
+  interview_type?: string
+}) {
+  const query = new URLSearchParams({ start: params.start, end: params.end })
+  if (params.job_id) query.set('job_id', params.job_id)
+  if (params.status) query.set('status', params.status)
+  if (params.interviewer_id) query.set('interviewer_id', params.interviewer_id)
+  if (params.interview_type) query.set('interview_type', params.interview_type)
+  return apiRequest<BackendInterviewCalendarResponse>(`/recruiter/interviews/calendar?${query}`)
+}

@@ -19,6 +19,7 @@ import type { Job } from '../types/job'
 import type { EvaluationRubric } from '../types/rubric'
 import type { Transcript } from '../types/transcript'
 import { validateDemoData } from '../utils/demoDataValidation'
+import { validateInterviewCalendarDomain } from '../utils/interviewCalendarValidation'
 import { normalizeApplicationStage } from '../utils/applicationStage'
 import type { DemoState } from './demoStateTypes'
 
@@ -34,9 +35,14 @@ const transcripts = transcriptsData as Transcript[]
 const communications = communicationsData as Communication[]
 
 const validationResult = validateDemoData()
+const calendarValidationResult = validateInterviewCalendarDomain()
 
 if (!validationResult.valid) {
   console.error('Invalid AURA AI demo data:', validationResult.errors)
+}
+
+if (!calendarValidationResult.valid) {
+  console.error('Invalid AURA AI calendar domain:', calendarValidationResult.errors)
 }
 
 export function createInitialDemoState(): DemoState {

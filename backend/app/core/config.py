@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     cv_max_extracted_characters: int = 50000
 
     screening_status_poll_interval_ms: int = 3000
+    recruiter_timezone: str = "Asia/Yangon"
 
     model_config = SettingsConfigDict(
         env_file=".env",

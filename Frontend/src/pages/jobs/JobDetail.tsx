@@ -1,4 +1,4 @@
-import { Archive, CheckCircle2, Circle, ExternalLink, FilePenLine, Pencil, Scale, Trash2, Users, XCircle } from 'lucide-react'
+import { Archive, CheckCircle2, Circle, ExternalLink, FilePenLine, Pencil, Scale, Share2, Trash2, Users, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DeleteJobDialog } from '../../components/jobs/DeleteJobDialog'
@@ -13,6 +13,8 @@ import { getHiringWorkflowPrimaryAction } from '../../utils/hiringWorkflowSetup'
 import type { JobStatus } from '../../types/job'
 import { canDeleteJob, canOpenJob } from '../../utils/jobValidation'
 import { SchedulingPolicySource } from '../../components/interviews/SchedulingPolicySource'
+import { ShareJobDialog } from '../../components/jobs/ShareJobDialog'
+import { buildPublicApplicationUrl } from '../../utils/jobSharing'
 
 type DialogAction = 'OPEN' | 'CLOSE' | 'REOPEN' | 'ARCHIVE' | 'RESTORE'
 
@@ -36,6 +38,7 @@ export default function JobDetail() {
   const navigate = useNavigate()
   const [dialogAction, setDialogAction] = useState<DialogAction>()
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const job = selectJobById(state, jobId)
   if (!job) return <PageContainer title="Job not found"><Card className="p-8 text-center text-sm text-aura-text-secondary">The requested job opening does not exist.</Card></PageContainer>
 
@@ -54,6 +57,7 @@ export default function JobDetail() {
   const lifecycleAction: DialogAction = job.status === 'DRAFT' ? 'OPEN' : job.status === 'OPEN' ? 'CLOSE' : job.status === 'CLOSED' ? 'REOPEN' : 'RESTORE'
   const openingReadiness = canOpenJob(state, job.id, new Date().toISOString())
   const openingBlocked = (job.status === 'DRAFT' || job.status === 'CLOSED') && !openingReadiness.ready
+  const applicationUrl = buildPublicApplicationUrl(job.id, window.location.origin)
 
   function changeStatus(status: JobStatus) {
     dispatch({ type: 'CHANGE_JOB_STATUS', payload: { jobId: job!.id, status, changedAt: new Date().toISOString() } })
@@ -64,7 +68,7 @@ export default function JobDetail() {
     navigate('/jobs')
   }
 
-  return <PageContainer title={job.title} description={`${job.department} · ${job.positionsCount} position${job.positionsCount === 1 ? '' : 's'} · ${formatEnum(job.employmentType)}`} actions={<>{workflowProgress.status !== 'PUBLISHED' ? <Link className={primaryLinkClass} to={`/jobs/${job.id}/setup?step=${workflowAction.step}`}>{workflowAction.label}</Link> : null}<Link className={linkClass} to={`/jobs/${job.id}/edit`}><Pencil size={16} />Edit job</Link>{job.status === 'OPEN' && workflowProgress.status === 'PUBLISHED' ? <Link className={linkClass} to={`/apply/${job.id}`}><ExternalLink size={16} />Public application</Link> : null}<Link className={workflowProgress.status === 'PUBLISHED' ? primaryLinkClass : linkClass} to={`/jobs/${job.id}/candidates`}><Users size={16} />{counts.applications ? 'View candidates' : 'Candidates'}</Link></>}>
+  return <PageContainer title={job.title} description={`${job.department} · ${job.positionsCount} position${job.positionsCount === 1 ? '' : 's'} · ${formatEnum(job.employmentType)}`} actions={<>{workflowProgress.status !== 'PUBLISHED' ? <Link className={primaryLinkClass} to={`/jobs/${job.id}/setup?step=${workflowAction.step}`}>{workflowAction.label}</Link> : null}<Link className={linkClass} to={`/jobs/${job.id}/edit`}><Pencil size={16} />Edit job</Link>{job.status === 'OPEN' && workflowProgress.status === 'PUBLISHED' ? <><button className={linkClass} type="button" onClick={() => setShareOpen(true)}><Share2 size={16} />Share job</button><Link className={linkClass} to={`/apply/${job.id}`}><ExternalLink size={16} />Public application</Link></> : null}<Link className={workflowProgress.status === 'PUBLISHED' ? primaryLinkClass : linkClass} to={`/jobs/${job.id}/candidates`}><Users size={16} />{counts.applications ? 'View candidates' : 'Candidates'}</Link></>}>
     <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
       <Card className="p-5 md:p-6"><div className="flex items-start justify-between gap-4"><div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Job overview</p><h2 className="mb-0 mt-2 text-xl font-semibold text-depth">Role details</h2></div><Badge tone={statusTone(job.status)}>{job.status}</Badge></div><p className="mb-0 mt-5 whitespace-pre-line text-sm leading-6 text-aura-text-secondary">{job.description}</p><dl className="mt-5 grid gap-3 border-t border-harbor/10 pt-4 sm:grid-cols-2"><div><dt className="text-xs text-aura-text-muted">Work arrangement</dt><dd className="mb-0 mt-1 text-sm font-semibold text-depth">{formatEnum(job.workArrangement)}{job.location ? ` · ${job.location}` : ''}</dd></div><div><dt className="text-xs text-aura-text-muted">Minimum experience</dt><dd className="mb-0 mt-1 text-sm font-semibold text-depth">{job.minimumExperienceYears} years</dd></div><div><dt className="text-xs text-aura-text-muted">Application deadline</dt><dd className="mb-0 mt-1 text-sm font-semibold text-depth">{formatDate(job.applicationDeadline)}</dd></div><div><dt className="text-xs text-aura-text-muted">Last updated</dt><dd className="mb-0 mt-1 text-sm font-semibold text-depth">{new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(job.updatedAt))}</dd></div></dl></Card>
       <Card className="overflow-hidden"><div className="bg-depth p-5 text-frost"><p className="m-0 text-[10px] font-bold uppercase tracking-[0.15em] text-glacier">Hiring workflow setup</p><h2 className="mb-0 mt-2 text-xl font-semibold text-white">{workflowProgress.status === 'PUBLISHED' ? 'Hiring workflow published' : 'Continue the evidence workflow'}</h2><p className="mb-0 mt-2 text-xs text-frost/65">{workflowProgress.status === 'PUBLISHED' ? 'Automatic screening ready' : `Current step: ${workflowProgress.currentStep.replaceAll('_', ' ').toLocaleLowerCase()}`}</p></div><div className="grid gap-0 divide-y divide-harbor/10 p-5">{[
@@ -79,6 +83,6 @@ export default function JobDetail() {
       <Card className="p-5 md:p-6"><h2 className="m-0 text-lg font-semibold text-depth">Interview scheduling</h2><div className="mt-3"><SchedulingPolicySource resolved={scheduling} /></div>{scheduling ? <p className="mb-0 mt-3 text-sm text-aura-text-secondary">{scheduling.policy.durationMinutes}-minute {formatEnum(scheduling.policy.interviewMode)} interview · {scheduling.policy.interviewerCount} interviewers · {scheduling.policy.candidateSlotCount} candidate time slots</p> : null}<div className="mt-4 flex flex-wrap gap-3"><Link className="text-sm font-semibold text-harbor no-underline" to={scheduling?.source === 'JOB_OVERRIDE' ? `/interviews/policies/${job.id}` : scheduling?.source === 'DEPARTMENT_TEMPLATE' ? `/interviews/settings/departments/${encodeURIComponent(job.department)}` : '/interviews/settings/organization'}>{scheduling ? 'View inherited settings' : 'Set up organization default'}</Link>{scheduling?.source !== 'JOB_OVERRIDE' ? <Link className="text-sm font-semibold text-marine no-underline" to={`/interviews/policies/${job.id}`}>Customize for this job</Link> : null}</div></Card>
       <Card className="p-5 md:p-6 xl:col-span-2"><div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><h2 className="m-0 text-lg font-semibold text-depth">Job lifecycle</h2><p className="mb-0 mt-2 max-w-2xl text-sm leading-6 text-aura-text-secondary">Lifecycle changes never remove candidates, interviews, or hiring history. Archive completed work when it should leave active recruitment views.</p>{openingBlocked ? <p className="mb-0 mt-3 text-xs font-semibold text-aura-warning">Complete the readiness items above before {job.status === 'CLOSED' ? 'reopening' : 'opening'} this job.</p> : null}{!deletion.allowed && job.status !== 'OPEN' ? <p className="mb-0 mt-3 text-xs text-aura-text-muted">This job cannot be deleted because it has related records. Archive it instead to preserve hiring history.</p> : null}</div><div className="flex flex-wrap gap-2"><Button disabled={openingBlocked} onClick={() => setDialogAction(lifecycleAction)}>{job.status === 'OPEN' ? <XCircle size={16} /> : <CheckCircle2 size={16} />}{lifecycleLabel}</Button>{job.status === 'DRAFT' || job.status === 'CLOSED' ? <Button variant="secondary" onClick={() => setDialogAction('ARCHIVE')}><Archive size={16} />Archive</Button> : null}{deletion.allowed ? <Button variant="danger" onClick={() => setDeleteOpen(true)}><Trash2 size={16} />Delete</Button> : null}</div></div></Card>
     </div>
-    {dialogAction ? <JobStatusDialog action={dialogAction} open onClose={() => setDialogAction(undefined)} onConfirm={changeStatus} /> : null}<DeleteJobDialog open={deleteOpen} jobTitle={job.title} onClose={() => setDeleteOpen(false)} onConfirm={removeJob} />
+    {dialogAction ? <JobStatusDialog action={dialogAction} open onClose={() => setDialogAction(undefined)} onConfirm={changeStatus} /> : null}<DeleteJobDialog open={deleteOpen} jobTitle={job.title} onClose={() => setDeleteOpen(false)} onConfirm={removeJob} /><ShareJobDialog open={shareOpen} job={job} applicationUrl={applicationUrl} onClose={() => setShareOpen(false)} />
   </PageContainer>
 }

@@ -8,7 +8,7 @@ import { backendWorkspaceMode } from '../../config/workspaceMode'
 import { PageContainer } from '../../components/layout/PageContainer'
 import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
-import BackendScreeningQueue from '../backend/BackendScreeningQueue'
+import BackendCandidatesList from '../backend/BackendCandidatesList'
 import { useDemoStore } from '../../hooks/useDemoStore'
 import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import {
@@ -39,7 +39,7 @@ const selectClass = 'h-10 w-full rounded-aura-sm border border-harbor/20 bg-whit
 const actionLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#1E2022]/30 bg-transparent px-4 text-sm font-semibold text-[#1E2022]/85 no-underline transition-all hover:border-[#1E2022] hover:text-[#1E2022] hover:bg-[#1E2022]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E2022]'
 
 export default function Candidates() {
-  if (backendWorkspaceMode) return <BackendScreeningQueue />
+  if (backendWorkspaceMode) return <BackendCandidatesList />
   return <DemoCandidates />
 }
 

@@ -15,6 +15,7 @@ import {
   selectHumanReviewQueueSummary,
 } from '../../store/demoSelectors'
 import type { HumanReviewCategory } from '../../types/reviewQueue'
+import { isBackendUuid, isDemoId } from '../../utils/backendIds'
 import BackendScreeningQueue from '../backend/BackendScreeningQueue'
 
 type CategoryFilter = HumanReviewCategory | 'ALL'
@@ -50,7 +51,14 @@ function emptyState(category: CategoryFilter) {
 }
 
 export default function HumanReviewQueue() {
-  if (backendWorkspaceMode) return <BackendScreeningQueue />
+  const [searchParams] = useSearchParams()
+  const requestedApplicationId = searchParams.get('applicationId')
+  const shouldUseBackendQueue =
+    backendWorkspaceMode &&
+    (!requestedApplicationId ||
+      (!isDemoId(requestedApplicationId) && isBackendUuid(requestedApplicationId)))
+
+  if (shouldUseBackendQueue) return <BackendScreeningQueue />
   return <DemoHumanReviewQueue />
 }
 
@@ -58,6 +66,7 @@ function DemoHumanReviewQueue() {
   const { state } = useDemoStore()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedApplicationId = searchParams.get('applicationId')
+  const requestedAction = searchParams.get('action')
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | undefined>(requestedApplicationId ?? undefined)
   const [category, setCategory] = useState<CategoryFilter>('NEEDS_REVIEW')
   const [jobId, setJobId] = useState('ALL')
@@ -101,6 +110,7 @@ function DemoHumanReviewQueue() {
     setSelectedApplicationId(applicationId)
     const next = new URLSearchParams(searchParams)
     next.set('applicationId', applicationId)
+    next.delete('action')
     setSearchParams(next)
   }
 
@@ -108,6 +118,7 @@ function DemoHumanReviewQueue() {
     setSelectedApplicationId(undefined)
     const next = new URLSearchParams(searchParams)
     next.delete('applicationId')
+    next.delete('action')
     setSearchParams(next)
   }
 
@@ -153,7 +164,7 @@ function DemoHumanReviewQueue() {
       </div>
 
       <Dialog open={Boolean(selectedItem)} title="Review candidate" size="wide" onClose={closeReview}>
-        {selectedItem ? <HumanReviewWorkspace item={selectedItem} /> : null}
+        {selectedItem ? <HumanReviewWorkspace item={selectedItem} openOverrideOnMount={requestedAction === 'override'} /> : null}
       </Dialog>
     </PageContainer>
   )

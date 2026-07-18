@@ -6,6 +6,8 @@ from app.api.applications import router as applications_router
 from app.api.auth import router as auth_router
 from app.api.demo import router as demo_router
 from app.api.public_jobs import router as public_jobs_router
+from app.api.recruiter_jobs import router as recruiter_jobs_router
+from app.api.recruiter_interviews import router as recruiter_interviews_router
 from app.api.recruiter_screenings import router as recruiter_screenings_router
 from app.api.screening_runs import router as screening_runs_router
 from app.core.config import get_settings
@@ -35,6 +37,14 @@ app.include_router(
 )
 app.include_router(
     public_jobs_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    recruiter_jobs_router,
+    prefix=settings.api_v1_prefix,
+)
+app.include_router(
+    recruiter_interviews_router,
     prefix=settings.api_v1_prefix,
 )
 app.include_router(

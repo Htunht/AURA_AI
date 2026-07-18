@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, RotateCcw, ShieldCheck } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useScreeningAutomation } from '../../hooks/useScreeningAutomation'
 import { useDemoStore } from '../../hooks/useDemoStore'
@@ -24,7 +24,13 @@ function recommendationTone(recommendation?: Recommendation) {
   return 'neutral'
 }
 
-export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
+export function HumanReviewWorkspace({
+  item,
+  openOverrideOnMount = false,
+}: {
+  item: HumanReviewQueueItem
+  openOverrideOnMount?: boolean
+}) {
   const { state, dispatch } = useDemoStore()
   const { retryFailed } = useScreeningAutomation()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -33,6 +39,14 @@ export function HumanReviewWorkspace({ item }: { item: HumanReviewQueueItem }) {
   const rubric = state.rubrics.find((entry) => entry.jobId === item.job.id && entry.status === 'PUBLISHED')
   const schedulingInvitation = selectSchedulingInvitationByApplicationId(state, item.application.id)
   const schedulingPolicy = selectResolvedInterviewSchedulingPolicy(state, item.job.id)
+  const openedOverrideFor = useRef<string | undefined>(undefined)
+
+  useEffect(() => {
+    if (!openOverrideOnMount || !evaluation || item.decision) return
+    if (openedOverrideFor.current === item.application.id) return
+    openedOverrideFor.current = item.application.id
+    setOverrideOpen(true)
+  }, [evaluation, item.application.id, item.decision, openOverrideOnMount])
 
   function recordDecision(
     reviewAction: Decision['reviewAction'],

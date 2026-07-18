@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarClock, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
+import { BriefcaseBusiness, CalendarClock, CalendarDays, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import logo from '../../assets/logo.png'
 
@@ -73,6 +73,13 @@ export function Sidebar() {
           >
             <CalendarClock size={18} aria-hidden="true" />
             Interviews
+          </NavLink>
+          <NavLink
+            to="/calendar"
+            className={({ isActive }) => getLinkClass(isActive)}
+          >
+            <CalendarDays size={18} aria-hidden="true" />
+            Calendar
           </NavLink>
         </div>
       </nav>

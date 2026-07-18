@@ -20,6 +20,7 @@ const InterviewDepartmentTemplates = lazy(() => import('../pages/interviews/Inte
 const InterviewDepartmentTemplateEditor = lazy(() => import('../pages/interviews/InterviewDepartmentTemplateEditor'))
 const InterviewSchedule = lazy(() => import('../pages/interviews/InterviewSchedule'))
 const Interviews = lazy(() => import('../pages/interviews/Interviews'))
+const InterviewCalendar = lazy(() => import('../pages/calendar/InterviewCalendar'))
 const Login = lazy(() => import('../pages/auth/Login'))
 const PublicJobApplication = lazy(() => import('../pages/public/PublicJobApplication'))
 const PublicInterviewScheduling = lazy(() => import('../pages/public/PublicInterviewScheduling'))
@@ -44,6 +45,7 @@ export function AppRoutes() {
           <Route path="/candidates" element={<Candidates />} />
           <Route path="/reviews" element={<HumanReviewQueue />} />
           <Route path="/interviews" element={<Interviews />} />
+          <Route path="/calendar" element={<InterviewCalendar />} />
           <Route path="/interviews/schedule" element={<InterviewSchedule />} />
           <Route path="/interviews/settings" element={<InterviewSchedulingSettings />} />
           <Route path="/interviews/settings/organization" element={<InterviewSchedulingPolicyEditor scope="ORGANIZATION" />} />

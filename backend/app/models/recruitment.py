@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +16,12 @@ class Job(Base):
     department: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="DRAFT", index=True)
+    position_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    employment_type: Mapped[str] = mapped_column(String(40), nullable=False, default="FULL_TIME")
+    work_arrangement: Mapped[str] = mapped_column(String(40), nullable=False, default="HYBRID")
+    location: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    minimum_experience_years: Mapped[float] = mapped_column(Numeric(4, 1), nullable=False, default=0)
+    application_deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_accepting_applications: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     cv_required: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     github_repository_required: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
@@ -24,6 +30,7 @@ class Job(Base):
 
     requirements: Mapped[list["JobRequirement"]] = relationship(back_populates="job", cascade="all, delete-orphan")
     rubrics: Mapped[list["ScreeningRubric"]] = relationship(back_populates="job", cascade="all, delete-orphan")
+    application_fields: Mapped[list["JobApplicationFormField"]] = relationship(back_populates="job", cascade="all, delete-orphan")
     applications: Mapped[list["Application"]] = relationship(back_populates="job")
 
 
@@ -41,6 +48,28 @@ class JobRequirement(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     job: Mapped[Job] = relationship(back_populates="requirements")
+
+
+class JobApplicationFormField(Base):
+    __tablename__ = "job_application_form_fields"
+    __table_args__ = (UniqueConstraint("job_id", "field_key", name="uq_job_application_form_fields_job_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    field_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    label: Mapped[str] = mapped_column(String(300), nullable=False)
+    field_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    placeholder: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    help_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    options: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
+    linked_requirement_codes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    evaluation_categories: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    job: Mapped[Job] = relationship(back_populates="application_fields")
 
 
 class ScreeningRubric(Base):
@@ -115,6 +144,44 @@ class Application(Base):
     job: Mapped[Job] = relationship(back_populates="applications")
     answers: Mapped[list["ApplicationAnswer"]] = relationship(back_populates="application", cascade="all, delete-orphan")
     screening_runs: Mapped[list["ScreeningRun"]] = relationship(back_populates="application")
+    interviews: Mapped[list["Interview"]] = relationship(back_populates="application", cascade="all, delete-orphan")
+
+
+class Interview(Base):
+    __tablename__ = "interviews"
+    __table_args__ = (
+        CheckConstraint("scheduled_end > scheduled_start", name="ck_interviews_end_after_start"),
+        CheckConstraint(
+            "status IN ('DRAFT', 'PENDING_CONFIRMATION', 'SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'NEEDS_RESCHEDULING')",
+            name="ck_interviews_status",
+        ),
+        CheckConstraint(
+            "interview_type IN ('SCREENING', 'TECHNICAL', 'BEHAVIORAL', 'PANEL', 'FINAL', 'OTHER')",
+            name="ck_interviews_type",
+        ),
+        CheckConstraint(
+            "meeting_url IS NULL OR meeting_url ~ '^https?://[^[:space:]]+$'",
+            name="ck_interviews_meeting_url",
+        ),
+        Index("ix_interviews_calendar_range", "scheduled_start", "scheduled_end"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    interviewer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    interview_type: Mapped[str] = mapped_column(String(40), nullable=False, default="TECHNICAL", index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="PENDING_CONFIRMATION", index=True)
+    scheduled_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    scheduled_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(80), nullable=False, default="Asia/Yangon")
+    location: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    meeting_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    recruiter_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    application: Mapped[Application] = relationship(back_populates="interviews")
+    interviewer: Mapped["User | None"] = relationship("User")
 
 
 class ApplicationAnswer(Base):
