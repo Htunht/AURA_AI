@@ -47,7 +47,7 @@ export function CandidateCurrentAction({
   if (kind === 'SCREENING_REVIEW') {
     title = 'Review screening evidence'
     description = 'Review AURA’s recommendation and the submitted evidence.'
-    action = <Link className={primaryLinkClass} to={`/reviews?applicationId=${application.id}&action=override`}>Open screening review <ArrowRight size={15} aria-hidden="true" /></Link>
+    action = <Link className={primaryLinkClass} to={`/reviews?applicationId=${application.id}&action=override&returnTo=${encodeURIComponent(`/candidates/${candidateId}`)}`}>Open screening review <ArrowRight size={15} aria-hidden="true" /></Link>
   } else if (kind === 'SCHEDULE_INTERVIEW') {
     title = 'Schedule interview'
     description = 'This candidate is ready for interview scheduling.'

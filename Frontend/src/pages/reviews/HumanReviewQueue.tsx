@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { HumanReviewCard } from '../../components/reviews/HumanReviewCard'
 import { HumanReviewTable } from '../../components/reviews/HumanReviewTable'
 import { HumanReviewWorkspace } from '../../components/reviews/HumanReviewWorkspace'
@@ -64,9 +64,11 @@ export default function HumanReviewQueue() {
 
 function DemoHumanReviewQueue() {
   const { state } = useDemoStore()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedApplicationId = searchParams.get('applicationId')
   const requestedAction = searchParams.get('action')
+  const returnTo = searchParams.get('returnTo')
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | undefined>(requestedApplicationId ?? undefined)
   const [category, setCategory] = useState<CategoryFilter>('NEEDS_REVIEW')
   const [jobId, setJobId] = useState('ALL')
@@ -116,6 +118,10 @@ function DemoHumanReviewQueue() {
 
   function closeReview() {
     setSelectedApplicationId(undefined)
+    if (returnTo?.startsWith('/candidates/')) {
+      navigate(returnTo, { replace: true })
+      return
+    }
     const next = new URLSearchParams(searchParams)
     next.delete('applicationId')
     next.delete('action')
