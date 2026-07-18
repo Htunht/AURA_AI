@@ -1,7 +1,12 @@
 
 .env.docker
 
+__pycache__/
+*.py[cod]
 backend/.env
 backend/.venv/
 backend/__pycache__/
 backend/.pytest_cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

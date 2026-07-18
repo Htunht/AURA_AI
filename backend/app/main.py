@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.api.auth import router as auth_router
 from app.core.config import get_settings
 from app.db.session import engine
 
@@ -8,6 +9,11 @@ settings = get_settings()
 
 app = FastAPI(
     title=settings.app_name,
+)
+
+app.include_router(
+    auth_router,
+    prefix=settings.api_v1_prefix,
 )
 
 
