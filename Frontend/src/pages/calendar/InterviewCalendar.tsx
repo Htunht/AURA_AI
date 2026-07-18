@@ -223,7 +223,7 @@ function InterviewDetailCard({ item }: { item: CalendarInterview }) {
         {item.location ? <div className="flex gap-2"><MapPin className="mt-0.5 shrink-0" size={13} /><div><dt className="sr-only">Location</dt><dd className="m-0">{item.location}</dd></div></div> : null}
       </dl>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-harbor/10 pt-3">
-        <Link className="text-xs font-semibold text-harbor no-underline hover:text-depth" to={`/candidates/${encodeURIComponent(item.candidateId)}`}>View candidate</Link>
+        <Link className="text-xs font-semibold text-harbor no-underline hover:text-depth" to={`/candidates/${encodeURIComponent(backendWorkspaceMode ? item.applicationId : item.candidateId)}`}>View candidate</Link>
         <Link className="text-xs font-semibold text-harbor no-underline hover:text-depth" to={`/interviews/${encodeURIComponent(item.id)}`}>View interview</Link>
         {isValidMeetingUrl(item.meetingUrl) ? <a className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-harbor no-underline hover:text-depth" href={item.meetingUrl} rel="noreferrer" target="_blank">Join meeting <ExternalLink size={12} /></a> : null}
       </div>

@@ -2,7 +2,8 @@ import {
   BriefcaseBusiness,
   Calendar,
   CalendarClock,
-  ChevronRight,
+  ChevronDown,
+  ListFilter,
   ScanSearch,
   Users,
 } from 'lucide-react'
@@ -13,14 +14,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Card } from '../../components/ui/Card'
 import { useDemoStore } from '../../hooks/useDemoStore'
 import {
-  selectActiveJobs,
-  selectApplicationCountByJobId,
   selectDashboardMetrics,
-  selectDraftApplicationFormByJobId,
-  selectPublishedApplicationFormByJobId,
-  selectPostInterviewReviewSummary,
-  selectFinalDecisionDashboardSummary,
-  selectPostDecisionDashboard,
   selectRecentApplications,
   selectUpcomingInterviews,
 } from '../../store/demoSelectors'
@@ -28,14 +22,6 @@ import { formatApplicationStage, formatDate, formatTime } from '../../utils/help
 import { getScreeningRecommendationLabel } from '../../utils/recommendation'
 
 const DASHBOARD_NOW = new Date('2026-07-16T10:30:00Z')
-
-// Tactile primary action button — brightness + press-down + focus ring
-const primaryLinkClass =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#C7FF38] bg-[#C7FF38] px-4 text-sm font-semibold text-[#1E2022] no-underline transition-all duration-200 ease-in-out shadow-[0_0_10px_rgba(199,255,56,0.35)] hover:brightness-110 hover:shadow-[0_0_18px_rgba(199,255,56,0.55)] active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#C7FF38]'
-
-// Tactile secondary button (job rows)
-const buttonLinkClass =
-  'inline-flex h-9 items-center justify-center gap-2 rounded-aura-sm border border-[#C7FF38] bg-[#C7FF38] px-3 text-xs font-semibold text-[#1E2022] no-underline transition-all duration-200 ease-in-out shadow-[0_0_8px_rgba(199,255,56,0.3)] hover:brightness-110 hover:shadow-[0_0_14px_rgba(199,255,56,0.5)] active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#C7FF38]'
 
 // Premium animated number counter component
 function AnimatedNumber({ value }: { value: number }) {
@@ -84,14 +70,20 @@ function recommendationTone(recommendation?: string) {
   return 'neutral'
 }
 
-export function DashboardCalendar({ upcomingInterviews }: { upcomingInterviews: Array<{ interview: any; candidate: any; job: any }> }) {
+export function DashboardCalendar({
+  upcomingInterviews,
+  selectedDay,
+  onSelectDay,
+}: {
+  upcomingInterviews: Array<{ interview: any; candidate: any; job: any }>
+  selectedDay: number
+  onSelectDay: (day: number) => void
+}) {
   const daysInMonth = 31
   const startDayOffset = 3 // Wednesday for July 2026
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const blanks = Array.from({ length: startDayOffset }, () => null)
   const calendarCells = [...blanks, ...days]
-
-  const [selectedDay, setSelectedDay] = useState<number>(16) // DASHBOARD_NOW is July 16, 2026
 
   const getInterviewsForDay = (day: number) => {
     return upcomingInterviews.filter(({ interview }) => {
@@ -100,10 +92,8 @@ export function DashboardCalendar({ upcomingInterviews }: { upcomingInterviews: 
     })
   }
 
-  const selectedInterviews = getInterviewsForDay(selectedDay)
-
   return (
-    <div className="overflow-hidden rounded-aura-md border border-[#1E2022]/15 bg-white shadow-aura-sm p-5 h-full flex flex-col justify-between">
+    <div className="overflow-hidden rounded-aura-md border border-[#1E2022]/15 bg-white p-5 shadow-aura-sm">
       <div>
         <div className="flex items-center justify-between border-b border-[#1E2022]/10 pb-4 mb-4">
           <div className="flex items-center gap-2">
@@ -140,7 +130,7 @@ export function DashboardCalendar({ upcomingInterviews }: { upcomingInterviews: 
               <button
                 key={`day-${day}`}
                 type="button"
-                onClick={() => setSelectedDay(day)}
+                onClick={() => onSelectDay(day)}
                 className={`relative h-8 w-full rounded-aura-sm text-xs font-semibold transition-all flex flex-col items-center justify-center ${
                   isSelected 
                     ? 'bg-[#1E2022] text-[#C7FF38] scale-105 shadow-aura-sm' 
@@ -158,45 +148,158 @@ export function DashboardCalendar({ upcomingInterviews }: { upcomingInterviews: 
           })}
         </div>
       </div>
+    </div>
+  )
+}
 
-      {/* Selected day interviews summary */}
-      <div className="mt-5 border-t border-[#1E2022]/10 pt-4">
-        <h3 className="m-0 text-xs font-bold text-[#1E2022]/60 uppercase tracking-wider mb-3">
-          Interviews on July {selectedDay}
-        </h3>
-        {selectedInterviews.length === 0 ? (
-          <p className="m-0 text-xs text-slate-400 italic">No interviews scheduled for this day.</p>
-        ) : (
-          <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-            {selectedInterviews.map(({ interview, candidate, job }) => (
-              <div key={interview.id} className="rounded-aura-sm border border-[#1E2022]/10 p-2 bg-[#F4F1EA]/30 hover:bg-[#F4F1EA]/60 transition-colors">
-                <div className="flex items-center justify-between gap-2">
-                  <Link to={`/candidates/${candidate.id}`} className="text-xs font-bold text-[#1E2022] no-underline hover:text-[#C7FF38] transition-colors truncate">
-                    {candidate.fullName}
-                  </Link>
-                  <span className="text-[10px] font-bold text-slate-500 shrink-0">
-                    {formatTime(interview.scheduledStart)}
+function DashboardWeeklyCalendar({ interviews }: { interviews: Array<{ interview: any; candidate: any; job: any }> }) {
+  const startHour = 8
+  const endHour = 18
+  const hourHeight = 44
+  const calendarHeight = (endHour - startHour) * hourHeight
+  const hours = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index)
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date('2026-07-12T00:00:00Z')
+    date.setUTCDate(date.getUTCDate() + index)
+    return date
+  })
+
+  const eventTones = [
+    { backgroundColor: '#E8F2FF', borderColor: '#67A8E4' },
+    { backgroundColor: '#E8F8F0', borderColor: '#4FB98A' },
+    { backgroundColor: '#F1EAFE', borderColor: '#9B6DDB' },
+    { backgroundColor: '#FFF4D9', borderColor: '#E3B348' },
+  ]
+
+  const formatCalendarTime = (value: string) => new Date(value).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+  })
+
+  const interviewsForDay = (date: Date) => interviews.filter(({ interview }) => {
+    const interviewDate = new Date(interview.scheduledStart)
+    return interviewDate.getUTCFullYear() === date.getUTCFullYear()
+      && interviewDate.getUTCMonth() === date.getUTCMonth()
+      && interviewDate.getUTCDate() === date.getUTCDate()
+  })
+
+  return (
+    <section className="overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-sm">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-harbor/10 px-5 py-4 md:px-6">
+        <div>
+          <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Interview schedule</p>
+          <h2 className="mb-0 mt-1 text-lg font-semibold text-depth">Today task</h2>
+        </div>
+        <Badge tone="accent">July 12–18</Badge>
+      </header>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[860px]">
+          <div className="grid grid-cols-[72px_repeat(7,minmax(112px,1fr))] border-b border-harbor/10 bg-white">
+            <div className="grid place-items-center border-r border-harbor/10 px-2 text-[10px] font-bold text-aura-text-muted">GMT+0</div>
+            {weekDays.map((date) => {
+              const isToday = date.getUTCDate() === 16
+              return (
+                <div className="border-r border-harbor/10 px-2 py-3 text-center last:border-r-0" key={date.toISOString()}>
+                  <p className="m-0 text-[10px] font-bold uppercase tracking-[0.12em] text-aura-text-muted">
+                    {date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}
+                  </p>
+                  <span className={`mt-1 inline-grid size-10 place-items-center rounded-full text-xs font-bold ${isToday ? 'bg-depth text-[#C7FF38] shadow-aura-sm' : 'text-depth'}`}>
+                    {String(date.getUTCDate()).padStart(2, '0')}/07
                   </span>
                 </div>
-                <p className="m-0 mt-0.5 text-[10px] text-slate-500 truncate">{job.title}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
-        )}
+
+          <div className="relative grid grid-cols-[72px_repeat(7,minmax(112px,1fr))]" style={{ height: calendarHeight }}>
+            <div className="relative border-r border-harbor/10 bg-white">
+              {hours.map((hour, index) => (
+                <span
+                  className="absolute right-3 -translate-y-1/2 text-[10px] font-semibold tabular-nums text-aura-text-muted"
+                  key={hour}
+                  style={{ top: Math.min(index * hourHeight, calendarHeight - 1) }}
+                >
+                  {String(hour).padStart(2, '0')}:00
+                </span>
+              ))}
+            </div>
+
+            {weekDays.map((date, dayIndex) => {
+              const dayInterviews = interviewsForDay(date)
+              const isToday = date.getUTCDate() === 16
+
+              return (
+                <div className={`relative border-r border-harbor/10 last:border-r-0 ${isToday ? 'bg-[#C7FF38]/[0.035]' : 'bg-white'}`} key={date.toISOString()}>
+                  {Array.from({ length: endHour - startHour }, (_, hourIndex) => (
+                    <div className="border-b border-harbor/[0.08]" key={hourIndex} style={{ height: hourHeight }} />
+                  ))}
+
+                  {dayInterviews.map(({ interview, candidate, job }, eventIndex) => {
+                    const eventStart = new Date(interview.scheduledStart)
+                    const eventEnd = new Date(interview.scheduledEnd)
+                    const minutesFromStart = (eventStart.getUTCHours() - startHour) * 60 + eventStart.getUTCMinutes()
+                    const durationMinutes = Math.max(30, (eventEnd.getTime() - eventStart.getTime()) / 60_000)
+                    const top = Math.max(2, (minutesFromStart / 60) * hourHeight + 3)
+                    const height = Math.max(38, (durationMinutes / 60) * hourHeight - 4)
+                    const tone = eventTones[(dayIndex + eventIndex) % eventTones.length]
+
+                    if (minutesFromStart < 0 || top >= calendarHeight) return null
+
+                    return (
+                      <Link
+                        className="absolute left-1.5 right-1.5 z-10 overflow-hidden rounded-aura-sm border-l-[3px] px-2 py-1.5 no-underline shadow-sm transition-transform hover:z-20 hover:-translate-y-0.5 hover:shadow-aura-sm focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marine"
+                        key={interview.id}
+                        style={{ top, height: Math.min(height, calendarHeight - top), ...tone }}
+                        to={`/candidates/${candidate.id}`}
+                      >
+                        <p className="m-0 truncate text-[9px] font-bold tabular-nums text-harbor">
+                          {formatCalendarTime(interview.scheduledStart)} – {formatCalendarTime(interview.scheduledEnd)}
+                        </p>
+                        <p className="mb-0 mt-0.5 truncate text-[11px] font-bold text-depth">{candidate.fullName}</p>
+                        <p className="mb-0 mt-0.5 truncate text-[9px] text-aura-text-muted">{job.title}</p>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )
+            })}
+
+            <div
+              aria-label="Current time: 10:30 UTC"
+              className="pointer-events-none absolute left-[72px] right-0 z-20 border-t border-red-400/80"
+              role="img"
+              style={{ top: ((((DASHBOARD_NOW.getUTCHours() - startHour) * 60) + DASHBOARD_NOW.getUTCMinutes()) / 60) * hourHeight }}
+              title="Current time: 10:30 UTC"
+            >
+              <span className="absolute -left-1.5 -top-1.5 size-3 rounded-full border-2 border-white bg-red-500 shadow-sm" />
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
   )
 }
 
 export default function Dashboard() {
   const { state } = useDemoStore()
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState(16)
+  const [dashboardPeriod, setDashboardPeriod] = useState('Week')
   const metrics = selectDashboardMetrics(state, DASHBOARD_NOW)
-  const activeJobs = selectActiveJobs(state).slice(0, 3)
   const recentApplications = selectRecentApplications(state)
   const upcomingInterviews = selectUpcomingInterviews(state, DASHBOARD_NOW)
-  const postInterview = selectPostInterviewReviewSummary(state)
-  const finalDecisions = selectFinalDecisionDashboardSummary(state)
-  const postDecision = selectPostDecisionDashboard(state, DASHBOARD_NOW)
+  const selectedDateInterviews = upcomingInterviews.filter(({ interview }) => {
+    const date = new Date(interview.scheduledStart)
+    return date.getFullYear() === 2026 && date.getMonth() === 6 && date.getDate() === selectedCalendarDay
+  })
+  const weeklyInterviews = state.interviews.flatMap((interview) => {
+    const application = state.applications.find((item) => item.id === interview.applicationId)
+    const candidate = application ? state.candidates.find((item) => item.id === application.candidateId) : undefined
+    const job = application ? state.jobs.find((item) => item.id === application.jobId) : undefined
+    return candidate && job ? [{ interview, candidate, job }] : []
+  })
   const metricCards = [
     { label: 'Active job openings', value: metrics.activeJobs, description: 'Roles currently accepting applications', icon: BriefcaseBusiness },
     { label: 'Total candidates', value: metrics.totalCandidates, description: 'Candidate profiles in the workspace', icon: Users },
@@ -206,10 +309,25 @@ export default function Dashboard() {
 
   return (
     <PageContainer
-      eyebrow="Hiring workspace"
+      eyebrow=""
       title="Recruitment overview"
-      description="Track active roles, candidate progress, AI review activity, and upcoming interviews."
-      actions={<Link className={primaryLinkClass} to="/jobs">View job openings <ChevronRight size={16} aria-hidden="true" /></Link>}
+      actions={(
+        <label className="relative inline-flex h-10 min-w-32 items-center rounded-aura-sm border border-harbor/20 bg-white shadow-sm transition-colors hover:border-marine/40 hover:bg-frost/45 focus-within:border-marine focus-within:ring-2 focus-within:ring-marine/15">
+          <ListFilter className="pointer-events-none absolute left-3 text-marine" size={16} aria-hidden="true" />
+          <span className="sr-only">Dashboard time period</span>
+          <select
+            className="h-full w-full cursor-pointer appearance-none rounded-aura-sm bg-transparent py-0 pl-9 pr-9 text-sm font-semibold text-depth outline-none"
+            onChange={(event) => setDashboardPeriod(event.target.value)}
+            value={dashboardPeriod}
+          >
+            <option>Day</option>
+            <option>Week</option>
+            <option>Month</option>
+            <option>Year</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 text-aura-text-muted" size={15} aria-hidden="true" />
+        </label>
+      )}
     >
       {/* Stats grid */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -237,154 +355,99 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-4 grid gap-4">
+        <div className="grid items-start gap-3 xl:grid-cols-4">
+          <div className="xl:col-span-3">
+            <DashboardWeeklyCalendar interviews={weeklyInterviews} />
+          </div>
+
+          <div className="grid gap-4 xl:col-span-1">
+            <DashboardCalendar
+              onSelectDay={setSelectedCalendarDay}
+              selectedDay={selectedCalendarDay}
+              upcomingInterviews={upcomingInterviews}
+            />
+
+            <section className="flex h-[248px] flex-col overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-sm">
+              <header className="flex shrink-0 items-center justify-between border-b border-harbor/10 px-4 py-3">
+                <div>
+                  <h2 className="m-0 text-base font-semibold text-depth">Upcoming events</h2>
+                  <p className="mb-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">July {selectedCalendarDay}</p>
+                </div>
+                <Badge tone="accent">{selectedDateInterviews.length}</Badge>
+              </header>
+              {selectedDateInterviews.length === 0 ? (
+                <p className="m-0 grid flex-1 place-items-center px-4 py-5 text-center text-sm text-aura-text-muted">No upcoming interviews on this date.</p>
+              ) : (
+                <div className="min-h-0 flex-1 divide-y divide-harbor/10 overflow-y-auto">
+                  {selectedDateInterviews.map(({ interview, candidate, job }) => (
+                    <article className="min-h-[91px] px-4 py-3 transition-colors hover:bg-frost/45" key={interview.id}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
+                          <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{job.title}</p>
+                        </div>
+                        <Badge tone="accent">{interview.status}</Badge>
+                      </div>
+                      <p className="mb-0 mt-2 text-xs font-semibold text-harbor">
+                        {formatDate(interview.scheduledStart)} · {formatTime(interview.scheduledStart)}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+
         <section className="overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-sm">
-          <header className="flex items-center justify-between border-b border-harbor/10 px-5 py-3 md:px-6">
+          <header className="flex items-center justify-between border-b border-harbor/10 px-6 py-4 md:px-7">
             <h2 className="m-0 text-lg font-semibold text-depth">Recent applications</h2>
             <Badge>{recentApplications.length}</Badge>
           </header>
-          <div className="divide-y divide-harbor/10">
-            {recentApplications.map(({ candidate, application, job, screeningEvaluation, decision }) => {
-              const recommendation = decision?.humanRecommendation ?? screeningEvaluation?.recommendation
-              const label = decision
-                ? getScreeningRecommendationLabel(decision.humanRecommendation)
-                : screeningEvaluation
-                  ? getScreeningRecommendationLabel(screeningEvaluation.recommendation)
-                  : 'Not screened'
-              const subtitle = decision
-                ? `Recruiter ${decision.reviewAction === 'CONFIRM' ? 'confirmed' : 'overrode'}`
-                : formatApplicationStage(application.currentStage)
-              return (
-                <article className="grid items-center gap-2 px-5 py-3 transition-colors hover:bg-frost/45 md:grid-cols-[1fr_1fr_auto] md:px-6" key={application.id}>
-                  <div className="min-w-0">
-                    <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
-                    <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{candidate.currentPosition}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <Link className="text-sm font-medium text-harbor no-underline hover:text-depth" to={`/jobs/${job.id}`}>{job.title}</Link>
-                    <p className="mb-0 mt-0.5 text-xs text-aura-text-muted">{formatDate(application.submittedAt)} · {subtitle}</p>
-                  </div>
-                  <Badge tone={recommendationTone(recommendation)}>{label}</Badge>
-                </article>
-              )
-            })}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] table-fixed border-collapse text-left">
+              <thead className="border-b border-depth bg-depth">
+                <tr className="text-[10px] font-bold uppercase tracking-[0.1em] text-white/75">
+                  <th className="w-[19%] px-4 py-2.5 pl-5 md:pl-6" scope="col">Candidate</th>
+                  <th className="w-[23%] px-4 py-2.5" scope="col">Current position</th>
+                  <th className="w-[24%] px-4 py-2.5" scope="col">Applied role</th>
+                  <th className="w-[16%] px-4 py-2.5" scope="col">Stage</th>
+                  <th className="w-[18%] px-4 py-2.5 pr-5 md:pr-6" scope="col">Recommendation</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-harbor/10">
+                {recentApplications.map(({ candidate, application, job, screeningEvaluation, decision }) => {
+                  const recommendation = decision?.humanRecommendation ?? screeningEvaluation?.recommendation
+                  const label = decision
+                    ? getScreeningRecommendationLabel(decision.humanRecommendation)
+                    : screeningEvaluation
+                      ? getScreeningRecommendationLabel(screeningEvaluation.recommendation)
+                      : 'Not screened'
+                  const stage = decision
+                    ? `Recruiter ${decision.reviewAction === 'CONFIRM' ? 'confirmed' : 'overrode'}`
+                    : formatApplicationStage(application.currentStage)
+                  return (
+                    <tr className="transition-colors hover:bg-frost/45" key={application.id}>
+                      <td className="px-4 py-2.5 pl-5 md:pl-6">
+                        <Link className="whitespace-nowrap text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
+                      </td>
+                      <td className="max-w-0 truncate px-4 py-2.5 text-xs text-aura-text-secondary">{candidate.currentPosition}</td>
+                      <td className="max-w-0 truncate px-4 py-2.5">
+                        <Link className="text-sm font-medium text-harbor no-underline hover:text-depth" to={`/jobs/${job.id}`}>{job.title}</Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-aura-text-secondary">{stage}</td>
+                      <td className="px-4 py-2.5 pr-5 md:pr-6">
+                        <Badge tone={recommendationTone(recommendation)}>{label}</Badge>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </section>
-
-        <div className="grid items-start gap-4 lg:grid-cols-5">
-          <section className="overflow-hidden rounded-aura-md border border-harbor/15 bg-white shadow-aura-sm lg:col-span-3">
-            <header className="flex items-center justify-between border-b border-harbor/10 px-5 py-3 md:px-6">
-              <h2 className="m-0 text-lg font-semibold text-depth">Upcoming events</h2>
-              <Badge tone="accent">{upcomingInterviews.length}</Badge>
-            </header>
-            {upcomingInterviews.length === 0 ? (
-              <p className="m-0 px-5 py-5 text-sm text-aura-text-muted">No upcoming interviews.</p>
-            ) : (
-              <div className="divide-y divide-harbor/10">
-                {upcomingInterviews.map(({ interview, candidate, job }) => (
-                  <article className="grid items-center gap-2 px-5 py-3 transition-colors hover:bg-frost/45 md:grid-cols-[1fr_1fr_auto] md:px-6" key={interview.id}>
-                    <div className="min-w-0">
-                      <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${candidate.id}`}>{candidate.fullName}</Link>
-                      <p className="mb-0 mt-0.5 truncate text-xs text-aura-text-muted">{job.title}</p>
-                    </div>
-                    <div className="min-w-0 text-sm font-semibold text-harbor">
-                      {formatDate(interview.scheduledStart)} · {formatTime(interview.scheduledStart)}
-                    </div>
-                    <Badge tone="accent">{interview.status}</Badge>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <div className="lg:col-span-2">
-            <DashboardCalendar upcomingInterviews={upcomingInterviews} />
-          </div>
-        </div>
       </div>
 
-      {/* Active job openings — delayed entry, interactive rows */}
-      <div className="mt-4 overflow-hidden rounded-aura-md border border-harbor/15 shadow-aura-sm opacity-0 [animation:fade-in-up_0.5s_ease-out_400ms_forwards]">
-        {/* Dark header */}
-        <div className="bg-depth px-5 py-4 md:px-6">
-          <p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-glacier">Open requisitions</p>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h2 className="m-0 text-lg font-semibold text-white">Active job openings</h2>
-            {(() => {
-              const totalPositions = activeJobs.reduce((sum, job) => sum + job.positionsCount, 0)
-              return <Badge tone="success">{totalPositions} position{totalPositions === 1 ? '' : 's'} open</Badge>
-            })()}
-          </div>
-        </div>
-        {/* Job list rows — interactive hover */}
-        <div className="divide-y divide-harbor/10 bg-white px-5 md:px-6">
-          {activeJobs.map((job) => {
-            const publishedForm = selectPublishedApplicationFormByJobId(state, job.id)
-            const draftForm = selectDraftApplicationFormByJobId(state, job.id)
-            return (
-              <article
-                className="group grid gap-3 py-4 transition-colors duration-200 hover:bg-[#f8fafa] cursor-pointer sm:grid-cols-[1fr_auto] sm:items-center"
-                key={job.id}
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="m-0 text-sm font-semibold text-depth group-hover:text-marine transition-colors duration-200">{job.title}</h3>
-                    <Badge tone="success">Open</Badge>
-                  </div>
-                  <p className="mb-0 mt-1 text-xs text-aura-text-muted">
-                    {job.department} · {job.positionsCount} position{job.positionsCount === 1 ? '' : 's'} · {selectApplicationCountByJobId(state, job.id)} applications
-                  </p>
-                  <p className="mb-0 mt-2 text-xs font-medium text-harbor">
-                    {publishedForm ? 'Form published' : draftForm ? 'Form in draft' : 'Form not configured'}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-4">
-                  <Link className={buttonLinkClass} to={`/jobs/${job.id}`}>View role</Link>
-                  <Link className={buttonLinkClass} to={`/jobs/${job.id}/candidates`}>View candidates</Link>
-                </div>
-              </article>
-            )
-          })}
-        </div>
-      </div>
-
-      <Card className="mt-4 p-5 md:p-6 opacity-0 [animation:fade-in-up_0.5s_ease-out_450ms_forwards]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Post-interview review</p><h2 className="mb-0 mt-2 text-lg font-semibold text-depth">Transcript and analysis preparation</h2><p className="mb-0 mt-1 text-sm text-aura-text-secondary">Preparation records support human evaluation and never make a final hiring decision.</p></div>
-          <Link className={buttonLinkClass} to="/interviews">Open interview history</Link>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {[["Transcripts", postInterview.transcriptsNeedReview], ["Preparing", postInterview.preparing], ["Analysis review", postInterview.analysesNeedApproval], ["Approved", postInterview.approved]].map(([label, value]) => <div className="rounded-aura-sm bg-frost/70 p-3" key={label}><p className="m-0 text-[10px] font-bold uppercase tracking-wide text-aura-text-muted">{label}</p><p className="mb-0 mt-1 text-xl font-bold text-depth">{value}</p></div>)}
-        </div>
-        {postInterview.attention[0] ? <Link className="mt-4 inline-flex text-sm font-semibold text-harbor" to={postInterview.attention[0].status === 'TRANSCRIPT_REQUIRED' || postInterview.attention[0].status === 'TRANSCRIPT_DRAFT' ? `/interviews/${postInterview.attention[0].interview.id}/transcript` : `/interviews/${postInterview.attention[0].interview.id}/analysis`}>Review next completed interview</Link> : null}
-        <div className="mt-5 border-t border-harbor/10 pt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="m-0 text-[10px] font-bold uppercase tracking-wide text-marine">Final decisions</p><p className="mb-0 mt-1 text-sm text-aura-text-secondary">{finalDecisions.readyForDecision} ready · {finalDecisions.needsDataReview} data review · {finalDecisions.onHold} on hold · {finalDecisions.decisionsRecorded} recorded</p></div>{finalDecisions.attention[0] ? <Link className="text-sm font-semibold text-harbor" to={`/candidates/${finalDecisions.attention[0].candidateId}/final-evaluation`}>Review final evaluation</Link> : null}</div></div>
-      </Card>
-
-      <Card className="mt-4 overflow-hidden p-0 opacity-0 [animation:fade-in-up_0.5s_ease-out_500ms_forwards]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-harbor/10 bg-frost/60 px-5 py-4">
-          <div><p className="m-0 text-[10px] font-bold uppercase tracking-[0.14em] text-marine">Post-decision work</p><h2 className="mb-0 mt-1 text-base font-semibold text-depth">Outcome preparation and hold reviews</h2></div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-aura-text-secondary">
-            <span><strong className="text-depth">{postDecision.selectionMessagesToPrepare}</strong> selection</span>
-            <span><strong className="text-depth">{postDecision.rejectionMessagesToPrepare}</strong> rejection</span>
-            <span><strong className="text-depth">{postDecision.holdFollowUpsDue}</strong> hold due</span>
-            <span className={postDecision.overdueHoldReviews ? 'font-semibold text-aura-danger' : ''}><strong>{postDecision.overdueHoldReviews}</strong> overdue</span>
-          </div>
-        </div>
-        {postDecision.items.length ? (
-          <div className="divide-y divide-harbor/10">
-            {postDecision.items.slice(0, 5).map((item) => (
-              <article className="grid gap-2 px-5 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={item.evaluation.id}>
-                <div>
-                  <Link className="text-sm font-semibold text-depth no-underline hover:text-marine" to={`/candidates/${item.candidate.id}`}>{item.candidate.fullName}</Link>
-                  <p className="mb-0 mt-1 text-xs text-aura-text-muted">{item.job.title} · {item.evaluation.humanDecision === 'HOLD' && item.holdFollowUp ? item.holdFollowUp.status === 'READY_FOR_REVIEW' ? 'Hold review ready' : `Follow-up ${formatDate(item.holdFollowUp.followUpAt)}` : item.actionLabel}</p>
-                </div>
-                <Link className={buttonLinkClass} to={item.evaluation.humanDecision === 'HOLD' ? `/candidates/${item.candidate.id}/final-evaluation` : `/candidates/${item.candidate.id}/outcome`}>{item.actionLabel}</Link>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="m-0 px-5 py-4 text-sm text-aura-text-secondary">No post-decision work requires attention.</p>
-        )}
-      </Card>
     </PageContainer>
   )
 }

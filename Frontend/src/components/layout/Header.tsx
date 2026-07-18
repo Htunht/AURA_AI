@@ -18,10 +18,10 @@ export function Header() {
     <header className="flex min-h-header items-center justify-between border-b border-harbor/15 bg-white px-5 py-3 md:px-8 xl:px-10">
       <div>
         <p className="m-0 text-[15px] font-bold tracking-[-0.01em] text-depth">
-          AURA Technology
+          AI Unified Recruitment Assistant
         </p>
         <p className="m-0 text-xs font-medium text-aura-text-muted">
-          Hiring workspace
+          Hiring Workspace
         </p>
       </div>
       <div className="flex items-center gap-2.5">

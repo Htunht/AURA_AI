@@ -113,6 +113,16 @@ def test_authenticated_calendar_returns_grouped_active_totals(client: TestClient
     assert july_18["interviews"][0]["scheduled_start"].endswith(("Z", "+00:00"))
 
 
+def test_authenticated_interview_detail_uses_persisted_ids(client: TestClient, calendar_records) -> None:
+    token = token_for(client, "admin@aura.local")
+    calendar = client.get("/api/v1/recruiter/interviews/calendar", params={"start": "2026-07-18", "end": "2026-07-19"}, headers={"Authorization": f"Bearer {token}"})
+    interview_id = calendar.json()["days"][0]["interviews"][0]["id"]
+    response = client.get(f"/api/v1/recruiter/interviews/{interview_id}", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    assert response.json()["application_id"] == str(calendar_records["application_one"])
+    assert response.json()["candidate_id"] == str(calendar_records["candidate"])
+
+
 @pytest.mark.parametrize(
     ("params", "expected"),
     [

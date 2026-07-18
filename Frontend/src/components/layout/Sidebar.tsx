@@ -17,12 +17,12 @@ export function Sidebar() {
     <aside className="static flex items-center justify-between border-r border-white/10 bg-depth px-5 py-4 text-frost lg:sticky lg:top-0 lg:block lg:h-screen lg:px-5 lg:py-6">
       <div
         className="flex items-center gap-3 lg:pb-7"
-        aria-label="AURA AI admin workspace"
+        aria-label="RECURIMENT admin workspace"
       >
-        <img src={logo} alt="AURA Logo" className="size-8 flex-none object-contain" />
-        <span className="grid gap-0.5">
+        <img src={logo} alt="RECURIMENT logo" className="size-8 flex-none object-contain" />
+        <span className="grid gap-0.5 max-[680px]:hidden">
           <span className="text-[16px] font-bold tracking-[-0.01em] text-white">
-            AURA AI
+            RECURIMENT
           </span>
           <span className="hidden text-[11px] font-medium text-white/40 lg:block">
             Recruitment Operations

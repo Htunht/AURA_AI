@@ -4,7 +4,7 @@ import type {
   RecruiterScreeningDetail,
   RecruiterScreeningListItem,
 } from '../types/backendScreening'
-import type { BackendInterviewCalendarResponse } from '../types/interviewCalendar'
+import type { BackendInterviewCalendarItem, BackendInterviewCalendarResponse } from '../types/interviewCalendar'
 import { apiRequest, setBackendAccessToken } from './api'
 
 export async function login(email: string, password: string) {
@@ -73,4 +73,8 @@ export function getInterviewCalendar(params: {
   if (params.interviewer_id) query.set('interviewer_id', params.interviewer_id)
   if (params.interview_type) query.set('interview_type', params.interview_type)
   return apiRequest<BackendInterviewCalendarResponse>(`/recruiter/interviews/calendar?${query}`)
+}
+
+export function getInterviewDetail(interviewId: string) {
+  return apiRequest<BackendInterviewCalendarItem>(`/recruiter/interviews/${encodeURIComponent(interviewId)}`)
 }

@@ -7,14 +7,22 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Dialog } from '../../components/ui/Dialog'
 import { DemoEvaluationFastForwardAction } from '../../components/interviews/DemoEvaluationFastForwardAction'
+import { backendWorkspaceMode } from '../../config/workspaceMode'
 import { useDemoStore } from '../../hooks/useDemoStore'
 import { selectInterviewAnalysisPreparationStatus, selectInterviewById, selectInterviewQuestionPreparationStatus, selectLatestFinalEvaluation, selectLatestInterviewQuestionSet, selectInterviewSessionOperationalStatus } from '../../store/demoSelectors'
 import { formatDuration, formatInterviewDate, formatInterviewMode, formatInterviewStatus, formatInterviewTime } from '../../utils/helpers'
+import { isBackendUuid } from '../../utils/backendIds'
+import BackendInterviewDetail from '../backend/BackendInterviewDetail'
 
 const linkClass = 'inline-flex h-10 items-center justify-center rounded-aura-sm border border-marine/35 bg-white px-4 text-sm font-semibold text-harbor no-underline hover:bg-glacier/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glacier'
 
 export default function InterviewDetail() {
   const { interviewId = '' } = useParams()
+  if (backendWorkspaceMode && isBackendUuid(interviewId)) return <BackendInterviewDetail interviewId={interviewId} />
+  return <DemoInterviewDetail interviewId={interviewId} />
+}
+
+function DemoInterviewDetail({ interviewId }: { interviewId: string }) {
   const [searchParams] = useSearchParams()
   const { state, dispatch } = useDemoStore()
   const [cancelOpen, setCancelOpen] = useState(false)

@@ -21,9 +21,11 @@ export function PageContainer({
     <section className="mx-auto w-full">
       {!hideHeader ? <header className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
         <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
-            {eyebrow}
-          </p>
+          {eyebrow ? (
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
+              {eyebrow}
+            </p>
+          ) : null}
           <h1 className="mb-2 text-[26px] font-bold leading-tight tracking-[-0.02em] text-depth md:text-[28px] xl:text-[32px]">
             {title}
           </h1>

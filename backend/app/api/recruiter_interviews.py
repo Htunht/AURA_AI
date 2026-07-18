@@ -11,8 +11,8 @@ from app.api.dependencies import get_db
 from app.core.config import get_settings
 from app.models.recruitment import Application, Interview
 from app.models.user import User
-from app.schemas.interview_calendar import InterviewCalendarResponse
-from app.services.interview_calendar_service import build_calendar_response, get_timezone
+from app.schemas.interview_calendar import InterviewCalendarItem, InterviewCalendarResponse
+from app.services.interview_calendar_service import build_calendar_response, get_timezone, serialize_interview
 
 router = APIRouter(prefix="/recruiter/interviews", tags=["Recruiter Interviews"])
 
@@ -82,6 +82,30 @@ def get_interview_calendar(
         range_end=range_end,
         display_timezone=settings.recruiter_timezone,
     )
+
+
+@router.get("/{interview_id}", response_model=InterviewCalendarItem)
+def get_interview_detail(
+    interview_id: uuid.UUID,
+    current_user: CalendarUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> InterviewCalendarItem:
+    statement = (
+        select(Interview)
+        .where(Interview.id == interview_id)
+        .options(
+            selectinload(Interview.application).selectinload(Application.candidate),
+            selectinload(Interview.application).selectinload(Application.job),
+            selectinload(Interview.interviewer),
+        )
+    )
+    role_codes = {assignment.role.code for assignment in current_user.user_roles}
+    if "INTERVIEWER" in role_codes and role_codes.isdisjoint({"ADMIN", "RECRUITER", "HIRING_MANAGER"}):
+        statement = statement.where(Interview.interviewer_id == current_user.id)
+    interview = db.scalar(statement)
+    if interview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+    return serialize_interview(interview)
 
 
 def _parse_boundary(value: str, zone) -> datetime:
