@@ -9,6 +9,17 @@ function hasDuplicate(values: string[]): boolean {
   return new Set(values).size !== values.length
 }
 
+const supportedFieldTypes = new Set([
+  'TEXT',
+  'EMAIL',
+  'PHONE',
+  'URL',
+  'NUMBER',
+  'TEXTAREA',
+  'MULTI_SELECT',
+  'FILE',
+])
+
 export function validateApplicationForm(
   form: ApplicationForm,
 ): ApplicationFormValidationResult {
@@ -33,6 +44,14 @@ export function validateApplicationForm(
 
     if (!field.label.trim()) {
       errors.push(`Field ${field.id} must have a non-empty label.`)
+    }
+
+    if (!supportedFieldTypes.has(field.type)) {
+      errors.push(`Field ${field.id} has an unsupported type.`)
+    }
+
+    if (field.key === 'github_repository_url' && field.type !== 'URL') {
+      errors.push('GitHub Repository URL field must use the URL field type.')
     }
 
     if (field.screeningMapping && (new Set(field.screeningMapping.requirementIds).size !== field.screeningMapping.requirementIds.length || new Set(field.screeningMapping.criterionKeys).size !== field.screeningMapping.criterionKeys.length)) {

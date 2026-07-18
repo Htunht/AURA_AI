@@ -5,8 +5,10 @@ import type {
   ApplicationSubmissionAnswer,
   CandidateSubmission,
 } from '../types/application'
-import type { ApplicationForm } from '../types/applicationForm'
+import type { ApplicationForm, ApplicationFormField } from '../types/applicationForm'
+import { getApplicationFormInputType } from './applicationFormFieldRendering'
 import { validateApplicationSubmission } from './applicationSubmissionValidation'
+import { normalizeGitHubRepositoryUrl, normalizeUrlFieldValue } from './urlFieldValidation'
 
 export type ApplicationFormDomainValidationResult = {
   valid: boolean
@@ -32,6 +34,7 @@ function createValidSubmission(form: ApplicationForm): CandidateSubmission {
     best_project: 'I led the frontend delivery of a multi-tenant analytics platform.',
     problem_solving: 'I profiled a slow data grid and reduced unnecessary rendering.',
     cv: 'taylor-morgan-cv.pdf',
+    github_repository_url: 'https://github.com/taylor/aura-work',
   }
   const answers: ApplicationSubmissionAnswer[] = form.fields.map((field) => ({
     fieldId: field.id,
@@ -45,6 +48,104 @@ function createValidSubmission(form: ApplicationForm): CandidateSubmission {
     jobId: form.jobId,
     answers,
   }
+}
+
+function validateUrlFieldSupport(errors: string[]) {
+  const genericUrlField: ApplicationFormField = {
+    id: 'field-validation-portfolio-url',
+    key: 'portfolio_url',
+    label: 'Portfolio URL',
+    type: 'URL',
+    required: false,
+    placeholder: 'https://portfolio.example.com',
+  }
+  const requiredUrlField: ApplicationFormField = {
+    ...genericUrlField,
+    id: 'field-validation-required-url',
+    required: true,
+  }
+  const githubField: ApplicationFormField = {
+    id: 'field-validation-github-url',
+    key: 'github_repository_url',
+    label: 'GitHub Repository URL',
+    type: 'URL',
+    required: false,
+    placeholder: 'https://github.com/username/repository',
+    helpText: 'Enter a public GitHub repository URL containing work relevant to this role.',
+  }
+  const cvField: ApplicationFormField = {
+    id: 'field-validation-file',
+    key: 'cv',
+    label: 'CV',
+    type: 'FILE',
+    required: true,
+  }
+  const invalidGithubFileField: ApplicationFormField = {
+    ...cvField,
+    id: 'field-validation-github-file',
+    key: 'github_repository_url',
+    label: 'GitHub Repository URL',
+  }
+  const baseForm: ApplicationForm = {
+    id: 'form-url-validation',
+    jobId: 'job-001',
+    name: 'URL validation form',
+    status: 'DRAFT',
+    version: 1,
+    fields: [
+      { id: 'field-validation-name', key: 'full_name', label: 'Full name', type: 'TEXT', required: true },
+      { id: 'field-validation-email', key: 'email', label: 'Email', type: 'EMAIL', required: true },
+      genericUrlField,
+      githubField,
+      cvField,
+    ],
+    createdAt: '2026-07-18T09:00:00Z',
+    updatedAt: '2026-07-18T09:00:00Z',
+  }
+  const submit = (form: ApplicationForm, values: Record<string, string>): CandidateSubmission => ({
+    formId: form.id,
+    jobId: form.jobId,
+    answers: form.fields.map((field) => ({
+      fieldId: field.id,
+      fieldKey: field.key,
+      fieldType: field.type,
+      value: values[field.key] ?? '',
+    })),
+  })
+
+  recordCheck(errors, getApplicationFormInputType(genericUrlField) === 'url', 'URL field rendering does not use input type url')
+  recordCheck(errors, getApplicationFormInputType(cvField) === 'file', 'FILE field rendering changed')
+  recordCheck(errors, !validateApplicationSubmission({ ...baseForm, fields: [baseForm.fields[0]!, baseForm.fields[1]!, invalidGithubFileField, cvField] }, submit({ ...baseForm, fields: [baseForm.fields[0]!, baseForm.fields[1]!, invalidGithubFileField, cvField] }, { full_name: 'Taylor', email: 'taylor@example.com', github_repository_url: 'resume.pdf', cv: 'taylor.pdf' })).valid, 'GitHub repository URL configured as FILE was accepted')
+  recordCheck(errors, normalizeUrlFieldValue(genericUrlField, '  https://example.com/work  ').valid, 'Valid generic HTTPS URL was rejected')
+  recordCheck(errors, !normalizeUrlFieldValue(genericUrlField, 'not a url').valid, 'Invalid URL was accepted')
+  recordCheck(errors, normalizeUrlFieldValue(genericUrlField, '').valid, 'Optional empty URL was rejected')
+  recordCheck(errors, normalizeGitHubRepositoryUrl('https://github.com/owner/repository').valid, 'Valid GitHub repository URL was rejected')
+  recordCheck(errors, normalizeGitHubRepositoryUrl('https://www.github.com/owner/repository').value === 'https://github.com/owner/repository', 'www GitHub URL was not normalized')
+  recordCheck(errors, normalizeGitHubRepositoryUrl('https://github.com/owner/repository.git').value === 'https://github.com/owner/repository', '.git suffix was not normalized')
+  recordCheck(errors, !normalizeGitHubRepositoryUrl('https://github.com/owner').valid, 'Profile-only GitHub URL was accepted')
+  recordCheck(errors, !normalizeGitHubRepositoryUrl('https://gitlab.com/owner/repository').valid, 'Non-GitHub URL was accepted for github_repository_url')
+  recordCheck(errors, !normalizeGitHubRepositoryUrl('localhost').valid, 'Malformed/local GitHub URL value was accepted')
+
+  const validSubmission = submit(baseForm, {
+    full_name: 'Taylor Morgan',
+    email: 'taylor@example.com',
+    portfolio_url: 'https://portfolio.example.com',
+    github_repository_url: 'https://github.com/owner/repository.git',
+    cv: 'taylor.pdf',
+  })
+  recordCheck(errors, validateApplicationSubmission(baseForm, validSubmission).valid, 'Valid URL application submission was rejected')
+
+  const invalidRequiredForm = { ...baseForm, fields: baseForm.fields.map((field) => field.id === genericUrlField.id ? requiredUrlField : field) }
+  recordCheck(
+    errors,
+    !validateApplicationSubmission(invalidRequiredForm, submit(invalidRequiredForm, { full_name: 'Taylor', email: 'taylor@example.com', cv: 'taylor.pdf' })).valid,
+    'Required URL validation accepted a blank URL',
+  )
+  recordCheck(
+    errors,
+    validateApplicationSubmission(baseForm, submit(baseForm, { full_name: 'Taylor', email: 'taylor@example.com', cv: 'taylor.pdf' })).valid,
+    'Optional empty URL submission was rejected',
+  )
 }
 
 export function validateApplicationFormDomain(): ApplicationFormDomainValidationResult {
@@ -114,6 +215,7 @@ export function validateApplicationFormDomain(): ApplicationFormDomainValidation
     validateApplicationSubmission(form, validSubmission).valid,
     'A valid application submission was rejected',
   )
+  validateUrlFieldSupport(errors)
 
   const emailField = form.fields.find((field) => field.key === 'email')
   const missingEmailSubmission: CandidateSubmission = {
@@ -194,6 +296,11 @@ export function validateApplicationFormDomain(): ApplicationFormDomainValidation
     prepared.application.documents[0]?.id === 'document-validation-new-cv' &&
       prepared.application.documents[0]?.fileName === 'taylor-morgan-cv.pdf',
     'Submission preparation did not create CV document metadata',
+  )
+  recordCheck(
+    errors,
+    !prepared.application.answers.some((answer) => answer.fieldKey === 'github_repository_url'),
+    'GitHub repository URL was incorrectly stored as application answer evidence',
   )
 
   const guidedExperienceField = form.fields.find(

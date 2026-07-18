@@ -58,6 +58,10 @@ export function FormPreview({ form }: FormPreviewProps) {
               <div className="rounded-aura-sm border border-dashed border-harbor/20 bg-frost/70 px-3 py-2.5 text-sm text-aura-text-muted">
                 Choose a file
               </div>
+            ) : field.type === 'URL' ? (
+              <div className="rounded-aura-sm border border-harbor/15 bg-frost/70 px-3 py-2.5 text-sm text-aura-text-muted">
+                {field.placeholder ?? 'https://example.com'}
+              </div>
             ) : (
               <div className="rounded-aura-sm border border-harbor/15 bg-frost/70 px-3 py-2.5 text-sm text-aura-text-muted">
                 {field.placeholder ?? field.type.replace('_', ' ')}

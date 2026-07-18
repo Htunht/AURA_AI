@@ -10,6 +10,7 @@ import { CandidateInterviewPanel } from '../../components/interviews/CandidateIn
 import { CandidateInterviewWorkflow } from '../../components/interviews/CandidateInterviewWorkflow'
 import { CandidateScreeningPanel } from '../../components/screening/CandidateScreeningPanel'
 import { PostDecisionNextStep } from '../../components/evaluation/PostDecisionNextStep'
+import { backendWorkspaceMode } from '../../config/workspaceMode'
 import { PageContainer } from '../../components/layout/PageContainer'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -34,6 +35,7 @@ import {
 import type { ApplicationAnswer } from '../../types/application'
 import { candidateTabAvailability } from '../../utils/candidateDetailPresentation'
 import { formatApplicationStage, formatApplicationStatus, formatDateTime } from '../../utils/helpers'
+import BackendScreeningDetail from '../backend/BackendScreeningDetail'
 
 const backLinkClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-aura-sm border border-[#1E2022]/30 bg-transparent px-4 text-sm font-semibold text-[#1E2022]/85 no-underline transition-all hover:border-[#1E2022] hover:text-[#1E2022] hover:bg-[#1E2022]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E2022]'
 
@@ -56,6 +58,11 @@ function Placeholder({ title, description }: { title: string; description: strin
 
 export default function CandidateDetail() {
   const { candidateId = '' } = useParams()
+  if (backendWorkspaceMode) return <BackendScreeningDetail applicationId={candidateId} />
+  return <DemoCandidateDetail candidateId={candidateId} />
+}
+
+function DemoCandidateDetail({ candidateId }: { candidateId: string }) {
   const { state } = useDemoStore()
   const candidate = selectCandidateById(state, candidateId)
   const applications = selectCandidateApplications(state, candidateId)

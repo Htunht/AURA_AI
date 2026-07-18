@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { HumanReviewCard } from '../../components/reviews/HumanReviewCard'
 import { HumanReviewTable } from '../../components/reviews/HumanReviewTable'
 import { HumanReviewWorkspace } from '../../components/reviews/HumanReviewWorkspace'
+import { backendWorkspaceMode } from '../../config/workspaceMode'
 import { PageContainer } from '../../components/layout/PageContainer'
 import { Dialog } from '../../components/ui/Dialog'
 import { Input } from '../../components/ui/Input'
@@ -14,6 +15,7 @@ import {
   selectHumanReviewQueueSummary,
 } from '../../store/demoSelectors'
 import type { HumanReviewCategory } from '../../types/reviewQueue'
+import BackendScreeningQueue from '../backend/BackendScreeningQueue'
 
 type CategoryFilter = HumanReviewCategory | 'ALL'
 type ConfidenceFilter = 'ALL' | 'BELOW_60' | '60_74' | '75_89' | '90_PLUS'
@@ -48,6 +50,11 @@ function emptyState(category: CategoryFilter) {
 }
 
 export default function HumanReviewQueue() {
+  if (backendWorkspaceMode) return <BackendScreeningQueue />
+  return <DemoHumanReviewQueue />
+}
+
+function DemoHumanReviewQueue() {
   const { state } = useDemoStore()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedApplicationId = searchParams.get('applicationId')

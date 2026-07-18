@@ -75,6 +75,7 @@ export async function validateDemoServices(): Promise<DemoServiceValidationResul
       'TEXT',
       'EMAIL',
       'PHONE',
+      'URL',
       'NUMBER',
       'TEXTAREA',
       'MULTI_SELECT',

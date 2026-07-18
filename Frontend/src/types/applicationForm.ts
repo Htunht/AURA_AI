@@ -4,6 +4,7 @@ export type ApplicationFormFieldType =
   | 'TEXT'
   | 'EMAIL'
   | 'PHONE'
+  | 'URL'
   | 'NUMBER'
   | 'TEXTAREA'
   | 'MULTI_SELECT'

@@ -1,11 +1,13 @@
 import type { ApplicationSubmissionValue } from '../../types/application'
 import type { ApplicationFormField } from '../../types/applicationForm'
+import { getApplicationFormInputType } from '../../utils/applicationFormFieldRendering'
 import { Input } from '../ui/Input'
 
 type DynamicFormFieldProps = {
   field: ApplicationFormField
   value: ApplicationSubmissionValue | undefined
   onChange: (value: ApplicationSubmissionValue) => void
+  onFileChange?: (file: File | undefined) => void
   error?: string
 }
 
@@ -13,6 +15,7 @@ export function DynamicFormField({
   field,
   value,
   onChange,
+  onFileChange,
   error,
 }: DynamicFormFieldProps) {
   const controlId = `application-${field.id}`
@@ -71,7 +74,11 @@ export function DynamicFormField({
           <Input
             id={controlId}
             type="file"
-            onChange={(event) => onChange(event.target.files?.[0]?.name ?? '')}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              onChange(file?.name ?? '')
+              onFileChange?.(file)
+            }}
             aria-invalid={Boolean(error)}
           />
           {stringValue ? (
@@ -109,20 +116,13 @@ export function DynamicFormField({
       )
     }
 
-    const inputType =
-      field.type === 'EMAIL'
-        ? 'email'
-        : field.type === 'PHONE'
-          ? 'tel'
-          : 'text'
-
     return (
       <Input
         id={controlId}
-        type={inputType}
+        type={getApplicationFormInputType(field)}
         value={stringValue}
         placeholder={field.placeholder}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(field.type === 'URL' ? event.target.value.trimStart() : event.target.value)}
         aria-invalid={Boolean(error)}
       />
     )

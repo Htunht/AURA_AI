@@ -7,10 +7,20 @@ import type { ApplicationForm } from '../types/applicationForm'
 import type { Candidate } from '../types/candidate'
 import { validateApplicationSubmission } from '../utils/applicationSubmissionValidation'
 import { DemoServiceError } from './DemoServiceError'
+import { apiRequest } from './api'
 
 export type PreparedApplicationSubmission = {
   candidate: Candidate
   application: Application
+}
+
+export type BackendApplicationSubmissionReceipt = {
+  application_id: string
+  submission_status: string
+  screening_run_id: string
+  screening_status: string
+  status_token: string
+  message: string
 }
 
 const candidateFieldKeys = new Set([
@@ -24,6 +34,9 @@ const candidateFieldKeys = new Set([
   'location',
   'skills',
   'cv',
+  'github_repository_url',
+  'github_url',
+  'repository_url',
 ])
 
 export function prepareApplicationSubmission(input: {
@@ -149,4 +162,38 @@ export function prepareApplicationSubmission(input: {
       submittedAt: input.submittedAt,
     },
   }
+}
+
+export async function submitApplicationToBackend(input: {
+  jobId: string
+  candidateFullName: string
+  candidateEmail: string
+  candidatePhone?: string
+  answers: Array<{
+    question_key: string
+    question_label: string
+    answer_text: string
+    linked_requirement_codes?: string[]
+  }>
+  githubRepositoryUrl?: string
+  cvFile?: File
+  idempotencyKey: string
+}): Promise<BackendApplicationSubmissionReceipt> {
+  const formData = new FormData()
+  formData.set('job_id', input.jobId)
+  formData.set('candidate_full_name', input.candidateFullName)
+  formData.set('candidate_email', input.candidateEmail)
+  if (input.candidatePhone) formData.set('candidate_phone', input.candidatePhone)
+  if (input.githubRepositoryUrl) formData.set('github_repository_url', input.githubRepositoryUrl)
+  if (input.cvFile) formData.set('cv_file', input.cvFile)
+  formData.set('consent', 'true')
+  formData.set('application_answers', JSON.stringify(input.answers))
+
+  return apiRequest<BackendApplicationSubmissionReceipt>('/applications/submit', {
+    method: 'POST',
+    headers: {
+      'Idempotency-Key': input.idempotencyKey,
+    },
+    body: formData,
+  })
 }

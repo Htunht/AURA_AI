@@ -6,6 +6,7 @@ import type {
   ApplicationForm,
   ApplicationFormField,
 } from '../types/applicationForm'
+import { normalizeUrlFieldValue } from './urlFieldValidation'
 
 export type ApplicationSubmissionValidationResult = {
   valid: boolean
@@ -21,10 +22,16 @@ function validateAnswerValue(
 ) {
   const { value } = answer
 
+  if (field.key === 'github_repository_url' && field.type !== 'URL') {
+    errors.push('GitHub Repository URL must use a URL field, not a file upload.')
+    return
+  }
+
   if (
     field.type === 'TEXT' ||
     field.type === 'EMAIL' ||
     field.type === 'PHONE' ||
+    field.type === 'URL' ||
     field.type === 'TEXTAREA' ||
     field.type === 'FILE'
   ) {
@@ -39,6 +46,13 @@ function validateAnswerValue(
 
     if (field.type === 'EMAIL' && value.trim() && !emailPattern.test(value)) {
       errors.push(`Field ${field.key} must contain a valid email address.`)
+    }
+
+    if (field.type === 'URL') {
+      const normalized = normalizeUrlFieldValue(field, value)
+      if (!normalized.valid) {
+        errors.push(`Field ${field.key}: ${normalized.error}`)
+      }
     }
 
     return

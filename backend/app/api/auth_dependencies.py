@@ -57,3 +57,22 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def require_roles(*allowed_roles: str):
+    allowed = set(allowed_roles)
+
+    def dependency(
+        current_user: Annotated[User, Depends(get_current_user)],
+    ) -> User:
+        user_roles = {user_role.role.code for user_role in current_user.user_roles}
+
+        if user_roles.isdisjoint(allowed):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to access this resource",
+            )
+
+        return current_user
+
+    return dependency

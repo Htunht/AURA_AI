@@ -12,3 +12,6 @@ pyjwt
 pwdlib[argon2]
 email-validator
 python-multipart
+openai
+PyMuPDF
+python-docx

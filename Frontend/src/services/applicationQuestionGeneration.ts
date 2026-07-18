@@ -24,7 +24,8 @@ export function generateRequirementAwareQuestions({ job, requirements, existingF
     suggestion(job, field(job, 'full_name', 'Full name', 'TEXT', true)), suggestion(job, field(job, 'email', 'Email', 'EMAIL', true)),
     suggestion(job, field(job, 'phone', 'Phone', 'PHONE', false)), suggestion(job, field(job, 'current_position', 'Current position', 'TEXT', false)),
     suggestion(job, field(job, 'years_of_experience', 'How many years of professional experience do you have?', 'NUMBER', true), minimum ? [minimum.id] : [], ['relevant_experience'], 'REQUIRED', 'Checks the minimum experience requirement.'),
-    suggestion(job, field(job, 'location', 'Location', 'TEXT', false)), suggestion(job, field(job, 'cv', 'CV / résumé', 'FILE', true)),
+    suggestion(job, field(job, 'location', 'Location', 'TEXT', false)), suggestion(job, { ...field(job, 'github_repository_url', 'GitHub Repository URL', 'URL', false, 'Enter a public GitHub repository URL containing work relevant to this role.'), placeholder: 'https://github.com/username/repository' }),
+    suggestion(job, field(job, 'cv', 'CV / résumé', 'FILE', true)),
   ]
   const requirementQuestions = requirements.filter((item) => (item.type === 'REQUIRED_SKILL' || item.type === 'PREFERRED_SKILL') && !covered.has(item.id)).map((item) => suggestion(job, field(job, `${item.type === 'REQUIRED_SKILL' ? 'required' : 'preferred'}_${requirementSlug(item.skillName ?? item.label)}_evidence`, `Describe how you have used ${item.skillName ?? item.label} in relevant work.`, 'TEXTAREA', item.importance === 'REQUIRED', 'Focus on your contribution, context, and outcome.'), [item.id], item.importance === 'REQUIRED' ? ['required_qualifications', 'role_evidence'] : ['role_evidence'], item.importance, `${item.importance === 'REQUIRED' ? 'Required' : 'Preferred'} qualification evidence for ${item.label}.`))
   const supporting = [

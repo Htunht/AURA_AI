@@ -1,27 +1,63 @@
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import logo from '../../assets/logo.png'
 import { DynamicFormField } from '../../components/forms/DynamicFormField'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
+import { backendWorkspaceMode, demoWorkspaceMode } from '../../config/workspaceMode'
 import { useDemoStore } from '../../hooks/useDemoStore'
-import { prepareApplicationSubmission, type PreparedApplicationSubmission } from '../../services/applicationSubmission'
+import { API_BASE_URL } from '../../services/api'
+import { getPublicBackendApplicationForm } from '../../services/backendRecruiterApi'
+import { prepareApplicationSubmission, submitApplicationToBackend, type BackendApplicationSubmissionReceipt, type PreparedApplicationSubmission } from '../../services/applicationSubmission'
 import { selectJobById, selectPublishedApplicationFormByJobId } from '../../store/demoSelectors'
 import type { ApplicationSubmissionValue, CandidateSubmission } from '../../types/application'
+import type { ApplicationForm, ApplicationFormField } from '../../types/applicationForm'
 import { validateApplicationSubmission } from '../../utils/applicationSubmissionValidation'
+import { isBackendUuid, isDemoId } from '../../utils/backendIds'
 import { canAcceptPublicApplications } from '../../utils/jobValidation'
+import { normalizeUrlFieldValue } from '../../utils/urlFieldValidation'
 
 const DEMO_TIMESTAMP = '2026-07-16T10:30:00Z'
 
 export default function PublicJobApplication() {
   const { jobId = '' } = useParams()
+  if (backendWorkspaceMode) return <BackendPublicJobApplication jobId={jobId} />
+  return <DemoPublicJobApplication jobId={jobId} />
+}
+
+function DemoPublicJobApplication({ jobId }: { jobId: string }) {
   const { state, dispatch } = useDemoStore()
   const [values, setValues] = useState<Record<string, ApplicationSubmissionValue | undefined>>({})
+  const [files, setFiles] = useState<Record<string, File | undefined>>({})
   const [errors, setErrors] = useState<string[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState<PreparedApplicationSubmission>()
+  const [backendReceipt, setBackendReceipt] = useState<BackendApplicationSubmissionReceipt>()
+  const [candidateStatus, setCandidateStatus] = useState<string>()
   const job = selectJobById(state, jobId)
   const form = selectPublishedApplicationFormByJobId(state, jobId)
+
+  useEffect(() => {
+    if (!backendReceipt?.status_token) return
+
+    localStorage.setItem(
+      `aura-application-receipt-${backendReceipt.application_id}`,
+      JSON.stringify(backendReceipt),
+    )
+
+    const pollStatus = async () => {
+      const params = new URLSearchParams({ status_token: backendReceipt.status_token })
+      const response = await fetch(`${API_BASE_URL}/applications/${backendReceipt.application_id}/submission-status?${params.toString()}`)
+      if (!response.ok) return
+      const body = await response.json() as { message?: string }
+      setCandidateStatus(body.message)
+    }
+
+    void pollStatus()
+    const intervalId = window.setInterval(() => void pollStatus(), 3000)
+    return () => window.clearInterval(intervalId)
+  }, [backendReceipt])
 
   if (!job) {
     return <PublicUnavailable title="Job not found" message="This job opening does not exist." />
@@ -40,7 +76,7 @@ export default function PublicJobApplication() {
     return <PublicUnavailable title={job.title} message="Applications are not currently available." />
   }
 
-  if (submitted) {
+  if (submitted || backendReceipt) {
     return (
       <main className="min-h-screen bg-frost px-5 py-8">
         <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[620px] place-items-center">
@@ -54,18 +90,22 @@ export default function PublicJobApplication() {
               Application received
             </p>
             <h1 className="m-0 text-[26px] font-bold leading-tight text-depth md:text-[30px]">
-              Thank you, {submitted.candidate.fullName}.
+              Thank you, {submitted?.candidate.fullName ?? 'your application has been received'}.
             </h1>
             <p className="mt-3 mb-0 text-sm leading-6 text-aura-text-secondary">
-              Your application for {job.title} has been submitted. The hiring
-              team will review your information.
+              {backendReceipt?.message ?? `Your application for ${job.title} has been submitted. The hiring team will review your information.`}
             </p>
+            {candidateStatus ? (
+              <p className="mt-3 mb-0 text-sm font-semibold text-harbor">
+                {candidateStatus}
+              </p>
+            ) : null}
             <dl className="my-6 rounded-aura-sm border border-harbor/10 bg-frost/70 px-4 py-3">
               <dt className="text-[11px] font-semibold uppercase tracking-wide text-aura-text-muted">
                 Application reference
               </dt>
               <dd className="mt-1 m-0 font-utility text-xs font-semibold text-harbor">
-                {submitted.application.id}
+                {submitted?.application.id ?? backendReceipt?.application_id}
               </dd>
             </dl>
             <Link
@@ -80,23 +120,78 @@ export default function PublicJobApplication() {
     )
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const normalizedValues = form.fields.reduce<Record<string, ApplicationSubmissionValue | undefined>>((accumulator, field) => {
+      const value = values[field.id]
+      if (field.type === 'URL' && typeof value === 'string') {
+        const normalized = normalizeUrlFieldValue(field, value)
+        accumulator[field.id] = normalized.valid ? normalized.value : value.trim()
+        return accumulator
+      }
+      accumulator[field.id] = value
+      return accumulator
+    }, {})
     const submission: CandidateSubmission = {
       formId: form.id,
       jobId: job.id,
       answers: form.fields
-        .filter((field) => values[field.id] !== undefined)
+        .filter((field) => normalizedValues[field.id] !== undefined)
         .map((field) => ({
           fieldId: field.id,
           fieldKey: field.key,
           fieldType: field.type,
-          value: values[field.id] ?? '',
+          value: normalizedValues[field.id] ?? '',
         })),
     }
     const validation = validateApplicationSubmission(form, submission)
     if (!validation.valid) {
       setErrors(validation.errors)
+      return
+    }
+    setValues(normalizedValues)
+
+    if (!demoWorkspaceMode) {
+      setIsSubmitting(true)
+      setErrors([])
+      try {
+        const answerFields = new Set(['full_name', 'email', 'phone', 'cv', 'github_repository_url', 'github_url', 'repository_url'])
+        const readString = (key: string) => {
+          const field = form.fields.find((item) => item.key === key)
+          const value = field ? normalizedValues[field.id] : undefined
+          return typeof value === 'string' ? value.trim() : ''
+        }
+        const githubUrl = readString('github_repository_url') || readString('github_url') || readString('repository_url')
+        const cvField = form.fields.find((field) => field.type === 'FILE')
+        const receipt = await submitApplicationToBackend({
+          jobId: job.id,
+          candidateFullName: readString('full_name'),
+          candidateEmail: readString('email'),
+          candidatePhone: readString('phone'),
+          githubRepositoryUrl: githubUrl || undefined,
+          cvFile: cvField ? files[cvField.id] : undefined,
+          idempotencyKey: crypto.randomUUID(),
+          answers: form.fields
+            .filter((field) => !answerFields.has(field.key))
+            .map((field) => {
+              const answerValue = normalizedValues[field.id]
+
+              return {
+                question_key: field.key,
+                question_label: field.label,
+                answer_text: Array.isArray(answerValue)
+                  ? answerValue.join(', ')
+                  : String(answerValue ?? ''),
+                linked_requirement_codes: field.screeningMapping?.requirementIds ?? [],
+              }
+            }),
+        })
+        setBackendReceipt(receipt)
+      } catch (error) {
+        setErrors([error instanceof Error ? error.message : 'Application submission failed.'])
+      } finally {
+        setIsSubmitting(false)
+      }
       return
     }
 
@@ -196,6 +291,7 @@ export default function PublicJobApplication() {
                 field={field}
                 value={values[field.id]}
                 onChange={(value) => setValues((current) => ({ ...current, [field.id]: value }))}
+                onFileChange={(file) => setFiles((current) => ({ ...current, [field.id]: file }))}
               />
             ))}
           </div>
@@ -207,8 +303,187 @@ export default function PublicJobApplication() {
               <ArrowLeft size={16} />
               Back to job openings
             </Link>
-            <Button type="submit">Submit application</Button>
+            <Button disabled={isSubmitting} type="submit">
+              {isSubmitting ? 'Submitting...' : 'Submit application'}
+            </Button>
           </div>
+        </form>
+      </Card>
+    </main>
+  )
+}
+
+function BackendPublicJobApplication({ jobId }: { jobId: string }) {
+  const [form, setForm] = useState<ApplicationForm>()
+  const [jobTitle, setJobTitle] = useState('')
+  const [department, setDepartment] = useState<string | null>(null)
+  const [values, setValues] = useState<Record<string, ApplicationSubmissionValue | undefined>>({})
+  const [files, setFiles] = useState<Record<string, File | undefined>>({})
+  const [errors, setErrors] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [backendReceipt, setBackendReceipt] = useState<BackendApplicationSubmissionReceipt>()
+  const [candidateStatus, setCandidateStatus] = useState<string>()
+  const invalidBackendJobId = isDemoId(jobId) || !isBackendUuid(jobId)
+
+  useEffect(() => {
+    if (invalidBackendJobId) {
+      setLoading(false)
+      return
+    }
+    async function load() {
+      try {
+        const response = await getPublicBackendApplicationForm(jobId)
+        setJobTitle(response.title)
+        setDepartment(response.department)
+        setForm({
+          id: `backend-form-${response.job_id}`,
+          jobId: response.job_id,
+          name: `${response.title} application`,
+          description: response.description,
+          status: 'PUBLISHED',
+          version: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          fields: response.fields.map((field): ApplicationFormField => ({
+            id: field.id,
+            key: field.key,
+            label: field.label,
+            type: field.type as ApplicationFormField['type'],
+            required: field.required,
+            placeholder: field.placeholder ?? undefined,
+            helpText: field.helpText ?? undefined,
+            options: field.options,
+            screeningMapping: field.linkedRequirementCodes.length ? { requirementIds: field.linkedRequirementCodes, criterionKeys: [], evidenceImportance: field.required ? 'REQUIRED' : 'SUPPORTING' } : undefined,
+          })),
+        })
+      } catch (error) {
+        setErrors([error instanceof Error ? error.message : 'Could not load backend application form.'])
+      } finally {
+        setLoading(false)
+      }
+    }
+    void load()
+  }, [invalidBackendJobId, jobId])
+
+  useEffect(() => {
+    if (!backendReceipt?.status_token) return
+    localStorage.setItem(`aura-backend-application-receipt-${backendReceipt.application_id}`, JSON.stringify(backendReceipt))
+    const pollStatus = async () => {
+      const params = new URLSearchParams({ status_token: backendReceipt.status_token })
+      const response = await fetch(`${API_BASE_URL}/applications/${backendReceipt.application_id}/submission-status?${params.toString()}`)
+      if (!response.ok) return
+      const body = await response.json() as { message?: string }
+      setCandidateStatus(body.message)
+    }
+    void pollStatus()
+    const intervalId = window.setInterval(() => void pollStatus(), 3000)
+    return () => window.clearInterval(intervalId)
+  }, [backendReceipt])
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!form) return
+    const normalizedValues = form.fields.reduce<Record<string, ApplicationSubmissionValue | undefined>>((accumulator, field) => {
+      const value = values[field.id]
+      if (field.type === 'URL' && typeof value === 'string') {
+        const normalized = normalizeUrlFieldValue(field, value)
+        accumulator[field.id] = normalized.valid ? normalized.value : value.trim()
+        return accumulator
+      }
+      accumulator[field.id] = value
+      return accumulator
+    }, {})
+    const submission: CandidateSubmission = {
+      formId: form.id,
+      jobId: form.jobId,
+      answers: form.fields.filter((field) => normalizedValues[field.id] !== undefined || field.required).map((field) => ({
+        fieldId: field.id,
+        fieldKey: field.key,
+        fieldType: field.type,
+        value: normalizedValues[field.id] ?? '',
+      })),
+    }
+    const validation = validateApplicationSubmission(form, submission)
+    if (!validation.valid) {
+      setErrors(validation.errors)
+      return
+    }
+    setValues(normalizedValues)
+    const readString = (key: string) => {
+      const field = form.fields.find((item) => item.key === key)
+      const value = field ? normalizedValues[field.id] : undefined
+      return typeof value === 'string' ? value.trim() : ''
+    }
+    const excluded = new Set(['full_name', 'email', 'phone', 'cv', 'github_repository_url'])
+    const cvField = form.fields.find((field) => field.key === 'cv')
+    setIsSubmitting(true)
+    setErrors([])
+    try {
+      const receipt = await submitApplicationToBackend({
+        jobId: form.jobId,
+        candidateFullName: readString('full_name'),
+        candidateEmail: readString('email'),
+        candidatePhone: readString('phone'),
+        githubRepositoryUrl: readString('github_repository_url') || undefined,
+        cvFile: cvField ? files[cvField.id] : undefined,
+        idempotencyKey: crypto.randomUUID(),
+        answers: form.fields.filter((field) => !excluded.has(field.key)).map((field) => {
+          const answerValue = normalizedValues[field.id]
+          return {
+            question_key: field.key,
+            question_label: field.label,
+            answer_text: Array.isArray(answerValue) ? answerValue.join(', ') : String(answerValue ?? ''),
+            linked_requirement_codes: field.screeningMapping?.requirementIds ?? [],
+          }
+        }),
+      })
+      setBackendReceipt(receipt)
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : 'Application submission failed.'])
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (invalidBackendJobId) return <PublicUnavailable title="Backend job required" message="Backend mode expects a real PostgreSQL job UUID. Demo job IDs such as job-003 remain demo-only." />
+  if (loading) return <PublicUnavailable title="Loading application" message="Loading the backend application form." />
+  if (!form) return <PublicUnavailable title="Application unavailable" message={errors[0] ?? 'This backend application form could not be loaded.'} />
+  if (backendReceipt) {
+    return (
+      <main className="min-h-screen bg-frost px-5 py-8">
+        <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[620px] place-items-center">
+          <Card className="w-full p-8 text-center shadow-aura-md md:p-10">
+            <CheckCircle2 className="mx-auto mb-4 text-aura-success" size={42} />
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">Application received</p>
+            <h1 className="m-0 text-[26px] font-bold leading-tight text-depth md:text-[30px]">Your application has been submitted.</h1>
+            <p className="mt-3 mb-0 text-sm leading-6 text-aura-text-secondary">{backendReceipt.message}</p>
+            {candidateStatus ? <p className="mt-3 mb-0 text-sm font-semibold text-harbor">{candidateStatus}</p> : null}
+            <dl className="my-6 rounded-aura-sm border border-harbor/10 bg-frost/70 px-4 py-3"><dt className="text-[11px] font-semibold uppercase tracking-wide text-aura-text-muted">Backend application ID</dt><dd className="mt-1 m-0 break-all font-utility text-xs font-semibold text-harbor">{backendReceipt.application_id}</dd></dl>
+          </Card>
+        </section>
+      </main>
+    )
+  }
+
+  return (
+    <main className="min-h-screen bg-frost px-5 py-6 md:px-8">
+      <header className="mx-auto flex max-w-[880px] items-center justify-between py-2 pb-6 text-sm text-aura-text-muted">
+        <Link to="/login" className="flex items-center gap-3 font-semibold text-depth no-underline"><img src={logo} alt="AURA Logo" className="size-8 flex-none object-contain" /><span>AURA Technology</span></Link>
+        <span>Backend application</span>
+      </header>
+      <section className="mx-auto max-w-[880px] pb-5">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">Careers at AURA Technology</p>
+        <h1 className="m-0 text-[28px] font-bold leading-tight text-depth md:text-[32px]">Apply for this role</h1>
+        <p className="mt-2 mb-0 text-sm text-aura-text-secondary md:text-[15px]">{jobTitle} {department ? `· ${department}` : ''}</p>
+      </section>
+      <Card className="mx-auto max-w-[880px] rounded-aura-lg p-5 shadow-aura-sm md:p-8">
+        {errors.length ? <div className="mb-5 rounded-aura-sm border border-aura-danger/30 bg-aura-danger-soft px-4 py-3 text-sm text-aura-danger" role="alert"><strong>Review your application</strong><ul className="mb-0 mt-2 pl-5">{errors.map((error) => <li key={error}>{error}</li>)}</ul></div> : null}
+        <form className="grid gap-6" onSubmit={submit} noValidate>
+          <div className="grid gap-x-5 gap-y-6 md:grid-cols-2 [&>div:has(textarea)]:md:col-span-2 [&>div:has(input[type='file'])]:md:col-span-2">
+            {form.fields.map((field) => <DynamicFormField key={field.id} field={field} value={values[field.id]} onChange={(value) => setValues((current) => ({ ...current, [field.id]: value }))} onFileChange={(file) => setFiles((current) => ({ ...current, [field.id]: file }))} />)}
+          </div>
+          <div className="flex justify-end border-t border-harbor/15 pt-5"><Button disabled={isSubmitting} type="submit">{isSubmitting ? 'Submitting...' : 'Submit application'}</Button></div>
         </form>
       </Card>
     </main>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import type {
   ApplicationFormField,
   ApplicationFormFieldType,
@@ -18,6 +18,7 @@ const fieldTypes: ApplicationFormFieldType[] = [
   'TEXT',
   'EMAIL',
   'PHONE',
+  'URL',
   'NUMBER',
   'TEXTAREA',
   'MULTI_SELECT',
@@ -56,12 +57,27 @@ export function FormFieldEditor({
   const [selectedCriterionKeys, setSelectedCriterionKeys] = useState(initialField?.screeningMapping?.criterionKeys ?? [])
   const [evidenceImportance, setEvidenceImportance] = useState(initialField?.screeningMapping?.evidenceImportance ?? 'SUPPORTING')
 
+  useEffect(() => {
+    if (key.trim() !== 'github_repository_url') return
+    setType('URL')
+    if (!label.trim() || label === initialField?.label) setLabel('GitHub Repository URL')
+    if (!placeholder.trim() || placeholder === initialField?.placeholder) setPlaceholder('https://github.com/username/repository')
+    if (!helpText.trim() || helpText === initialField?.helpText) {
+      setHelpText('Enter a public GitHub repository URL containing work relevant to this role.')
+    }
+  }, [helpText, initialField?.helpText, initialField?.label, initialField?.placeholder, key, label, placeholder])
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const normalizedKey = key.trim()
 
     if (!label.trim() || !normalizedKey) {
       setError('Field label and field key are required.')
+      return
+    }
+
+    if (normalizedKey === 'github_repository_url' && type !== 'URL') {
+      setError('GitHub Repository URL must use the URL field type.')
       return
     }
 
