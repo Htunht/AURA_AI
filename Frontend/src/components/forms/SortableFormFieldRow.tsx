@@ -70,7 +70,7 @@ export function SortableFormFieldRow({
         } ${!editable ? 'bg-white/80' : ''}`}
       >
         <span
-          className="grid place-items-center border-r border-harbor/10 bg-frost font-utility text-xs font-bold text-harbor/70"
+          className="grid place-items-center border-r border-white/10 bg-depth font-utility text-xs font-bold text-frost"
           aria-hidden="true"
         >
           {String(index + 1).padStart(2, '0')}

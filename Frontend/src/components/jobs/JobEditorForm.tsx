@@ -14,6 +14,11 @@ type JobEditorFormProps = {
   onSubmit: (input: JobDraftInput) => void
   onCancel: () => void
   requirementsWarning?: boolean
+  sectionTitles?: {
+    overview: string
+    requiredSkills: string
+    preferredSkills: string
+  }
 }
 
 const fieldClass = 'h-10 w-full rounded-aura-sm border border-[#1E2022]/12 bg-white px-3 text-sm text-[#1E2022] shadow-aura-xs focus:border-[#C7FF38]/60 focus:outline-none focus:ring-2 focus:ring-[#C7FF38]/20 transition-all duration-200 focus:scale-[1.005] hover:border-[#1E2022]/25'
@@ -39,7 +44,7 @@ function Section({ title, description, children }: { title: string; description:
   return <Card className="p-5 md:p-6"><div className="border-b border-[#1E2022]/10 pb-4"><h2 className="m-0 text-lg font-semibold text-[#1E2022]">{title}</h2><p className="mb-0 mt-1 text-sm text-slate-500">{description}</p></div><div className="mt-5">{children}</div></Card>
 }
 
-export function JobEditorForm({ initialValue, submitLabel, onSubmit, onCancel, requirementsWarning }: JobEditorFormProps) {
+export function JobEditorForm({ initialValue, submitLabel, onSubmit, onCancel, requirementsWarning, sectionTitles }: JobEditorFormProps) {
   const [form, setForm] = useState(initialValue)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [validationDialogOpen, setValidationDialogOpen] = useState(false)
@@ -91,6 +96,11 @@ export function JobEditorForm({ initialValue, submitLabel, onSubmit, onCancel, r
     focusJobDraftControl(field, fieldRefs)
   }
   const orderedIssues = getOrderedJobDraftIssues(errors)
+  const titles = sectionTitles ?? {
+    overview: 'Role overview',
+    requiredSkills: 'Required skills',
+    preferredSkills: 'Preferred skills',
+  }
 
   return (
     <form onSubmit={submit} noValidate className="space-y-6">
@@ -106,7 +116,7 @@ export function JobEditorForm({ initialValue, submitLabel, onSubmit, onCancel, r
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Main Column */}
         <div className="lg:col-span-2 space-y-6 animate-fade-in">
-          <Section title="Role overview" description="Give candidates and recruiters a clear description of the role.">
+          <Section title={titles.overview} description="Give candidates and recruiters a clear description of the role.">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Job title" error={errors.title} errorId={errorId('title')}>
                 <input ref={titleRef} id="job-draft-title" className={fieldClass} value={form.title} onChange={(event) => update('title', event.target.value)} {...invalidProps('title')} />
@@ -122,11 +132,11 @@ export function JobEditorForm({ initialValue, submitLabel, onSubmit, onCancel, r
             </div>
           </Section>
 
-          <Section title="Required skills" description="Candidates should provide evidence for each core capability.">
+          <Section title={titles.requiredSkills} description="Candidates should provide evidence for each core capability.">
             <SkillListEditor label="Required skills" skills={form.requiredSkills} otherSkills={form.preferredSkills} onChange={(skills) => update('requiredSkills', skills)} error={errors.requiredSkills} inputRef={requiredSkillsRef} inputId="job-draft-required-skills" errorId={errorId('requiredSkills')} />
           </Section>
 
-          <Section title="Preferred skills" description="Useful strengths that are not mandatory for the role.">
+          <Section title={titles.preferredSkills} description="Useful strengths that are not mandatory for the role.">
             <SkillListEditor label="Preferred skills" skills={form.preferredSkills} otherSkills={form.requiredSkills} onChange={(skills) => update('preferredSkills', skills)} error={errors.preferredSkills} inputRef={preferredSkillsRef} inputId="job-draft-preferred-skills" errorId={errorId('preferredSkills')} />
           </Section>
         </div>

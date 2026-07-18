@@ -26,11 +26,11 @@ export default function Interviews() {
   const history = items.filter((item) => item.interview.status === 'COMPLETED' || item.interview.status === 'CANCELLED')
   const [activeTab, setActiveTab] = useState<OperationsTab>(attention.length ? 'attention' : inProgress.length ? 'progress' : awaiting.length ? 'awaiting' : current.length ? 'scheduled' : 'history')
   const tabs: Array<{ id: OperationsTab; label: string; count: number }> = [
-    { id: 'attention', label: 'Needs attention', count: attention.length },
-    { id: 'progress', label: 'In progress', count: inProgress.length },
-    { id: 'awaiting', label: 'Waiting on candidate', count: awaiting.length },
-    { id: 'scheduled', label: 'Upcoming', count: current.length },
-    { id: 'history', label: 'Past', count: history.length },
+    { id: 'attention', label: 'Needs Review', count: attention.length },
+    { id: 'progress', label: 'Invitation Sent', count: inProgress.length },
+    { id: 'awaiting', label: 'Awaiting Candidate', count: awaiting.length },
+    { id: 'scheduled', label: 'Scheduled', count: current.length },
+    { id: 'history', label: 'Completed', count: history.length },
   ]
   const failedCount = attention.filter((item) => item.deliveryStatus === 'FAILED').length
   const unresolvedJobs = selectJobsWithoutResolvedSchedulingPolicy(state)
@@ -38,11 +38,6 @@ export default function Interviews() {
   useEffect(() => {
     if (attention.length > 0) setActiveTab('attention')
   }, [attention.length])
-
-  useEffect(() => {
-    if (activeTab === 'progress' && inProgress.length === 0 && current.length > 0) setActiveTab('scheduled')
-    if (activeTab === 'awaiting' && awaiting.length === 0 && current.length > 0) setActiveTab('scheduled')
-  }, [activeTab, awaiting.length, current.length, inProgress.length])
 
   return <PageContainer title="Interviews" hideHeader>
     <div className="mx-auto max-w-[1240px]">

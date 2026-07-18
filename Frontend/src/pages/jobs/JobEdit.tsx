@@ -23,5 +23,5 @@ export default function JobEdit() {
     dispatch({ type: 'UPDATE_JOB', payload: { jobId: job!.id, changes: { title: input.title.trim(), department: input.department.trim(), description: input.description.trim(), positionsCount: input.positionsCount, employmentType: input.employmentType, workArrangement: input.workArrangement, location: input.location.trim() || undefined, minimumExperienceYears: input.minimumExperienceYears, requiredSkills: draftSkillsToRequirements(input, job!.requiredSkills), applicationDeadline: input.applicationDeadline || undefined }, updatedAt: new Date().toISOString() } })
     navigate(`/jobs/${job!.id}`)
   }
-  return <PageContainer eyebrow="Job setup" title={`Edit ${job.title}`} description="Update role details without changing existing application or screening configuration."><JobEditorForm initialValue={initial} submitLabel={requirementsChanged ? 'Save and keep existing setup' : 'Save changes'} onSubmit={save} onCancel={() => navigate(`/jobs/${job.id}`)} requirementsWarning={requirementsChanged} /></PageContainer>
+  return <PageContainer eyebrow="Job setup" title={`Edit ${job.title}`}><JobEditorForm initialValue={initial} submitLabel={requirementsChanged ? 'Save and keep existing setup' : 'Save changes'} onSubmit={save} onCancel={() => navigate(`/jobs/${job.id}`)} requirementsWarning={requirementsChanged} /></PageContainer>
 }

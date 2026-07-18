@@ -241,6 +241,10 @@ export function canOpenJob(state: DemoState, jobId: string, changedAt: string): 
   if (job?.applicationDeadline && new Date(`${job.applicationDeadline}T23:59:59`).getTime() <= new Date(changedAt).getTime()) {
     return { status: 'JOB_DETAILS_INCOMPLETE', ready: false, issues: ['Choose a future application deadline before opening this job.'] }
   }
+  const customizedSchedule = state.interviewSchedulingPolicies.some((policy) => policy.scope === 'JOB' && policy.jobId === jobId && policy.status === 'ACTIVE')
+  if (!customizedSchedule) {
+    return { status: 'JOB_DETAILS_INCOMPLETE', ready: false, issues: ['Customize this job schedule before opening this job.'] }
+  }
   return readiness
 }
 

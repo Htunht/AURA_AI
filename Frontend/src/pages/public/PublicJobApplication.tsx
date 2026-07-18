@@ -78,41 +78,14 @@ function DemoPublicJobApplication({ jobId }: { jobId: string }) {
     return (
       <main className="min-h-screen bg-frost px-5 py-8">
         <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[620px] place-items-center">
-          <Card className="w-full p-8 text-center shadow-aura-md md:p-10">
-            <CheckCircle2
-              className="mx-auto mb-4 text-aura-success"
-              size={42}
-              aria-hidden="true"
-            />
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">
-              Application received
-            </p>
-            <h1 className="m-0 text-[26px] font-bold leading-tight text-depth md:text-[30px]">
-              Thank you, {submitted?.candidate.fullName ?? 'your application has been received'}.
-            </h1>
-            <p className="mt-3 mb-0 text-sm leading-6 text-aura-text-secondary">
-              {backendReceipt?.message ?? `Your application for ${job.title} has been submitted. The hiring team will review your information.`}
-            </p>
-            {candidateStatus ? (
-              <p className="mt-3 mb-0 text-sm font-semibold text-harbor">
-                {candidateStatus}
-              </p>
-            ) : null}
-            <dl className="my-6 rounded-aura-sm border border-harbor/10 bg-frost/70 px-4 py-3">
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-aura-text-muted">
-                Application reference
-              </dt>
-              <dd className="mt-1 m-0 font-utility text-xs font-semibold text-harbor">
-                {submitted?.application.id ?? backendReceipt?.application_id}
-              </dd>
-            </dl>
-            <Link
-              className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-4 text-sm font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] hover:bg-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)] duration-150"
-              to="/jobs"
-            >
-              View open roles
-            </Link>
-          </Card>
+          <ReceiptVoucher
+            heading={`Thank you, ${submitted?.candidate.fullName ?? 'your application has been received'}.`}
+            message={backendReceipt?.message ?? `Your application for ${job.title} has been submitted. The hiring team will review your information.`}
+            referenceLabel="Application reference"
+            referenceValue={submitted?.application.id ?? backendReceipt?.application_id}
+            status={candidateStatus}
+            showViewRoles
+          />
         </section>
       </main>
     )
@@ -451,14 +424,13 @@ function BackendPublicJobApplication({ jobId }: { jobId: string }) {
     return (
       <main className="min-h-screen bg-frost px-5 py-8">
         <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-[620px] place-items-center">
-          <Card className="w-full p-8 text-center shadow-aura-md md:p-10">
-            <CheckCircle2 className="mx-auto mb-4 text-aura-success" size={42} />
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-marine">Application received</p>
-            <h1 className="m-0 text-[26px] font-bold leading-tight text-depth md:text-[30px]">Your application has been submitted.</h1>
-            <p className="mt-3 mb-0 text-sm leading-6 text-aura-text-secondary">{backendReceipt.message}</p>
-            {candidateStatus ? <p className="mt-3 mb-0 text-sm font-semibold text-harbor">{candidateStatus}</p> : null}
-            <dl className="my-6 rounded-aura-sm border border-harbor/10 bg-frost/70 px-4 py-3"><dt className="text-[11px] font-semibold uppercase tracking-wide text-aura-text-muted">Backend application ID</dt><dd className="mt-1 m-0 break-all font-utility text-xs font-semibold text-harbor">{backendReceipt.application_id}</dd></dl>
-          </Card>
+          <ReceiptVoucher
+            heading="Your application has been submitted."
+            message={backendReceipt.message}
+            referenceLabel="Backend application ID"
+            referenceValue={backendReceipt.application_id}
+            status={candidateStatus}
+          />
         </section>
       </main>
     )
@@ -510,5 +482,71 @@ function PublicUnavailable({ title, message }: { title: string; message: string 
         </Link>
       </section>
     </main>
+  )
+}
+
+function ReceiptVoucher({
+  heading,
+  message,
+  referenceLabel,
+  referenceValue,
+  status,
+  showViewRoles = false,
+}: {
+  heading: string
+  message: string
+  referenceLabel: string
+  referenceValue?: string
+  status?: string
+  showViewRoles?: boolean
+}) {
+  return (
+    <Card className="relative w-full overflow-hidden rounded-[28px] border border-[#1E2022]/10 bg-[#FBFAF6] p-0 text-left shadow-[0_24px_80px_rgba(30,32,34,0.12)]">
+      <div className="absolute -left-5 top-[48%] size-10 rounded-full border border-[#1E2022]/10 bg-frost" aria-hidden="true" />
+      <div className="absolute -right-5 top-[48%] size-10 rounded-full border border-[#1E2022]/10 bg-frost" aria-hidden="true" />
+      <div className="border-b border-dashed border-[#1E2022]/18 bg-depth px-6 py-5 text-white md:px-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="AURA Logo" className="size-9 rounded-aura-sm bg-white object-contain p-1" />
+            <div>
+              <p className="m-0 text-[10px] font-bold uppercase tracking-[0.18em] text-glacier">Receipt voucher</p>
+              <p className="m-0 mt-1 text-sm font-semibold text-white">AURA Technology</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-glacier px-3 py-1.5 text-xs font-bold text-depth">
+            <CheckCircle2 size={15} aria-hidden="true" />
+            Received
+          </span>
+        </div>
+      </div>
+      <div className="px-6 py-7 text-center md:px-8 md:py-8">
+        <div className="mx-auto grid size-14 place-items-center rounded-full bg-glacier/20 text-[#7BAD00]">
+          <CheckCircle2 size={32} aria-hidden="true" />
+        </div>
+        <p className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-marine">Application received</p>
+        <h1 className="m-0 text-[26px] font-bold leading-tight text-depth md:text-[30px]">{heading}</h1>
+        <p className="mx-auto mb-0 mt-3 max-w-[460px] text-sm leading-6 text-aura-text-secondary">{message}</p>
+        {status ? <p className="mx-auto mb-0 mt-4 max-w-[460px] rounded-full bg-[#E9F6F8] px-4 py-2 text-sm font-semibold text-harbor">{status}</p> : null}
+      </div>
+      <div className="border-y border-dashed border-[#1E2022]/18 bg-white/70 px-6 py-5 md:px-8">
+        <dl className="grid gap-3 text-center">
+          <div>
+            <dt className="text-[10px] font-bold uppercase tracking-[0.16em] text-aura-text-muted">{referenceLabel}</dt>
+            <dd className="m-0 mt-2 break-all rounded-aura-sm border border-harbor/10 bg-frost/70 px-4 py-3 font-utility text-xs font-bold text-harbor">{referenceValue ?? 'Pending'}</dd>
+          </div>
+        </dl>
+      </div>
+      <div className="flex flex-col gap-3 px-6 py-5 md:flex-row md:items-center md:justify-between md:px-8">
+        <p className="m-0 text-xs leading-5 text-aura-text-muted">Keep this reference for your application status.</p>
+        {showViewRoles ? (
+          <Link
+            className="inline-flex h-10 items-center justify-center rounded-aura-sm border border-[#72a3bf] bg-[#72a3bf] px-4 text-sm font-semibold text-[#1D4052] no-underline transition-all shadow-[0_0_10px_rgba(114,163,191,0.45)] duration-150 hover:bg-[#5b8da8] hover:shadow-[0_0_16px_rgba(114,163,191,0.65)]"
+            to="/jobs"
+          >
+            View open roles
+          </Link>
+        ) : null}
+      </div>
+    </Card>
   )
 }

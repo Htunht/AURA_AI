@@ -11,7 +11,7 @@ type PageContainerProps = {
 
 export function PageContainer({
   title,
-  eyebrow = 'Recruitment operations',
+  eyebrow,
   description,
   actions,
   hideHeader = false,
