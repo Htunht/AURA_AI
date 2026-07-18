@@ -177,7 +177,7 @@ export default function BackendCandidatesList() {
           </div>
         </div>
 
-        <Card className="mb-4 p-3">
+        <div className="mb-4">
           <div className="grid gap-2 md:grid-cols-[minmax(280px,1fr)_220px_220px]">
             <label className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-aura-text-muted" size={17} />
@@ -198,8 +198,7 @@ export default function BackendCandidatesList() {
               <option value="FAILED">Failed</option>
             </select>
           </div>
-          <p className="mb-0 mt-2.5 text-xs font-medium text-aura-text-muted">Showing {filtered.length} of {rows.length} candidates</p>
-        </Card>
+        </div>
 
         {error ? <Card className="mb-4 border-aura-danger/25 bg-aura-danger-soft p-4 text-sm font-medium text-aura-danger">{error}</Card> : null}
         {loading ? <Card className="p-8 text-center text-sm text-aura-text-muted">Loading candidates…</Card> : null}

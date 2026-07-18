@@ -18,7 +18,6 @@ import {
 } from '../../store/demoSelectors'
 import type { ApplicationStage } from '../../types/application'
 import type { Recommendation } from '../../types/evaluation'
-import { formatCandidateResultCount } from '../../utils/candidateListPresentation'
 import { formatApplicationStage } from '../../utils/helpers'
 
 type RecommendationFilter = Recommendation | 'ALL' | 'NOT_SCREENED'
@@ -81,7 +80,7 @@ function DemoCandidates() {
       actions={job ? <><Link className={actionLinkClass} to={`/apply/${job.id}`}><ExternalLink size={16} aria-hidden="true" />Open application form</Link><Link className={actionLinkClass} to={`/jobs/${job.id}/application-form`}><FilePenLine size={16} aria-hidden="true" />Manage application form</Link></> : undefined}
     >
       <ScreeningAutomationStatus compact />
-      <Card className="mb-3 p-3">
+      <div className="mb-4">
         <div className="flex flex-wrap items-center gap-2.5">
           <label className="relative min-w-60 flex-[1_1_280px]">
             <span className="sr-only">Search candidates</span>
@@ -138,8 +137,7 @@ function DemoCandidates() {
             </label>
           </div>
         ) : null}
-        <p className="mb-0 mt-2.5 text-xs font-medium text-aura-text-muted" aria-live="polite">{formatCandidateResultCount(filteredItems.length, allItems.length)}</p>
-      </Card>
+      </div>
 
       {filteredItems.length > 0 ? (
         <><div className="hidden md:block"><CandidateTable items={filteredItems} onRetryFailed={(applicationId) => retryFailed([applicationId])} /></div><div className="grid gap-3 md:hidden">{filteredItems.map((item) => <CandidateCard item={item} onRetryFailed={() => retryFailed([item.application.id])} key={item.application.id} />)}</div></>
